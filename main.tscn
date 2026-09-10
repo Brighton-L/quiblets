@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://bebm5b7vjnvl8"]
+
+[ext_resource type="Script" uid="uid://ckqkoqll20lgj" path="res://scripts/main.gd" id="1_main"]
+
+[node name="Quiblets" type="Node3D" unique_id=945794823]
+script = ExtResource("1_main")
