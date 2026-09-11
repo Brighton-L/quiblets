@@ -51,7 +51,7 @@ func run()->void:
 		var effect=cast(move_name)
 		check(is_instance_valid(effect),move_name+" did not create a cast")
 		advance(1.8)
-		if p.mode=="buff":check(user.statuses.has(p.status),move_name+" did not grant its specific buff")
+		if p.mode=="buff":check((ally if p.get("ally",false) else user).statuses.has(p.status),move_name+" did not grant its specific buff")
 		elif p.mode=="cleanse":check(not user.statuses.has("burn"),move_name+" did not cleanse")
 		elif p.mode in ["heal","heal_field"]:check(user.current_hp>2000 and ally.current_hp>2000,move_name+" did not heal both user and nearby ally")
 		else:check(victim.current_hp<10000,move_name+" did not apply damage through its delivery mechanic")
@@ -72,6 +72,7 @@ func run()->void:
 	fixture();victim.position.x=4;cast("Water Shot");advance(.08);check(victim.current_hp==10000,"Water Shot hits before its projectile arrives");advance(.25);check(victim.current_hp<10000,"Water Shot never collided")
 	fixture();cast("Water Shot");victim.position.z=2;advance(.5);check(victim.current_hp==10000,"Non-homing projectile damaged a target that dodged its path")
 	fixture();var split=cast("Water Shot",["split"]);check(split.shots.size()==3,"Split does not create three independent projectiles");check(split.shots[0].dir!=split.shots[1].dir,"Split copies share the same trajectory")
+	fixture();var rainsplit=cast("Rain Drop",["split"]);check(rainsplit.patches.size()==3 and rainsplit.airborne_drops.size()==3,"Split Rain Drop launches three separate drops")
 	fixture();cast("Water Shot",["seeking"]);victim.position.z=1;advance(.6);check(victim.current_hp<10000,"Seeking did not steer toward a moving target")
 	fixture();var behind:=actor(Vector3(3.5,0,0),true);cast("Hydro Shot");advance(.5);check(victim.current_hp<10000 and behind.current_hp<10000,"Hydro Shot did not pierce two enemies")
 	fixture();var adjacent:=actor(Vector3(2,0,1),true);cast("Bubble Shot");advance(.65);check(adjacent.current_hp<10000,"Bubble Shot did not splash nearby enemies")
@@ -114,6 +115,23 @@ func run()->void:
 	fixture();user.current_hp=1000;cast("Leech Bloom");advance(.6);check(user.current_hp>1000,"Leech Bloom did not heal from damage")
 	fixture();user.add_status("burn",3,1,victim);cast("Cauterize");advance(.1);check(not user.statuses.has("burn") and user.current_hp<10000,"Cauterize did not pay its health cost and cleanse")
 	fixture();cast("Growth Spurt");advance(.1);var enlarged=cast("Vine Whip");check(enlarged.area_scale>1 and enlarged.force_scale>1,"Growth Spurt did not enlarge physical attack size and force")
+	# Helping Hand empowers a nearby ally (not the caster) and raises its damage.
+	fixture();cast("Helping Hand");advance(.1);check(ally.statuses.has("empower") and not user.statuses.has("empower"),"Helping Hand should empower an ally rather than the user")
+	fixture();user.attack=100;victim.current_hp=10000;user.data.moves=[{"name":"Mind Jab","slots":6,"stones":[]}];user.move_cooldowns=[0.0];user.move_cooldown_totals=[0.0];user.use_move(0,victim);advance(.5);var base_loss:=10000.0-victim.current_hp
+	fixture();user.attack=100;victim.current_hp=10000;user.add_status("empower",8,1.5,ally);user.data.moves=[{"name":"Mind Jab","slots":6,"stones":[]}];user.move_cooldowns=[0.0];user.move_cooldown_totals=[0.0];user.use_move(0,victim);advance(.5);check(10000.0-victim.current_hp>base_loss*1.4,"Empower raises the empowered Quiblet's outgoing damage")
+	# New status mechanics: poison ticks, slow/hasten alter speed, confuse makes
+	# the attacker miss, defense_down raises damage taken, and team buffs spread.
+	fixture();cast("Poison Spit");advance(.3);check(victim.statuses.has("poison"),"Poison Spit did not poison");var poison_hp:=victim.current_hp;advance(.6);check(victim.current_hp<poison_hp,"Poison did not deal damage over time")
+	fixture();var base_speed:float=user.speed;user.add_status("slow",3,.5);check(user.current_speed()<base_speed,"Slow did not reduce movement speed");user.statuses.erase("slow");user.add_status("hasten",3,.4);check(user.current_speed()>base_speed,"Tailwind hasten did not raise movement speed")
+	fixture();user.add_status("confuse",3,.9);var confused_misses:=0
+	for i in 400:
+		if not victim.accepts_hit_from(user):confused_misses+=1
+	check(confused_misses>250,"Confuse did not make the attacker miss")
+	fixture();victim.current_hp=10000;victim.take_damage(100.0,user,false);var normal_hit:=10000.0-victim.current_hp;victim.current_hp=10000;victim.add_status("defense_down",4,.5);victim.take_damage(100.0,user,false);check(10000.0-victim.current_hp>normal_hit*1.4,"Corrode defense_down did not raise damage taken")
+	fixture();cast("Cheer");advance(.1);check(user.statuses.has("empower") and ally.statuses.has("empower"),"A team buff should reach the caster and nearby allies")
+	# Copycat replays an ally's most recent move: an ally that last used Ignite makes Copycat apply Burn.
+	fixture();ally.last_move_name="Ignite";ally.last_move_time=Time.get_ticks_msec()/1000.0;cast("Copycat");advance(.5);check(victim.statuses.has("burn") or victim.current_hp<10000,"Copycat did not replay an ally move")
+	fixture();var pecked:=actor(Vector3(-2,0,1),true);cast("Peck");advance(.4);check(victim.current_hp<10000 and pecked.current_hp<10000,"Peck did not strike every living enemy once")
 	# Stone modifiers affect real delivery and durations, rather than fake hits.
 	fixture();var normal=cast("Downpour");var normal_duration:float=normal.duration;normal.finish(false);var lingering=cast("Downpour",["lingering"]);check(lingering.duration>normal_duration,"Lingering does not extend a real persistent field")
 	fixture();var ordinary=cast("Fireball");var ordinary_area:float=ordinary.area_scale;ordinary.finish(false);var blast=cast("Fireball",["blast"]);check(blast.area_scale>ordinary_area,"Blast did not expand the splash size")

@@ -54,19 +54,24 @@ func run()->void:
 				check(e.walkable.has(cell_of(point)) and not blocked(e,patch.position) and point.distance_to(e.zones[0].center)>1.5,"Berry patches must stand on walkable ground away from the start")
 			# The ground is one smooth heightfield: open ground flat, hills rounded, rivers soft troughs, no tile cubes.
 			var terrain_node:MeshInstance3D=e.get_node("TerrainMesh")
-			check(terrain_node.mesh is ArrayMesh and terrain_node.mesh.surface_get_array_len(0)==e.height_cols*e.height_rows and terrain_node.material_override is ShaderMaterial and terrain_node.material_override.shader.code.contains("fade_points") and terrain_node.material_override.next_pass is ShaderMaterial,"The ground is a single heightfield mesh wearing the fading terrain shader")
+			check(terrain_node.mesh is ArrayMesh and terrain_node.mesh.surface_get_array_len(0)==e.height_cols*e.height_rows and e.TERRAIN_SUBDIV==3 and e.get_node("Clouds").get_child_count()>0 and terrain_node.material_override is ShaderMaterial and terrain_node.material_override.shader.code.contains("fade_points") and terrain_node.material_override.next_pass is ShaderMaterial,"The ground is a single heightfield mesh wearing the fading terrain shader")
 			check(e.find_children("Terrain*","MultiMeshInstance3D",true,false).all(func(node3d):return node3d.name=="TerrainDetails"),"No tile cubes remain; only tufts and flowers are instanced")
 			var flat:=true
 			for cell in e.walkable.keys().slice(0,600):
-				if absf(e.terrain_height_at(Vector2(cell)))>.001:flat=false
-			check(flat,"Open ground is a flat plain")
+				if e.wall_tiers.has(cell) or e.deck_height_at(Vector2(cell))>-1.0e8:continue
+				if absf(e.terrain_height_at(Vector2(cell)))>e.PLAIN_ROLL+e.HILL_SKIRT_SHARE*(float(e.CLIFF_TIER_LAYERS[1])+e.HILL_ROLL)+.001:flat=false
+			check(flat,"Open ground away from hills and bridges only rolls within its swells plus the hills' skirts")
+			# Hills are walkable ground: every hill cell is walkable and rises above the plain.
+			check(e.wall_tiers.keys().all(func(cell):return e.walkable.has(cell) or e.prop_cells.has(cell)) and e.wall_tiers.keys().any(func(cell):return e.raw_height_at(Vector2(cell))>.8),"Hills stay walkable ground (a prop may stand on one) and rise above the plain")
 			var tallest:=0.0;var steepest:=0.0
 			for r in e.height_rows:
 				for c in range(e.height_cols-1):
 					var a:float=e.height_field[r*e.height_cols+c];var b:float=e.height_field[r*e.height_cols+c+1]
 					tallest=maxf(tallest,a);steepest=maxf(steepest,absf(a-b))
 			# The steepest smooth ramp (peak × the smoothstep's 1.5 slope ÷ HILL_RAMP) per sample is the limit; a seam would be far larger.
-			var ramp_limit:float=(float(e.CLIFF_TIER_LAYERS[1])+e.HILL_ROLL)*1.5/e.HILL_MIN_HALF/float(e.TERRAIN_SUBDIV)*.5+.12
+			var ramp_limit:float=(float(e.CLIFF_TIER_LAYERS[1])+e.HILL_ROLL)*1.5/e.HILL_MIN_HALF/float(e.TERRAIN_SUBDIV)*.5+e.PLAIN_ROLL*.3+.12
+			# A waterfall's lip is a deliberate drop from the high source channel into the trough.
+			if not e.waterfall_cells.is_empty():ramp_limit=maxf(ramp_limit,e.WATERFALL_TOP+e.RIVER_DEPTH+.3)
 			check(tallest>1.6 and steepest<ramp_limit,"Hills reach plateau height (%.2f) with no step between neighbouring samples beyond the ramp (%.2f, limit %.2f)"%[tallest,steepest,ramp_limit])
 			var lowest:=0.0
 			for cell in e.rivers:lowest=minf(lowest,e.terrain_height_at(Vector2(cell)))
@@ -75,7 +80,7 @@ func run()->void:
 			var atlas:ImageTexture=GameData.voxel_face_texture();var atlas_image:=atlas.get_image();var px:int=GameData.VOXEL_FACE_PIXELS
 			check(atlas.get_width()==px*3 and atlas.get_height()==px*2 and atlas_image.get_pixel(px+px/2,px+px/2).get_luminance()>atlas_image.get_pixel(px/2,px/2).get_luminance()+.1,"The voxel face atlas should be a 3×2 box atlas with a brighter top cell")
 			var wall_detail:ImageTexture=GameData.detail_texture("wall")
-			check(wall_detail.get_width()==GameData.DETAIL_PIXELS*3 and GameData.terrain_tile_texture().get_width()==GameData.DETAIL_PIXELS and terrain_node.material_override.get_shader_parameter("detail")==GameData.terrain_tile_texture(),"The ground tiles the grass detail's top cell")
+			check(wall_detail.get_width()==GameData.DETAIL_PIXELS*3 and not terrain_node.material_override.shader.code.contains("texture(") and terrain_node.material_override.shader.code.contains("SPECULAR=0.0"),"The ground wears no texture and shades matte")
 			var leaf_image:Image=GameData.detail_texture("leaf").get_image();var trunk_image:Image=GameData.detail_texture("trunk").get_image();var dp:int=GameData.DETAIL_PIXELS
 			var leaf_dark_rows:int=0;var trunk_dark_columns:int=0
 			for i in dp:
@@ -91,8 +96,8 @@ func run()->void:
 						for oy in GameData.DETAIL_BLOCK:
 							if not leaf_image.get_pixel(bx+ox,by+oy).is_equal_approx(first):blocky=false
 			check(blocky,"Detail textures are made of small uniform squares, not single pixels")
-			# Box parts wear a crisp detail texture on a rounded box; leaf spheres are plain-shaded balls.
-			check(e.props.is_empty() or e.props.all(func(prop):return prop.parts.all(func(part):return (part.mesh is SphereMesh and part.material_override.albedo_texture==null) or (part.material_override.albedo_texture!=null and part.material_override.texture_filter==BaseMaterial3D.TEXTURE_FILTER_NEAREST and part.mesh is ArrayMesh))),"Every prop box face wears a crisp detail texture on a rounded box, and leaf balls are plain spheres")
+			# Every prop part is a plain matte piece with no texture: a smooth blob, a cylinder, or a rounded box.
+			check(e.props.is_empty() or e.props.all(func(prop):return prop.parts.all(func(part):return part.material_override.albedo_texture==null and part.material_override.roughness==1.0 and (part.mesh is ArrayMesh or part.mesh is SphereMesh or part.mesh is CylinderMesh))),"Props are plain matte untextured pieces")
 			var rounded:ArrayMesh=GameData.rounded_box(Vector3.ONE,.2);var rounded_aabb:AABB=rounded.get_aabb()
 			check(rounded.get_surface_count()==1 and rounded_aabb.size.is_equal_approx(Vector3.ONE) and rounded.surface_get_array_len(0)==6*4*4*6,"The rounded box is a single closed surface the size of its box")
 			# With only the top and +X open, the top face reaches the -X edge square but curves away before +X, and covered faces are dropped.
@@ -100,15 +105,38 @@ func run()->void:
 			for vertex in partial.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]:
 				if absf(vertex.y-.5)<.001:top_min_x=minf(top_min_x,vertex.x);top_max_x=maxf(top_max_x,vertex.x)
 			check(partial.surface_get_array_len(0)==2*4*4*6 and is_equal_approx(top_min_x,-.5) and top_max_x<.5-.15 and partial.get_aabb().size.is_equal_approx(Vector3.ONE),"Rounding happens only where two open faces meet")
-			var river_meshes:Array=e.find_children("River*","MultiMeshInstance3D",true,false)
+			var river_meshes:Array=e.find_children("River*","MeshInstance3D",true,false)
 			if e.rivers.is_empty():check(river_meshes.is_empty(),"No river meshes without rivers")
 			else:
-				check(river_meshes.size()==2 and river_meshes.all(func(node3d):return node3d.multimesh.instance_count>0 or node3d.name=="RiverRipples") and e.find_child("RiverBed",true,false)==null,"Rivers are troughs in the ground mesh with water and ripples on top, no cube bed")
-				check(e.bridges.keys().all(func(cell):return e.walkable.has(cell) and absf(e.terrain_height_at(Vector2(cell)))<.001),"Bridge cells are flat open ground across the trough")
-				var water_node:MultiMeshInstance3D=e.find_child("RiverWater",true,false)
-				check(water_node.multimesh.instance_count==e.rivers.size()+e.pond_cells.size(),"Water sheets cover every river and pond cell")
+				check(river_meshes.size()==1 and river_meshes[0].name=="RiverWater" and river_meshes[0].mesh is ArrayMesh and e.find_child("RiverBed",true,false)==null,"Rivers are troughs in the ground mesh with one translucent water sheet, no bed cubes or ripple slivers")
+				check(e.bridges.keys().all(func(cell):return e.walkable.has(cell)) and (e.bridge_arches.is_empty() or (e.get_node("Bridges").get_child_count()==e.bridge_arches.size() and e.spanned_cells.keys().any(func(cell):return e.bridge_lift(Vector2(cell))>.5))),"Crossings carry an arched wooden bridge whose deck lifts the walker over the channel")
+				var water_node:MeshInstance3D=e.find_child("RiverWater",true,false);var water_cells:int=e.rivers.size()+e.pond_cells.size()+e.spanned_cells.size()
+				check(water_node.mesh.surface_get_array_len(0)==water_cells*e.TERRAIN_SUBDIV*e.TERRAIN_SUBDIV*6,"The water sheet covers every river and pond cell and runs on under every bridge")
+				var water_arrays:Array=water_node.mesh.surface_get_arrays(0);var water_colors:PackedColorArray=water_arrays[Mesh.ARRAY_COLOR];var water_uv2:PackedVector2Array=water_arrays[Mesh.ARRAY_TEX_UV2]
+				check(water_colors.size()==water_node.mesh.surface_get_array_len(0) and water_uv2.size()==water_colors.size() and Array(water_colors.slice(0,64)).all(func(color):return is_equal_approx(color.a,water_colors[0].a)),"Every water vertex carries flow, one shared phase, and shore depth for the shader")
+				var shallow:=0;var deep:=0
+				for uv in water_uv2:
+					if uv.x<.3:shallow+=1
+					elif uv.x>.7:deep+=1
+				check(shallow>0 and deep>0,"The water sheet is shallow along the banks and deep mid-channel")
+				check(water_node.material_override.shader.code.contains("shore_foam") and water_node.material_override.shader.code.contains("VIEW_MATRIX*vec4(bump"),"The water shader foams the shallows and glints on world-space rippled normals")
+				# Bridges never end in the water and the river runs on beneath them.
+				# No channel cell is ever a dry, waterless gap: every bridge cell has water
+				# under its deck, so a river reads as one continuous ribbon.
+				check(e.bridges.keys().all(func(cell):return e.spanned_cells.has(cell)),"Every crossing is spanned, so the river runs on continuously with no dry gaps")
+				for arch in e.bridge_arches:
+					check(e.deck_height_at(arch.center)>e.raw_height_at(arch.center)+.4,"The deck arches over the channel it spans")
+				if not e.bridge_arches.is_empty():
+					check(e.get_node("Bridges").get_children().all(func(deck):return deck.mesh is ArrayMesh and deck.get_child_count()==0),"Bridges are one earthen terrain deck each, with no rails or posts")
+				check(e.bridge_arches.all(func(arch):return arch.axis==Vector2(1,0) or arch.axis==Vector2(0,1)),"Bridges lie along one of the two crossing orientations")
+				if not e.waterfall_cells.is_empty():
+					check(e.get_node("Waterfalls").get_child_count()==e.waterfalls.size() and e.waterfall_cells.keys().all(func(cell):return e.raw_height_at(Vector2(cell))>.5 and not e.field_rect.has_point(cell)),"A waterfall's source channel runs high through the border hills and its sheet is built")
+					check(e.get_node("Waterfalls").get_children().all(func(fall):return fall.find_child("WaterfallSheet",true,false)!=null and fall.find_child("WaterfallSheet",true,false).material_override.shader==water_node.material_override.shader),"Waterfall sheets are the river's own water shader falling downward")
+					check(e.get_node("Waterfalls").get_children().all(func(fall):return fall.get_child_count()>=9) and e.waterfall_bubbles.size()>=10,"Each waterfall foot churns with many little foam spheres")
+					var bubble=e.waterfall_bubbles[0].node;var before:float=bubble.scale.x;e.elapsed+=1.7;e.update_waterfall_bubbles()
+					check(not is_equal_approx(bubble.scale.x,before),"Foam spheres pulse bigger and smaller over time")
 				check(e.RIVER_DEPTH>=1.2,"Rivers should be sunk deep")
-				check(water_node.material_override is ShaderMaterial and water_node.material_override.shader.code.contains("TIME") and water_node.multimesh.use_custom_data and e.river_channels>=int(e.biome.rivers)+e.EXTRA_RIVERS_MIN,"River water should flow with a time-driven shader fed each river's direction, with extra rivers guaranteed")
+				check(water_node.material_override is ShaderMaterial and water_node.material_override.shader.code.contains("TIME") and e.river_channels>=int(e.biome.rivers)+e.EXTRA_RIVERS_MIN,"River water should flow with a time-driven shader fed each river's direction, with extra rivers guaranteed")
 			check(int(e.cliff_tiers[1])>0 and int(e.cliff_tiers[2])>0 and int(e.cliff_tiers[3])>0 and e.cliff_layer_count==int(e.cliff_tiers[1])+int(e.cliff_tiers[2])+int(e.cliff_tiers[3]),"Every wall tier is present and the hill count matches the tier tallies")
 			check(e.get_child_count()<140,"Maps should stay lightweight")
 			for cell in e.walkable:check(not blocked(e,Vector3(cell.x,0,cell.y)),"Walkable tiles must not be covered by obstacle rects")
@@ -124,8 +152,8 @@ func run()->void:
 		for x in range(field.field_rect.position.x,field.field_rect.end.x):
 			for z in range(field.field_rect.position.y,field.field_rect.end.y):
 				var cell:=Vector2i(x,z);inside+=1
-				var cell_kinds:int=int(field.walkable.has(cell))+int(field.rivers.has(cell))+int(field.wall_tiers.has(cell))+int(field.prop_cells.has(cell))
-				check(cell_kinds==1,"Each field cell is exactly one of ground, river, wall, or prop")
+				var cell_kinds:int=int(field.walkable.has(cell))+int(field.rivers.has(cell))+int(field.prop_cells.has(cell))
+				check(cell_kinds==1 and (not field.wall_tiers.has(cell) or field.walkable.has(cell) or field.prop_cells.has(cell)),"Each field cell is exactly one of ground, river, or prop, and every hill is walkable ground or a prop's tile")
 				if field.walkable.has(cell):open_cells+=1
 		check(open_cells>inside*.6,"An open field should be mostly walkable ground: area %d"%area)
 		check(field.rivers.keys().all(func(cell):return not field.walkable.has(cell)) and field.bridges.keys().all(func(cell):return field.walkable.has(cell)),"Rivers block movement and bridges allow it")
@@ -139,18 +167,18 @@ func run()->void:
 	check(GameData.expedition_biome(6).decor.has("boulder") and GameData.expedition_biome(4).decor.has("big_mushroom") and GameData.expedition_biome(0).decor.has("tree"),"Biomes should list their own prop kinds")
 	# Destructible props: cube-built trees and boulders block their tile until a move breaks them.
 	var wood:=build(0,1,"level")
-	check(wood.props.size()>=8 and wood.props.all(func(prop):return prop.get_child_count()>=2 and not wood.walkable.has(prop.cell) and wood.prop_cells.has(prop.cell) and wood.field_rect.has_point(prop.cell)),"Levels should hold cube-built props that block their tiles")
+	check(wood.props.size()>=8 and wood.props.all(func(prop):return prop.get_child_count()>=1 and not wood.walkable.has(prop.cell) and wood.prop_cells.has(prop.cell) and wood.field_rect.has_point(prop.cell)),"Levels should hold simple props that block their tiles")
 	var cave:=build(6,1,"level")
 	check(wood.props.any(func(prop):return prop.kind=="tree") and cave.props.any(func(prop):return prop.kind=="boulder") and cave.props.any(func(prop):return prop.kind in ["crystal","big_mushroom"]),"Meadows grow trees; caves hold boulders, crystals, and big mushrooms")
-	check(cave.props.all(func(prop):return prop.harvestable()==(prop.kind!="boulder")),"Every prop except a boulder is harvestable")
+	check(cave.props.all(func(prop):return prop.harvestable()),"Every prop, boulders included, is harvestable")
 	cave.free()
 	# Harvesting: stand beside a tree for a while to gather big bundles; the tree then goes.
 	var orchard=wood.props.filter(func(prop):return prop.kind=="tree")[0];var orchard_cell:Vector2i=orchard.cell
-	# Trees and shrubs are made of lots of leaf spheres over a boxed trunk.
+	# Trees are a tapered trunk under five round leaf blobs in four greens; shrubs are three blobs.
 	var tree_balls:Array=orchard.parts.filter(func(part):return part.mesh is SphereMesh)
-	check(tree_balls.size()>=12 and tree_balls.size()<orchard.parts.size() and tree_balls.map(func(part):return part.material_override.albedo_color).reduce(func(seen,color):return seen if seen.has(color) else seen+[color],[]).size()>=6,"A tree's canopy is many leaf spheres in varied shades over a trunk")
+	check(tree_balls.size()==5 and orchard.parts.size()==6 and orchard.parts[0].mesh is CylinderMesh and GameData.leaf_sphere().radial_segments>=16 and tree_balls.map(func(part):return part.material_override.albedo_color).reduce(func(seen,color):return seen if seen.has(color) else seen+[color],[]).size()>=4,"A tree is a tapered trunk under five smooth leaf blobs in four greens")
 	var shrub=PROP_SCRIPT.new();shrub.setup("bush",Vector2i(0,0),GameData.expedition_biome(0),5,RandomNumberGenerator.new());root.add_child(shrub)
-	check(shrub.parts.size()>=10 and shrub.parts.all(func(part):return part.mesh is SphereMesh),"A shrub is a mound of leaf spheres");shrub.free()
+	check(shrub.parts.size()==7 and shrub.parts.all(func(part):return part.mesh is SphereMesh),"A shrub is a rounded dome of leaf blobs");shrub.free()
 	var picker:=QuibletActor3D.new();picker.setup(GameData.make_quiblet(2,10),false,0,1);wood.place_actor(picker);picker.set_physics_process(false);wood.team.append(picker)
 	picker.position=Vector3(orchard_cell.x+1.0,0,orchard_cell.y)
 	var harvest_rewards:Array=[];wood.reward_acquired.connect(func(reward,_position):harvest_rewards.append(reward))

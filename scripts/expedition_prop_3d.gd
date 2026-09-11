@@ -4,7 +4,7 @@ extends Node3D
 # A field prop standing on one tile of the open field: a cube-built tree,
 # boulder, mushroom, crystal, pillar, cactus, mound, or block. It blocks
 # movement (the expedition removes its cell from the walkable grid) and takes
-# damage from any move that reaches it. Every kind except the boulder is also
+# damage from any move that reaches it. Every kind, boulders included, is also
 # harvestable: a team member standing beside it for HARVEST_SECONDS gathers a
 # large bundle of the ingredients that prop grows. Either way, when it goes it
 # bursts into a scatter of small cubes that fall, bounce, shrink, and vanish
@@ -15,10 +15,10 @@ signal destroyed(prop)
 const SHARD_COUNT:=12
 const HARVEST_SECONDS:=2.5
 const HARVEST_RADIUS:=1.4
-# Which ingredient tags each prop kind grows; boulders grow nothing.
+# Which ingredient tags each prop kind grows; every kind, boulders included, gives something.
 const HARVEST_TAGS:={
 	"tree":["fruit","leaf"],"bush":["leaf","fruit"],"big_mushroom":["fungus"],"mushroom":["fungus"],"cactus":["spicy","dry"],
-	"crystal":["seed","hard"],"pillar":["earthy","hard"],"block":["earthy","hard"],"mound":["root","earthy"]
+	"crystal":["seed","hard"],"pillar":["earthy","hard"],"block":["earthy","hard"],"mound":["root","earthy"],"boulder":["earthy","hard"]
 }
 var harvest_progress:=0.0
 var harvested:=false
@@ -62,88 +62,89 @@ func setup(prop_kind:String,prop_cell:Vector2i,biome:Dictionary,stage_level:int,
 		_:build_tree(biome,rng)
 	set_process(false)
 
+# Props in the soft-meadow style: smooth blobs and tapered cylinders in matte
+# single colours, with a faint shadow disc that is not part of the breakable body.
+const LEAF_GREENS:=["#5cb15c","#6fbf6a","#8ccf80","#9fd98f"]
+func leaf_green(biome:Dictionary,index:int)->Color:
+	return Color(LEAF_GREENS[index%LEAF_GREENS.size()]).lerp(biome.get("accent",Color("#6fbf6a")),.3)
+
+func plain_material(color:Color)->StandardMaterial3D:
+	var mat:=StandardMaterial3D.new();mat.albedo_color=color;mat.roughness=1.0;mat.specular_mode=BaseMaterial3D.SPECULAR_DISABLED;return mat
+
 func build_big_mushroom(biome:Dictionary,rng:RandomNumberGenerator)->void:
 	var cap:Color=biome.get("accent",Color("#8bd06a"));var height:=rng.randf_range(1.3,1.9)
-	cube(Vector3(0,height*.5,0),Vector3(.4,height,.4),Color("#f4ecd8"))
-	cube(Vector3(0,height+.25,0),Vector3(1.5,.5,1.5),cap);cube(Vector3(0,height+.6,0),Vector3(.9,.3,.9),cap.lightened(.1));cube(Vector3(.45,height+.5,.35),Vector3(.25,.12,.25),Color("#f4ecd8"))
+	cylinder(Vector3(0,height*.5,0),.2,.26,height,Color("#f4ecd8"));ball(Vector3(0,height+.1,0),Vector3(.75,.28,.75),cap);shadow(.8)
 
-func build_mushroom(biome:Dictionary,rng:RandomNumberGenerator)->void:
+func build_mushroom(biome:Dictionary,_rng:RandomNumberGenerator)->void:
 	var cap:Color=biome.get("accent",Color("#8bd06a"))
-	cube(Vector3(-.2,.3,0),Vector3(.24,.6,.24),Color("#f4ecd8"));cube(Vector3(-.2,.72,0),Vector3(.7,.3,.7),cap)
-	cube(Vector3(.3,.2,.2),Vector3(.18,.4,.18),Color("#f4ecd8"));cube(Vector3(.3,.5,.2),Vector3(.45,.22,.45),cap.lightened(.1))
+	cylinder(Vector3(0,.3,0),.1,.13,.6,Color("#f4ecd8"));ball(Vector3(0,.7,0),Vector3(.36,.16,.36),cap)
 
 func build_crystal(biome:Dictionary,rng:RandomNumberGenerator)->void:
 	var shine:Color=biome.get("accent",Color("#7fe0ff"))
 	var main:=cube(Vector3(0,.8,0),Vector3(.4,1.7,.4),shine,Vector3(.15,rng.randf()*TAU,.1));main.material_override.emission_enabled=true;main.material_override.emission=shine;main.material_override.emission_energy_multiplier=.5
-	cube(Vector3(.35,.45,.2),Vector3(.28,.9,.28),shine.lightened(.15),Vector3(.3,rng.randf()*TAU,-.25));cube(Vector3(-.3,.3,-.2),Vector3(.22,.6,.22),shine.darkened(.1),Vector3(-.25,0,.3))
 
-func build_pillar(biome:Dictionary,rng:RandomNumberGenerator)->void:
-	var stone:Color=biome.get("cliff",Color("#7b7f72")).lightened(.1)
-	cube(Vector3(0,.15,0),Vector3(1.0,.3,1.0),stone.darkened(.08));cube(Vector3(0,1.15,0),Vector3(.62,1.7,.62),stone);cube(Vector3(0,2.1,0),Vector3(.9,.24,.9),stone.lightened(.08))
+func build_pillar(biome:Dictionary,_rng:RandomNumberGenerator)->void:
+	cylinder(Vector3(0,1.1,0),.3,.36,2.2,biome.get("cliff",Color("#7b7f72")).lightened(.1))
 
-func build_cactus(biome:Dictionary,rng:RandomNumberGenerator)->void:
+func build_cactus(biome:Dictionary,_rng:RandomNumberGenerator)->void:
 	var green:Color=biome.get("accent",Color("#6ea85a"))
-	cube(Vector3(0,.7,0),Vector3(.42,1.4,.42),green);cube(Vector3(.4,.75,0),Vector3(.3,.3,.3),green);cube(Vector3(.4,1.05,0),Vector3(.3,.5,.3),green.lightened(.06));cube(Vector3(-.38,.55,0),Vector3(.28,.28,.28),green);cube(Vector3(-.38,.85,0),Vector3(.28,.45,.28),green.lightened(.06))
+	cylinder(Vector3(0,.7,0),.2,.22,1.4,green);ball(Vector3(0,1.4,0),Vector3(.2,.2,.2),green)
 
-func build_mound(biome:Dictionary,rng:RandomNumberGenerator)->void:
-	var snow:Color=biome.get("accent",Color("#ffffff"))
-	cube(Vector3(0,.25,0),Vector3(1.2,.5,1.1),snow.darkened(.05));cube(Vector3(.1,.6,-.05),Vector3(.8,.3,.75),snow);cube(Vector3(-.25,.82,.1),Vector3(.4,.2,.4),snow.lightened(.04))
+func build_mound(biome:Dictionary,_rng:RandomNumberGenerator)->void:
+	ball(Vector3(0,.3,0),Vector3(.65,.35,.6),biome.get("accent",Color("#ffffff")))
 
 func build_block(biome:Dictionary,rng:RandomNumberGenerator)->void:
-	var stone:Color=biome.get("cliff",Color("#7b7f72")).lightened(.12)
-	var block:=cube(Vector3(0,.55,0),Vector3(1.1,1.1,1.1),stone,Vector3(0,rng.randf_range(-.4,.4),0));cube(Vector3(.2,1.3,.1),Vector3(.5,.4,.5),stone.lightened(.08),Vector3(0,rng.randf_range(-.6,.6),0))
+	cube(Vector3(0,.55,0),Vector3(1.1,1.1,1.1),biome.get("cliff",Color("#7b7f72")).lightened(.12),Vector3(0,rng.randf_range(-.4,.4),0))
 
-func cube(offset:Vector3,size:Vector3,color:Color,tilt:=Vector3.ZERO,detail:="specks")->MeshInstance3D:
-	# Rounded edges so props read as soft plastic blocks rather than sharp voxels.
-	var mesh:=GameData.rounded_box(size,minf(size.x,minf(size.y,size.z))*.2);var part:=MeshInstance3D.new();part.mesh=mesh;part.position=offset;part.rotation=tilt
-	var mat:=StandardMaterial3D.new();mat.albedo_color=color;mat.roughness=.88
-	if detail=="specks":GameData.apply_prop_specks(mat)
-	else:GameData.apply_detail(mat,detail)
-	part.material_override=mat;add_child(part);parts.append(part);colors.append(color);return part
+# A rounded box in one matte colour.
+func cube(offset:Vector3,size:Vector3,color:Color,tilt:=Vector3.ZERO)->MeshInstance3D:
+	var part:=MeshInstance3D.new();part.mesh=GameData.rounded_box(size,minf(size.x,minf(size.y,size.z))*.2);part.position=offset;part.rotation=tilt
+	part.material_override=plain_material(color);add_child(part);parts.append(part);colors.append(color);return part
 
-# A leaf ball: one sphere part in the cluster that makes up a canopy or shrub.
-func ball(offset:Vector3,radius:float,color:Color)->MeshInstance3D:
-	var part:=MeshInstance3D.new();part.mesh=GameData.leaf_sphere();part.position=offset;part.scale=Vector3.ONE*radius*2.0
-	var mat:=StandardMaterial3D.new();mat.albedo_color=color;mat.roughness=.9;part.material_override=mat;add_child(part);parts.append(part);colors.append(color);return part
+func cylinder(offset:Vector3,top_radius:float,bottom_radius:float,height:float,color:Color)->MeshInstance3D:
+	var mesh:=CylinderMesh.new();mesh.top_radius=top_radius;mesh.bottom_radius=bottom_radius;mesh.height=height;mesh.radial_segments=12
+	var part:=MeshInstance3D.new();part.mesh=mesh;part.position=offset;part.material_override=plain_material(color);add_child(part);parts.append(part);colors.append(color);return part
 
-func leaf_cluster(center:Vector3,extent:Vector3,count:int,radius:float,leaf:Color,rng:RandomNumberGenerator)->void:
-	for entry in GameData.leaf_cluster(center,extent,count,radius,leaf,rng):ball(entry.pos,float(entry.radius),entry.color)
+# A smooth blob; `radii` are its half extents.
+func ball(offset:Vector3,radii:Vector3,color:Color)->MeshInstance3D:
+	var part:=MeshInstance3D.new();part.mesh=GameData.leaf_sphere();part.position=offset;part.scale=radii*2.0
+	part.material_override=plain_material(color);add_child(part);parts.append(part);colors.append(color);return part
 
-# A tree: a square trunk under a canopy made of lots of overlapping leaf spheres.
-# Two silhouettes: a tall column tree with a slim trunk and a tall dark canopy,
-# or a big round tree with a wide bright canopy and a small tuft on top.
+func shadow(radius:float)->void:
+	var mesh:=CylinderMesh.new();mesh.top_radius=radius;mesh.bottom_radius=radius;mesh.height=.02;mesh.radial_segments=20
+	var disc:=MeshInstance3D.new();disc.mesh=mesh;disc.position=Vector3(0,.06,0)
+	var mat:=StandardMaterial3D.new();mat.albedo_color=Color(.2,.31,.16,.16);mat.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA;mat.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED;disc.material_override=mat;add_child(disc)
+
+# A tree is a tapered trunk under five round leaf blobs in four greens, over a shadow disc.
 func build_tree(biome:Dictionary,rng:RandomNumberGenerator)->void:
-	var leaf:Color=biome.get("accent",Color("#3f7650")).lightened(rng.randf_range(-.06,.1))
-	if rng.randf()<.5:
-		var height:=rng.randf_range(1.6,2.6);var width:=rng.randf_range(.8,1.15);var trunk_height:=rng.randf_range(.6,1.1)
-		trunk(biome,trunk_height,.3)
-		leaf_cluster(Vector3(0,trunk_height-.05+height*.5,0),Vector3(width*.5,height*.5,width*.5),9,width*.42,leaf.darkened(.1),rng)
-		leaf_cluster(Vector3(0,trunk_height+height+.05,0),Vector3(width*.3,.2,width*.3),3,width*.28,leaf.darkened(.02),rng)
-	else:
-		var width:=rng.randf_range(1.4,2.0);var height:=rng.randf_range(1.2,1.7);var trunk_height:=rng.randf_range(.8,1.2)
-		trunk(biome,trunk_height,.36)
-		leaf_cluster(Vector3(0,trunk_height-.05+height*.5,0),Vector3(width*.5,height*.5,width*.5*rng.randf_range(.85,1.0)),13,width*.3,leaf.lightened(.1),rng)
-		leaf_cluster(Vector3(rng.randf_range(-.25,.25),trunk_height+height+.15,rng.randf_range(-.2,.2)),Vector3(width*.25,.2,width*.25),4,width*.2,leaf.lightened(.18),rng)
+	var s:float=rng.randf_range(.28,.38)
+	trunk(biome,6.0*s,1.05*s)
+	var blobs:Array=[[0,8.6,0,4.6],[-3.4,7,.6,3],[3.4,7,-.6,3],[0,11,.4,2.8],[1.6,8.4,2.6,2.4]]
+	for i in blobs.size():
+		var blob:Array=blobs[i];ball(Vector3(blob[0],blob[1],blob[2])*s,Vector3.ONE*float(blob[3])*s,leaf_green(biome,i))
+	shadow(5.2*s)
 
-func trunk(biome:Dictionary,height:float,width:float)->void:
-	if str(biome.get("trunk",""))=="birch":
-		var bands:int=maxi(2,roundi(height/.3))
-		for i in bands:cube(Vector3(0,(float(i)+.5)*height/float(bands),0),Vector3(width,height/float(bands),width),Color("#e9e6dc") if i%2==0 else Color("#7f9a6a"),Vector3.ZERO,"trunk")
-	else:cube(Vector3(0,height*.5,0),Vector3(width,height,width),Color("#8a5b36"),Vector3.ZERO,"trunk")
+func trunk(_biome:Dictionary,height:float,width:float)->void:
+	cylinder(Vector3(0,height*.5,0),width*.75,width,height,Color("#a96f42"))
 
-# A shrub: a low mound of leaf spheres with a few lighter ones on top.
+# A bush is three leaf blobs.
 func build_bush(biome:Dictionary,rng:RandomNumberGenerator)->void:
-	var leaf:Color=biome.get("accent",Color("#3f7650")).darkened(.08)
-	leaf_cluster(Vector3(0,.42,0),Vector3(.48,.3,.45),6,.3,leaf,rng)
-	leaf_cluster(Vector3(.08,.82,.04),Vector3(.25,.1,.22),3,.2,leaf.lightened(.08),rng)
+	var s:float=rng.randf_range(.95,1.2)
+	# A full, rounded dome of overlapping leaves rather than three stray balls.
+	var blobs:Array=[[0,.40,0,.50],[.34,.32,.05,.37],[-.34,.32,-.05,.37],[.05,.32,.34,.35],[-.05,.32,-.34,.35],[.12,.60,.06,.35],[-.12,.55,-.08,.31]]
+	for i in blobs.size():
+		var blob:Array=blobs[i];ball(Vector3(blob[0],blob[1],blob[2])*s,Vector3.ONE*float(blob[3])*s,leaf_green(biome,i%3))
+	shadow(.85*s)
 
-# A blocky boulder: a big cube with a couple of smaller cubes leaning on it.
+# A boulder is a cluster of three squashed grey blobs over a shadow disc.
 func build_boulder(biome:Dictionary,rng:RandomNumberGenerator)->void:
-	# A pile of two or three stacked rounded-looking cubes in light grey, like the reference rocks.
-	var rock:Color=Color(biome.rock) if biome.has("rock") else Color("#b7bfb4").lerp(biome.get("cliff",Color("#7a4a28")),.12)
-	cube(Vector3(0,.42,0),Vector3(1.05,.84,1.0),rock,Vector3(0,rng.randf_range(-.25,.25),0))
-	cube(Vector3(.12,1.05,-.05),Vector3(.72,.5,.7),rock.lightened(.05),Vector3(0,rng.randf_range(-.4,.4),0))
-	cube(Vector3(-.45,.22,.3),Vector3(.45,.44,.45),rock.darkened(.06))
+	var grey:Color=Color(biome.rock) if biome.has("rock") else Color("#b9c3cb")
+	var light:Color=grey.lightened(.14);var dark:Color=grey.darkened(.1);var s:float=rng.randf_range(.7,1.05)
+	# One cohesive rounded rock: overlapping squashed lumps, lighter on top, darker low.
+	var lumps:Array=[[0,.40,0,.72,.50,.64,dark],[.36,.54,.12,.50,.42,.46,grey],[-.32,.50,-.16,.46,.40,.44,grey],[.06,.74,.04,.42,.36,.40,light],[-.10,.36,.34,.40,.32,.38,grey]]
+	for lump in lumps:
+		ball(Vector3(lump[0],lump[1],lump[2])*s,Vector3(lump[3],lump[4],lump[5])*s,lump[6])
+	shadow(1.05*s)
 
 func harvest()->void:
 	if shattered:return

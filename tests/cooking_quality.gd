@@ -42,6 +42,16 @@ func run()->void:
 		check(rolled_names.size() in [1,2,3] and rolled_names.all(func(move_name):return GameData.learnset(5).has(move_name)) and rolled_names.duplicate().all(func(move_name):return rolled_names.count(move_name)==1),"An acquired Bloomie rolled an invalid move count, move, or duplicate")
 	check(bloomie_rolls.size()>1,"Acquired Quiblets should not all receive the same starting move set")
 	check(rolled_move_counts.has(1) and rolled_move_counts.has(2) and rolled_move_counts.has(3),"Acquired Quiblets should be able to roll one, two, or three initial moves")
+	# Arrivals are born at their level, so they must still receive the Lv. 25 milestone(s) they would have earned levelling up.
+	seed(12345)
+	var high_arrival:=GameData.make_quiblet(0,30,"",false)
+	var high_before:int=high_arrival.moves.size()+high_arrival.moves.reduce(func(a,m):return a+int(m.slots),0)
+	game.apply_arrival_milestones(high_arrival)
+	check(high_arrival.moves.size()+high_arrival.moves.reduce(func(a,m):return a+int(m.slots),0)>high_before,"A Lv. 30+ stew arrival receives its Lv. 25 milestone")
+	var low_arrival:=GameData.make_quiblet(0,20,"",false)
+	var low_before:int=low_arrival.moves.size()+low_arrival.moves.reduce(func(a,m):return a+int(m.slots),0)
+	game.apply_arrival_milestones(low_arrival)
+	check(low_arrival.moves.size()+low_arrival.moves.reduce(func(a,m):return a+int(m.slots),0)==low_before,"A below-Lv.25 arrival receives no milestone")
 	var roster_before:int=game.roster.size()
 	for ingredient_name in ["Bumbleberry","Emberpepper","Dewmelon","Knobroot","Curlcap"]:game.ingredients[ingredient_name]=3;game.unlocked_ingredients.append(ingredient_name)
 	game.show_cooking()
@@ -112,7 +122,7 @@ func run()->void:
 	browser.find_child("RecipeNext",true,false).pressed.emit();await process_frame;browser=game.content.find_child("RecipeBrowser",true,false)
 	check(game.cooking_recipe_index==1 and browser.find_child("RecipeNumber",true,false).text=="#2" and browser.find_child("RecipeName",true,false).text=="???" and browser.find_child("RecipeRequires",true,false).text=="???" and browser.find_child("RecipeAttracts",true,false).text=="???","An undiscovered stew shows ??? for its name, requirements, and attraction")
 	game.known_recipes.append("Rock Bottom Broth");game.show_cooking();await process_frame;browser=game.content.find_child("RecipeBrowser",true,false)
-	check(browser.find_child("RecipeName",true,false).text=="Rock Bottom Broth" and browser.find_child("RecipeRequires",true,false).text==game.requirement_text(GameData.RECIPES[1].need) and browser.find_child("RecipeAttracts",true,false).text=="Attracts sturdy Green-type Quiblets","A discovered stew reveals its details")
+	check(browser.find_child("RecipeName",true,false).text=="Rock Bottom Broth" and browser.find_child("RecipeRequires",true,false).text==game.requirement_text(GameData.RECIPES[1].need) and browser.find_child("RecipeAttracts",true,false).text=="Attracts sturdy, rocky Quiblets","A discovered stew reveals its details")
 	browser.find_child("RecipePrevious",true,false).pressed.emit();await process_frame
 	game.step_cooking_recipe(-1);await process_frame
 	check(game.cooking_recipe_index==GameData.RECIPES.size()-1 and game.content.find_child("RecipeNumber",true,false).text=="#%d"%GameData.RECIPES.size(),"Stepping up from the first stew wraps to the last")

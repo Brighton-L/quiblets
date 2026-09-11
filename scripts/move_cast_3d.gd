@@ -36,6 +36,8 @@ var dash_hits:Dictionary={}
 var base_scale:=1.0
 var source_enemy:=false
 var airborne_visual:MeshInstance3D
+# One arcing drop per patch, so a Split raindrop/meteor visibly launches several.
+var airborne_drops:Array[MeshInstance3D]=[]
 var vine_visual:MeshInstance3D
 
 func setup(source, move_entry:Dictionary, new_target, power_scale:float, is_echo:bool)->void:
@@ -44,6 +46,10 @@ func setup(source, move_entry:Dictionary, new_target, power_scale:float, is_echo
 	entry=move_entry.duplicate(true);move_name=entry.name;profile=BEHAVIORS.profile(move_name);strength=power_scale
 	var move:Dictionary=GameData.MOVES[move_name]
 	damage=(float(move.power)+source.attack*.58)*strength*source.damage_multiplier
+	# Helping Hand's empower buff temporarily raises the caster's attack output;
+	# a Honk's weaken lowers it.
+	if source.statuses.has("empower"):damage*=float(source.statuses.empower.amount)
+	if source.statuses.has("weaken"):damage*=maxf(.1,1.0-float(source.statuses.weaken.amount))
 	distance=float(move.range)/35.0*pow(1.38,count("reach"))
 	duration_scale=pow(1.65,count("lingering"));area_scale=pow(1.35,count("blast"));force_scale=pow(1.65,count("force"))
 	if profile.get("physical",false) and source.statuses.has("growth"):
@@ -120,7 +126,10 @@ func _ready()->void:
 				wedge.surface_add_vertex(Vector3.ZERO);wedge.surface_add_vertex(Vector3(sin(a),0,cos(a)));wedge.surface_add_vertex(Vector3(sin(b),0,cos(b)))
 			wedge.surface_end();visuals[0].mesh=wedge;visuals[0].position=origin+Vector3.UP*.12;visuals[0].scale=Vector3.ONE*distance*area_scale
 	# Self-support activates on the first physics frame, after callers connect.
-	if profile.get("visual","") in ["rain","meteor"] or mode=="firework":
+	if profile.get("visual","") in ["rain","meteor"]:
+		# One drop per patch: a Split raindrop launches one arc onto each landing spot.
+		for patch in patches:airborne_drops.append(orb(origin+Vector3.UP,Vector3.ONE*.65))
+	elif mode=="firework":
 		airborne_visual=orb(origin+Vector3.UP,Vector3.ONE*.65)
 	if profile.get("visual","")=="root_slam":
 		airborne_visual=orb(aim+Vector3.UP*1.8,Vector3(.55,3.5,.55));airborne_visual.rotation.z=-.8
@@ -155,6 +164,13 @@ func _physics_process(delta:float)->void:
 		else:
 			airborne_visual.position=origin.lerp(aim,progress)+Vector3.UP*(sin(progress*PI)*4.0+.3)
 		airborne_visual.visible=elapsed<delay
+	for i in airborne_drops.size():
+		var drop:MeshInstance3D=airborne_drops[i]
+		if not is_instance_valid(drop):continue
+		var progress:=clampf(elapsed/maxf(delay,.01),0,1)
+		var landing:Vector3=patches[i].pos if i<patches.size() else aim
+		drop.position=origin.lerp(landing,progress)+Vector3.UP*(sin(progress*PI)*4.0+.3)
+		drop.visible=elapsed<delay
 	if is_instance_valid(vine_visual):
 		var tip:Vector3=aim
 		if not shots.is_empty():tip=shots[0].pos
@@ -219,6 +235,12 @@ func _physics_process(delta:float)->void:
 					var bonus:float=burn.amount*burn.time
 					victim.statuses.erase("burn");hit(victim,damage+bonus);pulse(victim.global_position,radius)
 			if elapsed>.25:finish()
+		"copycat":
+			if not activated:activated=true;spawn_copy()
+			if elapsed>.3:finish()
+		"peck":
+			if not activated:activated=true;do_peck()
+			if elapsed>.35:finish()
 
 func update_shot(shot:Dictionary,delta:float)->void:
 	if shot.fuse>=0:
@@ -340,9 +362,15 @@ func hit(victim,amount:float,center:Vector3=Vector3.INF,chain_depth:int=0,visite
 		if profile.has("swirl"):victim.displace(away.cross(Vector3.UP)*float(profile.swirl)*force_scale)
 		if profile.has("launch"):victim.add_status("launch",.8,float(profile.launch)*force_scale*effect_scale,actor)
 		if profile.has("burn"):victim.add_status("burn",float(profile.burn)*duration_scale,damage*.12*base_scale*pow(.6,chain_depth),actor,.15*count("drain"))
+		if profile.has("poison"):victim.add_status("poison",float(profile.poison)*duration_scale,damage*.10*base_scale*pow(.6,chain_depth),actor,.15*count("drain"))
 		if profile.has("status"):
-			var magnitude:float=damage*.12*base_scale*pow(.6,chain_depth) if profile.status=="leech" else effect_scale
+			# Control statuses (slow, confuse, defense_down) carry an explicit fractional
+			# "amount"; leech scales with damage; everything else uses the effect scale.
+			var magnitude:float=damage*.12*base_scale*pow(.6,chain_depth) if profile.status=="leech" else float(profile.get("amount",effect_scale))
 			victim.add_status(profile.status,float(profile.status_duration)*duration_scale*pow(.6,chain_depth),magnitude,actor,.15*count("drain"))
+		# A Honk interrupts (a short stun); a Scare sends the victim fleeing.
+		if profile.get("interrupt",false):victim.add_status("stun",.4,1.0,actor)
+		if profile.get("flee",false):victim.retreating=true
 	if chain_depth<count("chain"):
 		var excluded:=visited.duplicate();excluded.append(victim.get_instance_id())
 		var next=nearest(victim.global_position,excluded,4.0)
@@ -354,15 +382,63 @@ func hit(victim,amount:float,center:Vector3=Vector3.INF,chain_depth:int=0,visite
 func support()->void:
 	var actor=source();var mode:String=profile.mode
 	if mode=="heal":heal_area(origin,float(profile.amount)*strength);pulse(origin,radius);return
-	var recipients:Array=[actor]
-	if count("sharing")>0:recipients.append_array(actors_in(origin,3.2,false).filter(func(a):return a!=actor))
+	# Ally-targeted buffs (Helping Hand) land on the strongest nearby teammate,
+	# falling back to the caster when it is alone so the move is never wasted.
+	var primary=actor
+	if profile.get("ally",false):
+		var mate=best_ally(actor)
+		if mate!=null:primary=mate
+	var recipients:Array=[primary]
+	# Team buffs (Cheer, Shelter, Tailwind) reach the caster and every nearby ally.
+	if profile.get("team",false):
+		for mate in actors_in(actor.global_position,4.0,false):
+			if not recipients.has(mate):recipients.append(mate)
+	if count("sharing")>0:recipients.append_array(actors_in(origin,3.2,false).filter(func(a):return a!=primary))
 	for other in recipients:
-		var share:float=1.0 if other==actor else .55
+		var share:float=1.0 if other==primary else .55
 		if mode=="cleanse":
 			if profile.has("self_cost") and other==actor:other.take_damage(minf(other.current_hp-1,other.max_hp*float(profile.self_cost)))
 			other.cleanse()
 		else:other.add_status(profile.status,duration*share,float(profile.amount)*strength*share,actor)
 		pulse(other.global_position,.9)
+
+func best_ally(actor):
+	var best=null;var best_attack:=-1.0
+	for other in actors_in(actor.global_position,8.0,false):
+		if other==actor:continue
+		if other.attack>best_attack:best_attack=other.attack;best=other
+	return best
+
+# Copycat replays the most recent move an ally used, at reduced strength and with
+# the copier's own Move Stones. With no ally move on record it falls back to a
+# basic strike so the move is never wasted.
+func spawn_copy()->void:
+	var actor=source()
+	if not is_instance_valid(actor):return
+	var copied:="";var best_time:=-1.0
+	for mate in actors_in(actor.global_position,12.0,false):
+		if mate==actor:continue
+		var name:=str(mate.last_move_name)
+		var t:float=float(mate.last_move_time)
+		if name!="" and name!="Copycat" and GameData.MOVES.has(name) and t>best_time:best_time=t;copied=name
+	if copied=="":copied="Mind Jab"
+	var clone=get_script().new()
+	clone.setup(actor,{"name":copied,"slots":int(entry.get("slots",1)),"stones":entry.get("stones",[])},target(),strength*.6,false)
+	get_parent().add_child(clone)
+
+# Peck (and Cross Peck) strikes every living enemy within reach exactly once, then
+# the pecker settles beside the last one it hit.
+func do_peck()->void:
+	var actor=source()
+	if not is_instance_valid(actor):return
+	var last=null
+	for other in opponents():
+		if not is_instance_valid(other) or other.current_hp<=0:continue
+		if flat(other.global_position-origin).length()>distance+.5:continue
+		hit(other,damage);pulse(other.global_position,radius);last=other
+	if is_instance_valid(last):
+		var approach:Vector3=last.global_position-flat(last.global_position-actor.global_position).normalized()*1.1
+		actor.global_position=actor.safe_displacement(actor.global_position,actor.clamp_point(approach),.4)
 
 func heal_area(center:Vector3,amount:float)->void:
 	var extra:float=1.8 if count("sharing")>0 else 0.0

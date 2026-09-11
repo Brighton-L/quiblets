@@ -49,6 +49,9 @@ var statuses:Dictionary={}
 var cast_epoch:=0
 var motion_lock:=0
 var status_visual:MeshInstance3D
+# The last self-initiated move (name and time), so Mimbit's Copycat can replay it.
+var last_move_name:=""
+var last_move_time:=-1.0
 # Summed Power Stone bonus stats from the equipped stones, keyed by stat.
 var bonus_totals:Dictionary={}
 
@@ -81,7 +84,9 @@ func _physics_process(delta: float) -> void:
 	if current_hp<=0:return
 	# Natural recovery: team Quiblets slowly regain HP whenever they are below full.
 	if not enemy and current_hp<max_hp:current_hp=minf(max_hp,current_hp+max_hp*GameData.PASSIVE_REGEN_PER_SECOND*delta)
-	for i in move_cooldowns.size():move_cooldowns[i]=maxf(0,move_cooldowns[i]-delta)
+	# Encourage's haste speeds up cooldown recovery while it lasts.
+	var cooldown_rate:float=1.0+(float(statuses.haste.amount) if statuses.has("haste") else 0.0)
+	for i in move_cooldowns.size():move_cooldowns[i]=maxf(0,move_cooldowns[i]-delta*cooldown_rate)
 	if actions_locked() or motion_lock>0:
 		velocity=Vector3.ZERO;return
 	if movement_locked():
@@ -140,9 +145,17 @@ func move_toward_point(point: Vector3, delta: float, steer:=true) -> void:
 	# and snapping back across its goal every frame.
 	var arrival:=clampf(flat.length()/.9,.4,1.0)
 	var before:=global_position
-	velocity=(direction+separation*.7).normalized()*speed*arrival;velocity.y=0;move_and_slide();global_position=clamp_point(global_position)
+	velocity=(direction+separation*.7).normalized()*current_speed()*arrival;velocity.y=0;move_and_slide();global_position=clamp_point(global_position)
 	face_direction(velocity,delta)
 	track_progress(before,delta)
+
+# Movement speed after status effects: Frost/mud/web slows drag it down, while an
+# air-current Tailwind speeds it up.
+func current_speed()->float:
+	var result:=speed
+	if statuses.has("slow"):result*=maxf(.15,1.0-float(statuses.slow.amount))
+	if statuses.has("hasten"):result*=1.0+float(statuses.hasten.amount)
+	return result
 
 # The model turns smoothly to face wherever the Quiblet is heading, on every
 # kind of movement (routes, chases, kiting, retreats). The model's +Z is its front.
@@ -190,6 +203,8 @@ func _execute_move(index:int,new_target:QuibletActor3D,effectiveness:float,ignor
 	if not chain_visited.has(index):chain_visited.append(index)
 	var entry:Dictionary=data.moves[index];var move:Dictionary=GameData.MOVES[entry.name]
 	var profile:Dictionary=BEHAVIORS.profile(entry.name)
+	# Record the move so an ally's Copycat can replay it (never record Copycat itself).
+	if not forced and not is_echo and entry.name!="Copycat":last_move_name=entry.name;last_move_time=Time.get_ticks_msec()/1000.0
 	if not ignore_cooldown and move_cooldowns[index]>0:return
 	if profile.has("low_hp") and current_hp/max_hp>float(profile.low_hp):return
 	if profile.mode=="combust" and (not is_instance_valid(new_target) or not new_target.statuses.has("burn")):return
@@ -298,6 +313,8 @@ func take_damage(amount:float,attacker:QuibletActor3D=null,reflectable:bool=true
 	# Power Stone bonuses: the attacker's critical hits, then the victim's damage resistance.
 	if reflectable and is_instance_valid(attacker) and attacker!=self and attacker.bonus_value("crit")>0.0 and randf()<minf(1.0,attacker.bonus_value("crit")):amount*=GameData.CRITICAL_HIT_MULTIPLIER
 	amount*=maxf(0.0,1.0-bonus_value("resist"))
+	# Corrode and similar effects lower the victim's defense, so it takes more.
+	if statuses.has("defense_down"):amount*=1.0+float(statuses.defense_down.amount)
 	# Level gap: under-levelled fighters deal less to and take more from higher-level foes.
 	if is_instance_valid(attacker) and attacker!=self and attacker.enemy!=enemy:amount*=GameData.level_gap_factor(int(attacker.data.get("level",1)),int(data.get("level",1)))
 	var incoming:=amount
@@ -373,7 +390,7 @@ func update_statuses(delta:float)->void:
 		var active_time:=minf(delta,status.time)
 		var ref:WeakRef=status.source
 		var from_actor:QuibletActor3D=ref.get_ref() as QuibletActor3D if ref!=null else null
-		if kind in ["burn","leech"]:
+		if kind in ["burn","leech","poison"]:
 			var actual:=take_damage(float(status.amount)*active_time,from_actor,false)
 			if is_instance_valid(from_actor):from_actor.receive_shared_heal(actual*(float(status.drain)+(.5 if kind=="leech" else 0.0)))
 		elif kind=="cocoon":receive_shared_heal(max_hp*float(status.amount)*active_time)
@@ -391,12 +408,14 @@ func movement_locked()->bool:
 	return actions_locked() or statuses.has("root")
 
 func cleanse()->void:
-	for kind in ["burn","leech","root","stun","bubble","smoke"]:statuses.erase(kind)
+	for kind in ["burn","leech","root","stun","bubble","smoke","poison","slow","confuse","defense_down","weaken"]:statuses.erase(kind)
 
 func accepts_hit_from(attacker:QuibletActor3D)->bool:
 	var miss:=0.0
 	if statuses.has("evade"):miss=maxf(miss,minf(.85,float(statuses.evade.amount)))
 	if is_instance_valid(attacker) and attacker.statuses.has("smoke"):miss=1-(1-miss)*.5
+	# A confused (or scared) attacker's own strikes often go wide.
+	if is_instance_valid(attacker) and attacker.statuses.has("confuse"):miss=maxf(miss,minf(.9,float(attacker.statuses.confuse.amount)))
 	if bonus_value("evasion")>0.0:miss=1-(1-miss)*(1-minf(1.0,bonus_value("evasion")))
 	return randf()>=miss
 
@@ -422,12 +441,19 @@ func update_status_visual()->void:
 		status_visual.material_override=mat
 	status_visual.visible=not statuses.is_empty() and current_hp>0
 	var tint:=Color(.7,.7,.7,.3)
-	for kind in ["burn","leech","root","stun","smoke","evade","thorns","cocoon","bubble","shield"]:
+	for kind in ["burn","leech","root","stun","smoke","evade","thorns","cocoon","bubble","shield","empower","poison","slow","confuse","defense_down","taunt","haste","hasten","weaken"]:
 		if not statuses.has(kind):continue
 		match kind:
 			"burn":tint=Color(1,.25,.03,.45)
 			"root","leech","thorns":tint=Color(.3,.6,.12,.4)
 			"bubble","shield":tint=Color(.2,.7,1,.35)
 			"cocoon":tint=Color(.85,1,.65,.8)
-			"stun":tint=Color(.7,.3,.85,.4)
+			"stun","confuse":tint=Color(.7,.3,.85,.4)
+			"empower":tint=Color(.63,.44,.85,.4)
+			"poison":tint=Color(.55,.8,.2,.45)
+			"slow":tint=Color(.5,.7,.95,.4)
+			"defense_down":tint=Color(.85,.5,.2,.4)
+			"taunt":tint=Color(.95,.55,.2,.4)
+			"haste","hasten":tint=Color(.95,.9,.4,.4)
+			"weaken":tint=Color(.6,.55,.5,.4)
 	status_visual.material_override.albedo_color=tint

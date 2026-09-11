@@ -1,8 +1,8 @@
 extends SceneTree
 
 func _initialize() -> void:
-	var expected_species := ["Plip","Swellit","Spriggle","Frondle","Vinee","Bloomie","Sparko","Scorchit"]
-	var expected_types := ["Water","Water","Green","Green","Green","Green","Fire","Fire"]
+	var expected_species := ["Plip","Swellit","Spriggle","Frondle","Vinee","Bloomie","Sparko","Scorchit","Fistor","Carapuff","Burlow","Stackle","Shelter","Mimbit","Pidler","Gloopit","Blubber","Cysicle","Gagglet","Gaggle"]
+	var expected_types := ["Water","Water","Green","Green","Green","Green","Fire","Fire","Psychic","Psychic","Earth","Earth","Normal","Normal","Normal","Poison","Air","Ice","Air","Air"]
 	var expected_learnsets := [
 		["Water Shot","Bubble Shot","Splash Dash","Backwash","Water Burst","Rain Drop","Spray"],
 		["Water Shot","Water Jet","Hydro Shot","Breaker","Riptide","Undertow","Whirlpool","Wave Rush","Tidal Wave","Water Spout","Downpour","Tsunami"],
@@ -11,9 +11,21 @@ func _initialize() -> void:
 		["Vine Whip","Vine Spear","Vine Grab","Rootbind","Thorn Burst","Sprout","Seed Mine","Root Slam","Leech Bloom"],
 		["Healing Bloom","Pollen Puff","Soothing Scent","Spore Cloud","Thorn Armor","Cocoon","Last Bloom"],
 		["Fireball","Flame Burst","Spark Burst","Flare","Flame Dash","Flame Pillar","Ignite"],
-		["Fireball","Flame Burst","Flare","Flame Dash","Blazing Rush","Fire Trail","Flame Wave","Firestorm","Inferno","Flame Pillar","Ignite","Combust"]
+		["Fireball","Flame Burst","Flare","Flame Dash","Blazing Rush","Fire Trail","Flame Wave","Firestorm","Inferno","Flame Pillar","Ignite","Combust"],
+		["Mind Jab","Psycho Punch","Fist Barrage","Helping Hand"],
+		["Psy Bolt","Psychic Push","Telekinesis","Psychic Pull","Psy Barrier","Gravity Well","Mind Squeeze","Psy Wall","Psy Bounce","Puff Grab","Mind Pop"],
+		["Rock Toss","Quake","Mud Shot","Pitfall","Sinkhole","Burrow","Groundbreaker","Dust Cloud","Dig Punch","Dust-Up","Tunneling Charge"],
+		["Rock Toss","Quake","Stone Spikes","Stone Wall","Rock Armor","Boulder Roll","Earth Pillar","Brace","Crush","Barricade","Rock Scatter"],
+		["Shell Bash","Guard","Taunt","Spin","Fortify","Cover","Body Block","Hunker Down","Shelter"],
+		["Distract","Cheer","Encourage","Copycat"],
+		["Web Shot","Web Snare","Web Yank","Web Line","Web Trap","Silk Sling","Tangle","Cocoon"],
+		["Poison Spit","Gunk Glob","Corrode","Blinding Gunk","Toxic Pop","Noxious Cloud","Acid Rain","Nauseate","Fume Burst","Poison Bomb"],
+		["Gust","Air Burst","Updraft","Vacuum","Crosswind","Tailwind","Whirlwind","Wind Wall","Downdraft","Cyclone","Deflate"],
+		["Icicle Shot","Ice Spike","Cold Snap","Ice Wall","Frost Patch","Ice Cage","Glacier Rush","Hail","Iceberg","Icicle Mine","Shatter"],
+		["Wingbeat","Honk","Peck","Feather Guard","Tailwind","Scare","Escort","Alarm Honk"],
+		["Wingbeat","Honk","Peck","Feather Guard","Tailwind","Scare","Escort","Alarm Honk","Double Honk","Two-Headed Watch","Cross Peck","Gaggle Rush"]
 	]
-	assert(GameData.SPECIES.size()==8 and GameData.LEARNSETS.size()==8,"The roster and learnset table should each contain eight Quiblets")
+	assert(GameData.SPECIES.size()==20 and GameData.LEARNSETS.size()==20,"The roster and learnset table should each contain twenty Quiblets")
 	for i in expected_species.size():
 		assert(GameData.SPECIES[i].name==expected_species[i] and GameData.SPECIES[i].element==expected_types[i],"Incorrect Quiblet identity at roster index %d"%i)
 		assert(GameData.learnset(i)==expected_learnsets[i],"Incorrect learnset for "+expected_species[i])
@@ -327,13 +339,28 @@ func _initialize() -> void:
 	var locked_cards:Array=game.content.find_children("*","IngredientDragCard",true,false).filter(func(card):return card.ingredient_name=="Sunplum")
 	assert(not locked_cards.is_empty() and not locked_cards[0].unlocked and not locked_cards[0].draggable,"Locked resource display should be disabled")
 	game.unlocked_ingredients.append("Sunplum")
+	# The spice workshop: five drag slots, an info panel, and spices hidden until made.
+	game.clear_spice_mix(false);game.spice_mix.clear();game.unlocked_spices.erase("Rare Spice");game.show_spice_workshop();await process_frame
+	assert(game.content.find_children("SpiceMixSlot*","",true,false).size()==5,"The mixing bowl should have five drag slots")
+	var rare_row:int=GameData.SPICES.keys().find("Rare Spice");var locked_row:Panel=game.content.find_child("SpiceGuideRow%d"%rare_row,true,false)
+	assert(locked_row.find_children("*","Label",true,false).any(func(l):return l.text=="???"),"An unmade spice hides its details behind ???")
 	var rare_before:int=game.spice_inventory["Rare Spice"]["special"]
 	var plum_before:int=game.ingredients["Sunplum"];var spark_before:int=game.ingredients["Sparkfruit"];var brine_before:int=game.ingredients["Brinepod"]
-	game.spice_mix.clear();game.spice_mix.append("Sunplum");game.spice_mix.append("Sparkfruit");game.spice_mix.append("Brinepod")
+	# Dragging a resource in consumes it immediately, like the cooking pot.
+	game.place_spice_ingredient(0,"Sunplum");game.place_spice_ingredient(1,"Sparkfruit");game.place_spice_ingredient(2,"Brinepod");await process_frame
+	assert(game.spice_mix.size()==3 and game.ingredients["Sunplum"]==plum_before-1 and game.ingredients["Sparkfruit"]==spark_before-1 and game.ingredients["Brinepod"]==brine_before-1,"Placing resources should consume one of each on the spot")
 	assert(GameData.choose_spice(game.spice_mix).name=="Rare Spice" and GameData.spice_quality(game.spice_mix)=="special","High-tier rare mixture should preview Special Rare Spice")
+	game.select_cooking_ingredient("Sunplum");await process_frame
+	assert(game.content.find_child("SelectedIngredientIcon",true,false)!=null,"Clicking a resource shows its info panel")
+	# Detaching a bowl slot refunds the resource.
+	game.detach_spice_ingredient_for_drag(2);await process_frame
+	assert(game.spice_mix.size()==2 and game.ingredients["Brinepod"]==brine_before,"Dragging a resource out of the bowl refunds it")
+	game.place_spice_ingredient(2,"Brinepod")
 	game.craft_spice();await process_frame
-	assert(game.spice_inventory["Rare Spice"]["special"]==rare_before+1,"Crafted seasoning should be stored by quality")
-	assert(game.ingredients["Sunplum"]==plum_before-1 and game.ingredients["Sparkfruit"]==spark_before-1 and game.ingredients["Brinepod"]==brine_before-1,"Seasoning crafting should consume one of each selected resource")
+	assert(game.spice_inventory["Rare Spice"]["special"]==rare_before+1 and game.unlocked_spices.has("Rare Spice"),"Crafting should bank the seasoning by quality and unlock it")
+	assert(game.ingredients["Sunplum"]==plum_before-1 and game.ingredients["Sparkfruit"]==spark_before-1 and game.ingredients["Brinepod"]==brine_before-1 and game.spice_mix.is_empty(),"Crafting consumes only what was placed and empties the bowl")
+	var known_row:Panel=game.content.find_child("SpiceGuideRow%d"%rare_row,true,false)
+	assert(known_row.find_children("*","Label",true,false).any(func(l):return l.text=="Rare Spice"),"A crafted spice reveals its name and requirements")
 	var plain_ingredients:=["Bumbleberry","Emberpepper","Dewmelon","Knobroot","Curlcap"]
 	game.leftovers.erase("Plain Stew");game.show_cooking()
 	for i in plain_ingredients.size():game.assign_pot_slot(i,plain_ingredients[i])
@@ -417,8 +444,8 @@ func _initialize() -> void:
 	for extra_index in range(3,game.expedition.team.size()):game.expedition.team[extra_index].position=Vector3(0,0,0)
 	game.expedition.camera_pan_time=0.0  # a freshly spawned set pans the camera; this checks plain following
 	var stage_env:WorldEnvironment=game.find_child("StageEnvironment",false,false);var stage_sun:DirectionalLight3D=game.find_child("StageSun",false,false)
-	assert(not stage_env.environment.fog_enabled,"Expeditions keep the clear, soft look without depth haze")
-	assert(stage_env!=null and stage_sun!=null and stage_env.environment.ambient_light_energy<=1.0 and stage_sun.light_energy<=1.05 and stage_sun.shadow_opacity<=.5 and stage_env.environment.glow_enabled and stage_env.environment.glow_intensity<=.4 and stage_env.environment.tonemap_exposure<1.0,"The expedition stage should stay restrained: soft ambient fill, one sun near unit energy, no overexposure")
+	assert(not stage_env.environment.fog_enabled,"Expeditions have no depth haze")
+	assert(stage_env!=null and stage_sun!=null and stage_env.environment.ambient_light_energy>=.8 and stage_env.environment.ambient_light_energy<=1.1 and stage_sun.light_energy>=.6 and stage_sun.light_energy<=.9 and not stage_sun.shadow_enabled and not stage_env.environment.glow_enabled and stage_env.environment.tonemap_mode==Environment.TONE_MAPPER_LINEAR,"The expedition stage should be soft meadow lighting: pale sky ambient, one gentle sun, no shadows, no glow, linear tone mapping")
 	game.expedition.update_group_camera(1.0)
 	assert(absf(game.expedition.camera_focus.x)<.5,"The expedition camera should center itself on the whole living team")
 	assert(game.camera_3d.position.y>13.0,"The expedition camera should pull back when the team spreads out")

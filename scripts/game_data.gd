@@ -177,7 +177,8 @@ static func rounded_box(size:Vector3,radius:float,segments:=4,exposed:int=BOX_AL
 static var leaf_sphere_mesh:SphereMesh
 static func leaf_sphere()->SphereMesh:
 	if leaf_sphere_mesh==null:
-		leaf_sphere_mesh=SphereMesh.new();leaf_sphere_mesh.radius=.5;leaf_sphere_mesh.height=1.0;leaf_sphere_mesh.radial_segments=10;leaf_sphere_mesh.rings=6
+		# Smooth and round, like the soft-meadow reference.
+		leaf_sphere_mesh=SphereMesh.new();leaf_sphere_mesh.radius=.5;leaf_sphere_mesh.height=1.0;leaf_sphere_mesh.radial_segments=24;leaf_sphere_mesh.rings=18
 	return leaf_sphere_mesh
 
 # Positions for a cluster of overlapping leaf balls filling an ellipsoid of the
@@ -614,7 +615,19 @@ const SPECIES := [
 	{"name":"Vinee", "element":"Green", "color":Color("#65ad65"), "accent":Color("#e1ef8b"), "shape":"tail", "base_hp":174, "base_atk":37, "range":100.0, "family":"vinee"},
 	{"name":"Bloomie", "element":"Green", "color":Color("#8dcf75"), "accent":Color("#f2b7d2"), "shape":"tuft", "base_hp":185, "base_atk":24, "range":145.0, "family":"bloomie"},
 	{"name":"Sparko", "element":"Fire", "color":Color("#f07a4d"), "accent":Color("#ffd25f"), "shape":"tail", "base_hp":140, "base_atk":39, "range":145.0, "family":"sparko"},
-	{"name":"Scorchit", "element":"Fire", "color":Color("#d94b3f"), "accent":Color("#ffad48"), "shape":"horn", "base_hp":192, "base_atk":43, "range":105.0, "family":"sparko"}
+	{"name":"Scorchit", "element":"Fire", "color":Color("#d94b3f"), "accent":Color("#ffad48"), "shape":"horn", "base_hp":192, "base_atk":43, "range":105.0, "family":"sparko"},
+	{"name":"Fistor", "element":"Psychic", "color":Color("#a06fd6"), "accent":Color("#e7d3ff"), "shape":"fists", "base_hp":174, "base_atk":34, "range":150.0, "family":"fistor"},
+	{"name":"Carapuff", "element":"Psychic", "color":Color("#c39be8"), "accent":Color("#f0e4ff"), "shape":"puff", "base_hp":178, "base_atk":35, "range":160.0, "family":"carapuff"},
+	{"name":"Burlow", "element":"Earth", "color":Color("#b07d4e"), "accent":Color("#e6c79a"), "shape":"horn", "base_hp":176, "base_atk":41, "range":120.0, "family":"burlow"},
+	{"name":"Stackle", "element":"Earth", "color":Color("#8f8577"), "accent":Color("#c9bfa8"), "shape":"boulder", "base_hp":205, "base_atk":32, "range":110.0, "family":"stackle"},
+	{"name":"Shelter", "element":"Normal", "color":Color("#cdb98f"), "accent":Color("#efe3c6"), "shape":"shell", "base_hp":240, "base_atk":24, "range":90.0, "family":"shelter"},
+	{"name":"Mimbit", "element":"Normal", "color":Color("#e3c98f"), "accent":Color("#fff0c8"), "shape":"ears", "base_hp":120, "base_atk":22, "range":150.0, "family":"mimbit"},
+	{"name":"Pidler", "element":"Normal", "color":Color("#9a8fb0"), "accent":Color("#e6dcf2"), "shape":"web", "base_hp":150, "base_atk":33, "range":165.0, "family":"pidler"},
+	{"name":"Gloopit", "element":"Poison", "color":Color("#7cae57"), "accent":Color("#d7f0a8"), "shape":"gloop", "base_hp":170, "base_atk":36, "range":175.0, "family":"gloopit"},
+	{"name":"Blubber", "element":"Air", "color":Color("#8fc7dd"), "accent":Color("#dff2fa"), "shape":"balloon", "base_hp":175, "base_atk":37, "range":170.0, "family":"blubber"},
+	{"name":"Cysicle", "element":"Ice", "color":Color("#8fd0e6"), "accent":Color("#e2f7ff"), "shape":"spikes", "base_hp":168, "base_atk":40, "range":180.0, "family":"cysicle"},
+	{"name":"Gagglet", "element":"Air", "color":Color("#dcd2c4"), "accent":Color("#f0a24d"), "shape":"beak", "base_hp":165, "base_atk":30, "range":140.0, "family":"gaggle", "model":"res://models/Gagglet.glb"},
+	{"name":"Gaggle", "element":"Air", "color":Color("#cfc4b4"), "accent":Color("#e8944a"), "shape":"twinbeak", "base_hp":210, "base_atk":34, "range":130.0, "family":"gaggle", "model":"res://models/Gaggle.glb"}
 ]
 
 const MOVES := {
@@ -680,7 +693,105 @@ const MOVES := {
 	"Combust":{"power":70.0,"cooldown":5.0,"range":165.0,"color":Color("#ef654c"),"kind":"burst","desc":"Causes a Burning enemy to erupt for immediate damage, consuming its Burn."},
 	"Smoke Cloud":{"power":20.0,"cooldown":6.0,"range":135.0,"color":Color("#ef654c"),"kind":"burst","desc":"Fills an area with smoke that interferes with enemy accuracy and targeting."},
 	"Cauterize":{"power":0.0,"cooldown":6.0,"range":0.0,"color":Color("#ef654c"),"kind":"recover","desc":"Damages the user slightly to remove applicable negative status effects."},
-	"Firework":{"power":76.0,"cooldown":7.0,"range":210.0,"color":Color("#ef654c"),"kind":"burst","desc":"Launches fire upward, where it explodes and rains burning fragments over an area."}
+	"Firework":{"power":76.0,"cooldown":7.0,"range":210.0,"color":Color("#ef654c"),"kind":"burst","desc":"Launches fire upward, where it explodes and rains burning fragments over an area."},
+	"Mind Jab":{"power":32.0,"cooldown":1.3,"range":205.0,"color":Color("#b07fe0"),"kind":"projectile","desc":"Fires a psychic fist forward for a quick punch at range."},
+	"Psycho Punch":{"power":96.0,"cooldown":9.5,"range":150.0,"color":Color("#8a5fd0"),"kind":"burst","desc":"Creates an enormous psychic fist that delivers a slow, extremely powerful punch with heavy knockback."},
+	"Fist Barrage":{"power":42.0,"cooldown":4.6,"range":185.0,"color":Color("#a074dd"),"kind":"burst","desc":"Creates several psychic fists that rapidly pummel the target."},
+	"Helping Hand":{"power":0.0,"cooldown":8.0,"range":0.0,"color":Color("#c9a9f0"),"kind":"recover","desc":"Uses Fistor's floating fists to empower an ally, temporarily increasing its attack."},
+	"Psy Bolt":{"power":32.0,"cooldown":1.3,"range":205.0,"color":Color("#b07fe0"),"kind":"projectile","desc":"Fires a simple psychic projectile at an enemy."},
+	"Telekinesis":{"power":30.0,"cooldown":4.5,"range":175.0,"color":Color("#b07fe0"),"kind":"burst","desc":"Lifts or moves an enemy briefly using psychic force."},
+	"Psychic Push":{"power":46.0,"cooldown":3.2,"range":110.0,"color":Color("#b07fe0"),"kind":"burst","desc":"Sends a burst of psychic force forward, damaging and pushing enemies away."},
+	"Psychic Pull":{"power":28.0,"cooldown":4.5,"range":190.0,"color":Color("#b07fe0"),"kind":"projectile","desc":"Pulls a targeted enemy toward Carapuff."},
+	"Psy Barrier":{"power":0.0,"cooldown":7.0,"range":0.0,"color":Color("#b07fe0"),"kind":"recover","desc":"Creates a temporary psychic barrier that reduces incoming damage."},
+	"Gravity Well":{"power":40.0,"cooldown":6.0,"range":180.0,"color":Color("#b07fe0"),"kind":"burst","desc":"Creates a psychic field that pulls nearby enemies toward its center."},
+	"Mind Squeeze":{"power":40.0,"cooldown":4.8,"range":185.0,"color":Color("#b07fe0"),"kind":"burst","desc":"Surrounds an enemy in psychic force and repeatedly compresses them for damage."},
+	"Psy Wall":{"power":24.0,"cooldown":5.5,"range":170.0,"color":Color("#b07fe0"),"kind":"burst","desc":"Creates a temporary wall of psychic energy that blocks or hinders movement."},
+	"Psy Bounce":{"power":50.0,"cooldown":4.0,"range":150.0,"color":Color("#b07fe0"),"kind":"burst","desc":"Uses psychic force to launch Carapuff rapidly to another position, damaging enemies it collides with."},
+	"Puff Grab":{"power":78.0,"cooldown":7.0,"range":165.0,"color":Color("#8a5fd0"),"kind":"burst","desc":"Shapes its psychic puff into a large grabbing appendage that picks up and throws an enemy."},
+	"Mind Pop":{"power":104.0,"cooldown":11.0,"range":130.0,"color":Color("#8a5fd0"),"kind":"burst","desc":"Compresses its psychic puff into a tiny point, then releases it in a large psychic explosion."},
+	"Quake":{"power":44.0,"cooldown":4.0,"range":120.0,"color":Color("#c8965a"),"kind":"burst","desc":"Slams the ground and sends a damaging shockwave outward."},
+	"Rock Toss":{"power":40.0,"cooldown":2.2,"range":195.0,"color":Color("#c8965a"),"kind":"projectile","desc":"Digs up a chunk of rock and throws it at an enemy."},
+	"Pitfall":{"power":30.0,"cooldown":5.5,"range":160.0,"color":Color("#c8965a"),"kind":"burst","desc":"Creates a hidden hole that traps the first enemy to cross it briefly."},
+	"Sinkhole":{"power":46.0,"cooldown":5.5,"range":170.0,"color":Color("#c8965a"),"kind":"burst","desc":"Collapses an area of ground, damaging enemies and pulling them toward the center."},
+	"Burrow":{"power":0.0,"cooldown":7.0,"range":0.0,"color":Color("#c8965a"),"kind":"recover","desc":"Dives underground temporarily to avoid danger and reposition."},
+	"Groundbreaker":{"power":62.0,"cooldown":5.0,"range":175.0,"color":Color("#c8965a"),"kind":"burst","desc":"Bursts the ground apart in a powerful line or area attack."},
+	"Dust Cloud":{"power":22.0,"cooldown":6.0,"range":150.0,"color":Color("#c8965a"),"kind":"burst","desc":"Kicks up a thick cloud of dust that reduces enemy accuracy or visibility."},
+	"Mud Shot":{"power":36.0,"cooldown":2.6,"range":185.0,"color":Color("#c8965a"),"kind":"projectile","desc":"Fires a blob of mud that damages and slows the target."},
+	"Dig Punch":{"power":80.0,"cooldown":6.5,"range":160.0,"color":Color("#a9743d"),"kind":"burst","desc":"Burrows to an enemy, erupts directly beneath them, and punches upward with its head."},
+	"Dust-Up":{"power":60.0,"cooldown":6.5,"range":120.0,"color":Color("#a9743d"),"kind":"burst","desc":"Burrows near enemies, then erupts with a huge dusty blast that deals moderate damage and may inflict Confused."},
+	"Tunneling Charge":{"power":72.0,"cooldown":6.0,"range":170.0,"color":Color("#a9743d"),"kind":"burst","desc":"Travels rapidly underground in a straight line, damaging or disturbing enemies above the tunnel before emerging at the end."},
+	"Stone Wall":{"power":22.0,"cooldown":5.5,"range":150.0,"color":Color("#c8965a"),"kind":"burst","desc":"Rearranges part of its body into a temporary blocking wall."},
+	"Rock Armor":{"power":0.0,"cooldown":7.0,"range":0.0,"color":Color("#c8965a"),"kind":"recover","desc":"Packs its rocks tightly around itself to reduce incoming damage."},
+	"Boulder Roll":{"power":58.0,"cooldown":4.5,"range":145.0,"color":Color("#c8965a"),"kind":"burst","desc":"Rearranges into a rounder form and rolls through enemies."},
+	"Earth Pillar":{"power":60.0,"cooldown":5.5,"range":175.0,"color":Color("#c8965a"),"kind":"burst","desc":"Raises a pillar of stone beneath a target, damaging and launching them."},
+	"Stone Spikes":{"power":52.0,"cooldown":4.0,"range":165.0,"color":Color("#c8965a"),"kind":"burst","desc":"Causes sharp rocks to erupt from the ground in a target area."},
+	"Brace":{"power":0.0,"cooldown":7.5,"range":0.0,"color":Color("#c8965a"),"kind":"recover","desc":"Locks its rocks together, greatly reducing knockback and incoming damage for a short time."},
+	"Crush":{"power":66.0,"cooldown":5.0,"range":150.0,"color":Color("#c8965a"),"kind":"burst","desc":"Splits apart around an enemy, then slams its rocks back together on the target."},
+	"Barricade":{"power":20.0,"cooldown":6.0,"range":160.0,"color":Color("#c8965a"),"kind":"burst","desc":"Spreads several rock pieces into a temporary obstacle line."},
+	"Rock Scatter":{"power":72.0,"cooldown":7.0,"range":150.0,"color":Color("#a9743d"),"kind":"burst","desc":"Explodes its body outward into multiple rock projectiles, then snaps itself back together."},
+	"Guard":{"power":0.0,"cooldown":6.0,"range":0.0,"color":Color("#d8c39a"),"kind":"recover","desc":"Braces behind its shell and greatly reduces incoming damage for a short time."},
+	"Taunt":{"power":0.0,"cooldown":6.0,"range":0.0,"color":Color("#d8c39a"),"kind":"recover","desc":"Makes nearby enemies prioritize Shelter as their target."},
+	"Fortify":{"power":0.0,"cooldown":7.5,"range":0.0,"color":Color("#d8c39a"),"kind":"recover","desc":"Greatly increases defense but reduces movement speed temporarily."},
+	"Cover":{"power":0.0,"cooldown":7.0,"range":0.0,"color":Color("#d8c39a"),"kind":"recover","desc":"Protects a chosen nearby ally by taking part of the damage they would receive."},
+	"Body Block":{"power":40.0,"cooldown":5.0,"range":140.0,"color":Color("#d8c39a"),"kind":"burst","desc":"Rushes toward an ally in danger and knocks nearby enemies away."},
+	"Shell Bash":{"power":56.0,"cooldown":4.0,"range":130.0,"color":Color("#d8c39a"),"kind":"burst","desc":"Charges shell-first into an enemy, dealing damage and strong knockback."},
+	"Spin":{"power":44.0,"cooldown":4.5,"range":100.0,"color":Color("#d8c39a"),"kind":"burst","desc":"Spins its shell rapidly, damaging and pushing away nearby enemies."},
+	"Hunker Down":{"power":0.0,"cooldown":9.0,"range":0.0,"color":Color("#d8c39a"),"kind":"recover","desc":"Fully retreats into its shell, becoming extremely resistant but unable to move or attack."},
+	"Shelter":{"power":0.0,"cooldown":8.0,"range":0.0,"color":Color("#d8c39a"),"kind":"recover","desc":"Uses its oversized shell as cover, reducing damage taken by nearby allies positioned behind or close to it."},
+	"Distract":{"power":0.0,"cooldown":5.5,"range":0.0,"color":Color("#d8c39a"),"kind":"recover","desc":"Makes a ridiculous display or noise that causes nearby enemies to target Mimbit temporarily."},
+	"Cheer":{"power":0.0,"cooldown":7.0,"range":0.0,"color":Color("#d8c39a"),"kind":"recover","desc":"Temporarily increases nearby allies' attack power."},
+	"Encourage":{"power":0.0,"cooldown":7.0,"range":0.0,"color":Color("#d8c39a"),"kind":"recover","desc":"Reduces a chosen ally's current move cooldowns."},
+	"Copycat":{"power":24.0,"cooldown":5.0,"range":200.0,"color":Color("#d8c39a"),"kind":"burst","desc":"Repeats a weaker version of the last move used by an allied Quiblet, using Mimbit's own Move Stones."},
+	"Web Shot":{"power":34.0,"cooldown":1.8,"range":195.0,"color":Color("#d8c39a"),"kind":"projectile","desc":"Fires sticky webbing that damages and slows an enemy."},
+	"Web Snare":{"power":22.0,"cooldown":5.0,"range":180.0,"color":Color("#d8c39a"),"kind":"projectile","desc":"Wraps an enemy in webbing and prevents movement temporarily."},
+	"Web Line":{"power":40.0,"cooldown":4.0,"range":190.0,"color":Color("#d8c39a"),"kind":"burst","desc":"Attaches a strand to an enemy and pulls Pidler toward them."},
+	"Web Yank":{"power":26.0,"cooldown":4.5,"range":185.0,"color":Color("#d8c39a"),"kind":"projectile","desc":"Attaches a strand to an enemy and pulls the enemy toward Pidler."},
+	"Web Trap":{"power":28.0,"cooldown":5.5,"range":160.0,"color":Color("#d8c39a"),"kind":"burst","desc":"Places a web trap on the ground that snares the first enemy to cross it."},
+	"Silk Sling":{"power":50.0,"cooldown":4.0,"range":150.0,"color":Color("#d8c39a"),"kind":"burst","desc":"Anchors a web behind itself and launches forward, damaging enemies it collides with."},
+	"Tangle":{"power":24.0,"cooldown":5.0,"range":170.0,"color":Color("#d8c39a"),"kind":"burst","desc":"Connects several nearby enemies with webbing, restricting their movement."},
+	"Poison Spit":{"power":32.0,"cooldown":1.6,"range":195.0,"color":Color("#8ec44f"),"kind":"projectile","desc":"Spits a poison glob that deals damage and may inflict Poisoned."},
+	"Gunk Glob":{"power":30.0,"cooldown":2.2,"range":185.0,"color":Color("#8ec44f"),"kind":"projectile","desc":"Fires a sticky glob that deals light damage and slows the target."},
+	"Corrode":{"power":28.0,"cooldown":4.0,"range":185.0,"color":Color("#8ec44f"),"kind":"projectile","desc":"Hits an enemy with corrosive poison that temporarily reduces their defense."},
+	"Blinding Gunk":{"power":24.0,"cooldown":4.5,"range":180.0,"color":Color("#8ec44f"),"kind":"projectile","desc":"Spits sludge into an enemy's face, causing some attacks to miss."},
+	"Toxic Pop":{"power":34.0,"cooldown":4.0,"range":185.0,"color":Color("#8ec44f"),"kind":"projectile","desc":"Sticks a toxic glob onto an enemy that bursts after a short delay, damaging nearby enemies and potentially poisoning them."},
+	"Noxious Cloud":{"power":24.0,"cooldown":6.0,"range":150.0,"color":Color("#8ec44f"),"kind":"burst","desc":"Creates a toxic cloud that damages or poisons enemies inside it."},
+	"Acid Rain":{"power":40.0,"cooldown":7.0,"range":190.0,"color":Color("#8ec44f"),"kind":"burst","desc":"Causes corrosive droplets to fall repeatedly over a target area."},
+	"Nauseate":{"power":20.0,"cooldown":5.0,"range":175.0,"color":Color("#8ec44f"),"kind":"projectile","desc":"Inflicts a status that disrupts enemy actions or movement."},
+	"Fume Burst":{"power":40.0,"cooldown":3.2,"range":95.0,"color":Color("#8ec44f"),"kind":"burst","desc":"Releases a short-range burst of toxic fumes around itself."},
+	"Poison Bomb":{"power":78.0,"cooldown":7.0,"range":200.0,"color":Color("#6fa83a"),"kind":"burst","desc":"Collects a large glob of poison and launches it in an arc. On impact it detonates into poison splatters that may inflict Poisoned."},
+	"Gust":{"power":40.0,"cooldown":2.6,"range":110.0,"color":Color("#a7d3e4"),"kind":"burst","desc":"Blows a concentrated blast of air forward with strong knockback."},
+	"Vacuum":{"power":30.0,"cooldown":5.0,"range":120.0,"color":Color("#a7d3e4"),"kind":"burst","desc":"Takes a huge breath inward, pulling nearby enemies toward itself."},
+	"Crosswind":{"power":42.0,"cooldown":4.0,"range":130.0,"color":Color("#a7d3e4"),"kind":"burst","desc":"Blasts enemies sideways across the battlefield."},
+	"Updraft":{"power":44.0,"cooldown":4.5,"range":175.0,"color":Color("#a7d3e4"),"kind":"burst","desc":"Fires air upward beneath enemies, launching them briefly into the air."},
+	"Tailwind":{"power":0.0,"cooldown":6.0,"range":0.0,"color":Color("#a7d3e4"),"kind":"recover","desc":"Stirs up a tailwind that boosts nearby allies' movement speed for a short time."},
+	"Whirlwind":{"power":46.0,"cooldown":4.5,"range":160.0,"color":Color("#a7d3e4"),"kind":"burst","desc":"Creates a small moving tornado that damages and carries enemies."},
+	"Wind Wall":{"power":30.0,"cooldown":5.0,"range":120.0,"color":Color("#a7d3e4"),"kind":"burst","desc":"Produces a sustained gust that pushes enemies and some projectiles away."},
+	"Downdraft":{"power":54.0,"cooldown":5.0,"range":165.0,"color":Color("#a7d3e4"),"kind":"burst","desc":"Slams compressed air downward onto a target area."},
+	"Cyclone":{"power":54.0,"cooldown":6.0,"range":120.0,"color":Color("#a7d3e4"),"kind":"burst","desc":"Spins rapidly and creates a tornado around itself that repeatedly damages and throws enemies."},
+	"Air Burst":{"power":58.0,"cooldown":4.5,"range":200.0,"color":Color("#a7d3e4"),"kind":"projectile","desc":"Fires a compressed ball of air that explodes on impact with very strong knockback."},
+	"Deflate":{"power":76.0,"cooldown":7.0,"range":150.0,"color":Color("#8dbfd6"),"kind":"burst","desc":"Releases its stored air in every direction, blasting enemies away and launching Blubber backward before it reinflates."},
+	"Icicle Shot":{"power":32.0,"cooldown":1.3,"range":205.0,"color":Color("#aee3f0"),"kind":"projectile","desc":"Fires a sharp icicle projectile."},
+	"Ice Spike":{"power":42.0,"cooldown":3.0,"range":175.0,"color":Color("#aee3f0"),"kind":"burst","desc":"Creates a spike of ice beneath an enemy."},
+	"Ice Wall":{"power":22.0,"cooldown":5.5,"range":150.0,"color":Color("#aee3f0"),"kind":"burst","desc":"Raises a temporary wall of ice that blocks movement or attacks."},
+	"Frost Patch":{"power":24.0,"cooldown":5.0,"range":170.0,"color":Color("#aee3f0"),"kind":"burst","desc":"Freezes the ground in an area, making enemies move poorly or slide."},
+	"Ice Cage":{"power":22.0,"cooldown":5.0,"range":165.0,"color":Color("#aee3f0"),"kind":"burst","desc":"Grows ice around an enemy and traps them temporarily."},
+	"Glacier Rush":{"power":52.0,"cooldown":4.5,"range":145.0,"color":Color("#aee3f0"),"kind":"burst","desc":"Forms ice beneath itself and slides rapidly through enemies."},
+	"Hail":{"power":46.0,"cooldown":7.0,"range":190.0,"color":Color("#aee3f0"),"kind":"burst","desc":"Causes chunks of ice to fall repeatedly over an area."},
+	"Iceberg":{"power":60.0,"cooldown":5.5,"range":175.0,"color":Color("#aee3f0"),"kind":"burst","desc":"Raises a large mass of ice beneath enemies, damaging and launching them."},
+	"Cold Snap":{"power":44.0,"cooldown":4.2,"range":105.0,"color":Color("#aee3f0"),"kind":"burst","desc":"Releases a sudden burst of cold that damages and slows nearby enemies."},
+	"Icicle Mine":{"power":56.0,"cooldown":5.5,"range":165.0,"color":Color("#aee3f0"),"kind":"burst","desc":"Plants a frozen spike trap that erupts when an enemy approaches."},
+	"Shatter":{"power":72.0,"cooldown":6.5,"range":120.0,"color":Color("#8fd0e6"),"kind":"burst","desc":"Creates a violent burst of ice shards around Cysicle, dealing heavy nearby damage."},
+	"Honk":{"power":18.0,"cooldown":4.0,"range":120.0,"color":Color("#e8b45a"),"kind":"burst","desc":"Lets out a loud honk that briefly lowers nearby enemies' attack and interrupts what they're doing."},
+	"Wingbeat":{"power":38.0,"cooldown":3.0,"range":110.0,"color":Color("#e8b45a"),"kind":"burst","desc":"Flaps hard and pushes nearby enemies away."},
+	"Feather Guard":{"power":0.0,"cooldown":6.5,"range":0.0,"color":Color("#e8b45a"),"kind":"recover","desc":"Fluffs up its feathers and takes reduced damage for a short time."},
+	"Scare":{"power":16.0,"cooldown":6.0,"range":175.0,"color":Color("#e8b45a"),"kind":"burst","desc":"Jumps in front of an enemy, spreads its wings and feathers, and causes it to flee and stop targeting an ally for a few seconds."},
+	"Escort":{"power":0.0,"cooldown":7.0,"range":0.0,"color":Color("#e8b45a"),"kind":"recover","desc":"Flies beside a chosen ally for a short time, shielding it and helping intercept nearby attackers."},
+	"Alarm Honk":{"power":0.0,"cooldown":7.0,"range":0.0,"color":Color("#e8b45a"),"kind":"recover","desc":"Warns the team, briefly raising allies' evasion so fewer incoming attacks connect."},
+	"Peck":{"power":40.0,"cooldown":5.0,"range":220.0,"color":Color("#e8b45a"),"kind":"burst","desc":"Rapidly dashes to one enemy and pecks it hard, then immediately dashes to the next living enemy, until every currently alive enemy has been hit exactly once."},
+	"Double Honk":{"power":22.0,"cooldown":5.0,"range":150.0,"color":Color("#e8b45a"),"kind":"burst","desc":"Each head honks in a different direction, lowering attack and interrupting enemies across a wider area."},
+	"Two-Headed Watch":{"power":0.0,"cooldown":7.5,"range":0.0,"color":Color("#e8b45a"),"kind":"recover","desc":"Protects and watches two allied Quiblets at once, shielding them and reacting when either is attacked."},
+	"Cross Peck":{"power":46.0,"cooldown":6.0,"range":220.0,"color":Color("#d9933f"),"kind":"burst","desc":"The two heads rapidly peck nearby targets at the same time, striking every living enemy once."},
+	"Gaggle Rush":{"power":56.0,"cooldown":6.5,"range":170.0,"color":Color("#d9933f"),"kind":"burst","desc":"Both heads honk and flap as Gaggle barrels through the enemy group, disrupting and weakening several enemies at once."}
 }
 
 const LEARNSETS := [
@@ -691,7 +802,19 @@ const LEARNSETS := [
 	["Vine Whip","Vine Spear","Vine Grab","Rootbind","Thorn Burst","Sprout","Seed Mine","Root Slam","Leech Bloom"],
 	["Healing Bloom","Pollen Puff","Soothing Scent","Spore Cloud","Thorn Armor","Cocoon","Last Bloom"],
 	["Fireball","Flame Burst","Spark Burst","Flare","Flame Dash","Flame Pillar","Ignite"],
-	["Fireball","Flame Burst","Flare","Flame Dash","Blazing Rush","Fire Trail","Flame Wave","Firestorm","Inferno","Flame Pillar","Ignite","Combust"]
+	["Fireball","Flame Burst","Flare","Flame Dash","Blazing Rush","Fire Trail","Flame Wave","Firestorm","Inferno","Flame Pillar","Ignite","Combust"],
+	["Mind Jab","Psycho Punch","Fist Barrage","Helping Hand"],
+	["Psy Bolt","Psychic Push","Telekinesis","Psychic Pull","Psy Barrier","Gravity Well","Mind Squeeze","Psy Wall","Psy Bounce","Puff Grab","Mind Pop"],
+	["Rock Toss","Quake","Mud Shot","Pitfall","Sinkhole","Burrow","Groundbreaker","Dust Cloud","Dig Punch","Dust-Up","Tunneling Charge"],
+	["Rock Toss","Quake","Stone Spikes","Stone Wall","Rock Armor","Boulder Roll","Earth Pillar","Brace","Crush","Barricade","Rock Scatter"],
+	["Shell Bash","Guard","Taunt","Spin","Fortify","Cover","Body Block","Hunker Down","Shelter"],
+	["Distract","Cheer","Encourage","Copycat"],
+	["Web Shot","Web Snare","Web Yank","Web Line","Web Trap","Silk Sling","Tangle","Cocoon"],
+	["Poison Spit","Gunk Glob","Corrode","Blinding Gunk","Toxic Pop","Noxious Cloud","Acid Rain","Nauseate","Fume Burst","Poison Bomb"],
+	["Gust","Air Burst","Updraft","Vacuum","Crosswind","Tailwind","Whirlwind","Wind Wall","Downdraft","Cyclone","Deflate"],
+	["Icicle Shot","Ice Spike","Cold Snap","Ice Wall","Frost Patch","Ice Cage","Glacier Rush","Hail","Iceberg","Icicle Mine","Shatter"],
+	["Wingbeat","Honk","Peck","Feather Guard","Tailwind","Scare","Escort","Alarm Honk"],
+	["Wingbeat","Honk","Peck","Feather Guard","Tailwind","Scare","Escort","Alarm Honk","Double Honk","Two-Headed Watch","Cross Peck","Gaggle Rush"]
 ]
 
 const MOVE_STONES := [
@@ -787,7 +910,13 @@ const MOVE_RARITY_DECAY:=.7
 const INGREDIENT_AFFINITY:={
 	"Water":{"excellent":["Dewmelon","Brinepod","Frostberry"],"good_tags":["juicy","fruit"],"poor_tags":["dry","spicy"],"opposing":["Emberpepper"]},
 	"Green":{"excellent":["Bitterleaf","Honeybulb","Glowcap"],"good_tags":["plant","leaf","root","earthy","fungus"],"poor_tags":["salty","spicy"],"opposing":["Emberpepper"]},
-	"Fire":{"excellent":["Emberpepper","Sparkfruit","Sunplum"],"good_tags":["spicy","dry","seed"],"poor_tags":["juicy","soft"],"opposing":["Frostberry","Dewmelon"]}
+	"Fire":{"excellent":["Emberpepper","Sparkfruit","Sunplum"],"good_tags":["spicy","dry","seed"],"poor_tags":["juicy","soft"],"opposing":["Frostberry","Dewmelon"]},
+	"Psychic":{"excellent":["Bitterleaf","Glowcap","Puffshroom"],"good_tags":["bitter","soft","fungus"],"poor_tags":["hard","spicy"],"opposing":["Emberpepper"]},
+	"Earth":{"excellent":["Knobroot","Stonebean","Oldroot"],"good_tags":["earthy","hard","root"],"poor_tags":["juicy","sweet"],"opposing":["Dewmelon"]},
+	"Normal":{"excellent":["Honeybulb","Knobroot"],"good_tags":["savory","soft","root"],"poor_tags":["spicy","sour"],"opposing":[]},
+	"Poison":{"excellent":["Puffshroom","Curlcap","Glowcap"],"good_tags":["fungus","bitter","sour"],"poor_tags":["sweet","salty"],"opposing":[]},
+	"Air":{"excellent":["Frostberry","Sparkfruit"],"good_tags":["dry","seed","soft"],"poor_tags":["hard","earthy"],"opposing":[]},
+	"Ice":{"excellent":["Frostberry","Brinepod"],"good_tags":["juicy","salty"],"poor_tags":["spicy","dry"],"opposing":["Emberpepper"]}
 }
 
 static func quiblet_relationship(a:Dictionary,b:Dictionary)->String:
@@ -920,24 +1049,24 @@ const SPICE_RECIPES := [
 const SPICE_QUALITIES := ["basic","good","great","special"]
 
 const RECIPES := [
-	{"name":"Plain Stew","need":{},"priority":0,"desc":"A simple mixed stew with a broad general pool.","pool":[0,1,2,3,4,5,6,7],"attracts":"any Quiblet","color":Color("#b98c64")},
-	{"name":"Rock Bottom Broth","need":{"earthy":2,"hard":2},"priority":10,"desc":"A dense mineral broth for Stone and rocky Quiblets.","pool":[3,4],"attracts":"sturdy Green-type Quiblets","color":Color("#777c86")},
+	{"name":"Plain Stew","need":{},"priority":0,"desc":"A simple mixed stew with a broad general pool.","pool":[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19],"attracts":"any Quiblet","color":Color("#b98c64")},
+	{"name":"Rock Bottom Broth","need":{"earthy":2,"hard":2},"priority":10,"desc":"A dense mineral broth for Stone and rocky Quiblets.","pool":[3,4,10,11],"attracts":"sturdy, rocky Quiblets","color":Color("#777c86")},
 	{"name":"Hot Stuff","need":{"spicy":2,"dry":2},"priority":10,"desc":"A fiery stew for heat-loving Quiblets.","pool":[6,7],"attracts":"Fire-type Quiblets","color":Color("#df6246")},
 	{"name":"Deep Dish","need":{"salty":2,"juicy":3},"priority":10,"desc":"A briny, juicy dish for Water and aquatic Quiblets.","pool":[0,1],"attracts":"Water-type Quiblets","color":Color("#55abc7")},
 	{"name":"Shock Stock","need":{"sour":2,"seed":2},"priority":10,"desc":"A crackling stock that draws Electric Quiblets.","pool":[6],"attracts":"sparky orange Quiblets","color":Color("#e1c53c")},
-	{"name":"Food for Thought","need":{"bitter":2,"soft":2},"priority":10,"desc":"A curious dish favored by Psychic Quiblets.","pool":[5],"attracts":"thoughtful Green-type Quiblets","color":Color("#9a78c7")},
+	{"name":"Food for Thought","need":{"bitter":2,"soft":2},"priority":10,"desc":"A curious dish favored by Psychic Quiblets.","pool":[8,9],"attracts":"thoughtful Psychic-type Quiblets","color":Color("#9a78c7")},
 	{"name":"Garden Variety","need":{"leaf":2,"soft":2},"priority":10,"desc":"A green stew for Plant and leafy Quiblets.","pool":[2,3,4,5],"attracts":"Green-type Quiblets","color":Color("#69a45e")},
-	{"name":"Midnight Snack","need":{"bitter":3,"fungus":2},"priority":20,"desc":"A dark, earthy meal for nocturnal and shadowy Quiblets.","pool":[4,7],"attracts":"dark, nocturnal Quiblets","color":Color("#625a83")},
-	{"name":"Heavy Helping","need":{"hard":3,"savory":2},"priority":20,"desc":"A weighty meal for large, bulky, tanky Quiblets.","pool":[1,3,7],"attracts":"big, bulky Quiblets","color":Color("#8c735e")},
-	{"name":"Light Bite","need":{"soft":3,"juicy":2},"priority":20,"desc":"A light dish for small, nimble Quiblets.","pool":[0,2,6],"attracts":"small, nimble Quiblets","color":Color("#76c7b0")},
-	{"name":"Punch Drunk","need":{"spicy":2,"hard":2},"priority":25,"desc":"A forceful stew for melee and aggressive Quiblets.","pool":[4,6,7],"attracts":"aggressive melee Quiblets","color":Color("#cf7041")},
-	{"name":"Long Shot","need":{"dry":3,"seed":2},"priority":25,"desc":"A crisp seed stew for ranged Quiblets.","pool":[0,1,2,3,6,7],"attracts":"long-range Quiblets","color":Color("#6e9bc5")},
-	{"name":"Comfort Food","need":{"sweet":3,"soft":2},"priority":25,"desc":"A soothing meal for healing and support-oriented Quiblets.","pool":[5],"attracts":"healing, supportive Quiblets","color":Color("#d49b9f")},
-	{"name":"Woodland Medley","need":{"fungus":2,"leaf":1,"earthy":1},"priority":15,"desc":"A forest medley enjoyed by woodland Quiblets across types.","pool":[2,3,4,5],"attracts":"woodland Green-type Quiblets","color":Color("#638b58")},
-	{"name":"Peak Cuisine","need":{"root":3,"hard":3},"priority":15,"desc":"A sturdy dish for mountain, cave, and highland Quiblets.","pool":[1,3,7],"attracts":"mountain and cave Quiblets","color":Color("#7c818c")},
-	{"name":"Coastal Catch","need":{"salty":2,"juicy":2},"priority":15,"desc":"A shore-inspired dish broader than a purely aquatic stew.","pool":[0,1,2,3],"attracts":"shoreline Quiblets","color":Color("#4fa7a6")},
-	{"name":"Fancy Feast","need":{"sweet":2,"sour":2,"juicy":2},"priority":30,"desc":"An elaborate dish that attracts unusual and rare Quiblets.","pool":[1,5,7],"attracts":"rare and unusual Quiblets","color":Color("#c17fc4")},
-	{"name":"Mystery Meat","need":{"spicy":1,"salty":1,"bitter":1,"savory":1},"priority":30,"desc":"A strange mixed dish with an unpredictable, weird pool.","pool":[0,1,2,3,4,5,6,7],"attracts":"unpredictable Quiblets","color":Color("#826177")}
+	{"name":"Midnight Snack","need":{"bitter":3,"fungus":2},"priority":20,"desc":"A dark, earthy meal for nocturnal and shadowy Quiblets.","pool":[4,7,15],"attracts":"dark, nocturnal Quiblets","color":Color("#625a83")},
+	{"name":"Heavy Helping","need":{"hard":3,"savory":2},"priority":20,"desc":"A weighty meal for large, bulky, tanky Quiblets.","pool":[1,3,7,11,12],"attracts":"big, bulky Quiblets","color":Color("#8c735e")},
+	{"name":"Light Bite","need":{"soft":3,"juicy":2},"priority":20,"desc":"A light dish for small, nimble Quiblets.","pool":[0,2,6,13,18],"attracts":"small, nimble Quiblets","color":Color("#76c7b0")},
+	{"name":"Punch Drunk","need":{"spicy":2,"hard":2},"priority":25,"desc":"A forceful stew for melee and aggressive Quiblets.","pool":[4,6,7,10],"attracts":"aggressive melee Quiblets","color":Color("#cf7041")},
+	{"name":"Long Shot","need":{"dry":3,"seed":2},"priority":25,"desc":"A crisp seed stew for ranged Quiblets.","pool":[0,1,2,3,6,7,14,15,16,17],"attracts":"long-range Quiblets","color":Color("#6e9bc5")},
+	{"name":"Comfort Food","need":{"sweet":3,"soft":2},"priority":25,"desc":"A soothing meal for healing and support-oriented Quiblets.","pool":[5,13,18,19],"attracts":"healing, supportive Quiblets","color":Color("#d49b9f")},
+	{"name":"Woodland Medley","need":{"fungus":2,"leaf":1,"earthy":1},"priority":15,"desc":"A forest medley enjoyed by woodland Quiblets across types.","pool":[2,3,4,5,15],"attracts":"woodland Quiblets","color":Color("#638b58")},
+	{"name":"Peak Cuisine","need":{"root":3,"hard":3},"priority":15,"desc":"A sturdy dish for mountain, cave, and highland Quiblets.","pool":[1,3,7,10,11,17],"attracts":"mountain and cave Quiblets","color":Color("#7c818c")},
+	{"name":"Coastal Catch","need":{"salty":2,"juicy":2},"priority":15,"desc":"A shore-inspired dish broader than a purely aquatic stew.","pool":[0,1,2,3,16],"attracts":"shoreline Quiblets","color":Color("#4fa7a6")},
+	{"name":"Fancy Feast","need":{"sweet":2,"sour":2,"juicy":2},"priority":30,"desc":"An elaborate dish that attracts unusual and rare Quiblets.","pool":[1,5,7,14,17,19],"attracts":"rare and unusual Quiblets","color":Color("#c17fc4")},
+	{"name":"Mystery Meat","need":{"spicy":1,"salty":1,"bitter":1,"savory":1},"priority":30,"desc":"A strange mixed dish with an unpredictable, weird pool.","pool":[0,1,2,3,4,5,6,7,14,15,16,18,19],"attracts":"unpredictable Quiblets","color":Color("#826177")}
 ]
 
 static func species(index: int) -> Dictionary:

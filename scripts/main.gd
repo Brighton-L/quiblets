@@ -11,6 +11,8 @@ const EQUIPMENT_SLOT_SCRIPT:=preload("res://scripts/equipment_drop_slot.gd")
 const MOVE_ICON_SCRIPT:=preload("res://scripts/move_icon.gd")
 const POWER_STONE_ICON_SCRIPT:=preload("res://scripts/power_stone_icon.gd")
 const TRAINING_SLOT_SCRIPT:=preload("res://scripts/training_drop_slot.gd")
+const SPICE_MIX_SLOT_SCRIPT:=preload("res://scripts/spice_mix_slot.gd")
+const SPICE_MIX_MAX:=5
 const UNLOCK_RING_SCRIPT:=preload("res://scripts/unlock_progress_ring.gd")
 const REWARD_SPARKLES_SCRIPT:=preload("res://scripts/reward_sparkles.gd")
 
@@ -35,6 +37,8 @@ var spice_inventory := {
 	"Gentle Herb":{"basic":0,"good":0,"great":0,"special":0},
 	"Rare Spice":{"basic":0,"good":0,"great":0,"special":0}
 }
+# Spices are hidden in the workshop until crafted at least once.
+var unlocked_spices: Array[String] = []
 var selected_cooking_ingredient := ""
 var selected_cooking_item:Dictionary={}
 var unlocked_ingredients: Array[String] = []
@@ -184,6 +188,7 @@ func save_data()->Dictionary:
 		"special_slots":special_slots.duplicate(),
 		"spice_mix":spice_mix.duplicate(),
 		"spice_inventory":spice_inventory.duplicate(true),
+		"unlocked_spices":unlocked_spices.duplicate(),
 		"move_stone_inventory":move_stone_inventory.duplicate(true),
 		"power_stone_inventory":power_stone_inventory.duplicate(true),
 		"pending_stew":pending_stew.duplicate(true),
@@ -269,13 +274,21 @@ func apply_save_data(data:Dictionary)->void:
 	spice_mix.clear()
 	for value in data.get("spice_mix",[]):
 		var ingredient_name:=migrate_ingredient_name(str(value))
-		if spice_mix.size()<3 and GameData.INGREDIENTS.has(ingredient_name):spice_mix.append(ingredient_name)
+		if spice_mix.size()<SPICE_MIX_MAX and GameData.INGREDIENTS.has(ingredient_name):spice_mix.append(ingredient_name)
 	var saved_spices=data.get("spice_inventory",{})
 	if saved_spices is Dictionary:
 		for spice_name in spice_inventory:
 			var saved_qualities=saved_spices.get(spice_name,{})
 			if saved_qualities is Dictionary:
 				for quality in spice_inventory[spice_name]:spice_inventory[spice_name][quality]=maxi(0,int(saved_qualities.get(quality,0)))
+	unlocked_spices.clear()
+	for value in data.get("unlocked_spices",[]):
+		var spice_name:=str(value)
+		if GameData.SPICES.has(spice_name) and not unlocked_spices.has(spice_name):unlocked_spices.append(spice_name)
+	# Older saves recorded no unlock list: any spice already sitting in the
+	# inventory has clearly been made before, so treat it as discovered.
+	for spice_name in spice_inventory:
+		if not unlocked_spices.has(spice_name) and spice_inventory[spice_name].values().any(func(count):return int(count)>0):unlocked_spices.append(spice_name)
 	move_stone_inventory.clear()
 	for stone in GameData.MOVE_STONES:move_stone_inventory[str(stone.effect)]=0
 	var saved_move_stones=data.get("move_stone_inventory",{})
@@ -1284,63 +1297,98 @@ func show_resources() -> void:
 			var use:=add_button(row,"USE",Vector2(414,12),Vector2(72,31),func(name=item):show_item_use(name),"gold");use.name="UseSpecialItem";use.disabled=int(special_items[item])<=0
 
 func show_spice_workshop()->void:
-	screen="spice_workshop";clear_content();make_topbar("SPICE WORKSHOP","Combine three resources. Better resources create stronger seasoning.",false)
+	screen="spice_workshop";clear_content();make_topbar("SPICE WORKSHOP","Drag up to five resources into the bowl; better resources create stronger seasoning.",false)
 	var workbench:=panel(Rect2(30,112,560,565),Color("#fffaf0"),18);content.add_child(workbench)
-	label(workbench,"MIXING BOWL",Vector2(22,18),18,GameData.COLORS.ink,true)
-	for i in 3:
-		var slot:=panel(Rect2(32+i*168,62,146,118),Color.WHITE,14);workbench.add_child(slot)
-		if i<spice_mix.size():
-			var ingredient_name:=spice_mix[i];var info:Dictionary=GameData.INGREDIENTS[ingredient_name]
-			add_ingredient_icon(slot,info,Vector2(44,6),Vector2(58,48),34);label(slot,ingredient_name,Vector2(8,54),13,GameData.COLORS.ink,true,HORIZONTAL_ALIGNMENT_CENTER,130);add_button(slot,"REMOVE",Vector2(20,82),Vector2(106,27),func(index=i):remove_spice_mix(index),"plain")
-		else:label(slot,"+",Vector2(42,25),42,GameData.COLORS.muted,false,HORIZONTAL_ALIGNMENT_CENTER,62)
-	var result:=GameData.choose_spice(spice_mix) if spice_mix.size()==3 else {};var quality:=GameData.spice_quality(spice_mix) if spice_mix.size()==3 else "basic"
-	var preview:=panel(Rect2(32,200,482,112),spice_quality_color(quality).lightened(.68) if not result.is_empty() else Color("#eeeeea"),14);workbench.add_child(preview)
+	label(workbench,"MIXING BOWL",Vector2(22,16),18,GameData.COLORS.ink,true)
+	label(workbench,"Drag resources in from the right. Drag one back out to remove it.",Vector2(22,42),11,GameData.COLORS.muted,false,HORIZONTAL_ALIGNMENT_LEFT,516)
+	for i in SPICE_MIX_MAX:
+		var slot:=SPICE_MIX_SLOT_SCRIPT.new();slot.name="SpiceMixSlot%d"%i;slot.position=Vector2(20+i*106,64);slot.size=Vector2(100,112);workbench.add_child(slot);slot.setup(self,i,spice_mix[i] if i<spice_mix.size() else "")
+	var result:=GameData.choose_spice(spice_mix) if not spice_mix.is_empty() else {};var quality:=GameData.spice_quality(spice_mix) if not spice_mix.is_empty() else "basic"
+	var preview:=panel(Rect2(20,192,520,104),spice_quality_color(quality).lightened(.68) if not result.is_empty() else Color("#eeeeea"),14);preview.name="SpicePreview";workbench.add_child(preview)
 	if result.is_empty():
-		label(preview,"NO SEASONING YET",Vector2(16,17),17,GameData.COLORS.muted,true,HORIZONTAL_ALIGNMENT_CENTER,450);label(preview,"Fill all three slots with a matching combination.",Vector2(16,54),13,GameData.COLORS.muted,false,HORIZONTAL_ALIGNMENT_CENTER,450)
+		label(preview,"NO SEASONING YET",Vector2(16,20),17,GameData.COLORS.muted,true,HORIZONTAL_ALIGNMENT_CENTER,488);label(preview,"Fill the bowl with a matching combination of resources.",Vector2(16,55),13,GameData.COLORS.muted,false,HORIZONTAL_ALIGNMENT_CENTER,488)
 	else:
-		var spice_info:Dictionary=GameData.SPICES[result.name];label(preview,spice_info.icon,Vector2(18,20),36,spice_info.color);label(preview,"%s %s"%[quality.capitalize(),result.name],Vector2(75,18),19,GameData.COLORS.ink,true);label(preview,"Favors %s"%spice_info.favors,Vector2(75,51),12,GameData.COLORS.muted,false,HORIZONTAL_ALIGNMENT_LEFT,380)
-	var craft:=add_button(workbench,"CRAFT SEASONING",Vector2(32,329),Vector2(482,54),func():craft_spice(),"gold");craft.disabled=result.is_empty()
-	label(workbench,"QUALITY",Vector2(32,405),14,GameData.COLORS.ink,true)
-	label(workbench,"Basic  →  Good  →  Great  →  Special",Vector2(32,434),17,GameData.COLORS.berry,true)
-	label(workbench,"Quality depends on the average resource tier.\nHigher quality creates a much stronger attraction bias.",Vector2(32,470),11,GameData.COLORS.muted,false,HORIZONTAL_ALIGNMENT_LEFT,470)
-	add_back_button(content,BACK_BUTTON_POSITION,func():show_resources())
-	var catalogue:=panel(Rect2(610,112,640,565),Color("#f4f7fb"),18);content.add_child(catalogue)
-	label(catalogue,"CHOOSE THREE RESOURCES",Vector2(20,17),18,GameData.COLORS.ink,true)
-	var keys:=GameData.INGREDIENTS.keys()
-	var choice_scroll:=ScrollContainer.new();choice_scroll.position=Vector2(16,53);choice_scroll.size=Vector2(608,88);catalogue.add_child(choice_scroll)
-	var choice_row:=HBoxContainer.new();choice_row.add_theme_constant_override("separation",8);choice_scroll.add_child(choice_row)
-	for i in keys.size():
-		var ingredient_name:String=keys[i];var info:Dictionary=GameData.INGREDIENTS[ingredient_name]
-		var unlocked:=unlocked_ingredients.has(ingredient_name)
-		var button_text:="     %s\n     ×%d  • tier %d"%[ingredient_name,ingredients[ingredient_name],info.tier] if unlocked else "     ?\n     ×0"
-		var button:=add_button(choice_row,button_text,Vector2.ZERO,Vector2(139,76),func(name=ingredient_name):add_spice_mix(name),"plain");button.custom_minimum_size=Vector2(139,76)
-		if unlocked:add_ingredient_icon(button,info,Vector2(6,17),Vector2(38,42),22)
-		button.disabled=not unlocked or spice_mix.size()>=3 or int(ingredients[ingredient_name])<=spice_mix.count(ingredient_name)
-	label(catalogue,"SEASONING GUIDE",Vector2(20,154),15,GameData.COLORS.ink,true)
-	for i in GameData.SPICE_RECIPES.size():
-		var recipe:Dictionary=GameData.SPICE_RECIPES[i];var spice_info:Dictionary=GameData.SPICES[recipe.name];var x:=18+(i%2)*302;var y:=184+(i/2)*60
-		var row:=panel(Rect2(x,y,288,50),Color.WHITE,9);catalogue.add_child(row);label(row,spice_info.icon+"  "+recipe.name,Vector2(9,5),12,spice_info.color,true);label(row,"Favors "+spice_info.favors,Vector2(9,25),9,GameData.COLORS.muted,false,HORIZONTAL_ALIGNMENT_LEFT,270)
+		var spice_info:Dictionary=GameData.SPICES[result.name];label(preview,spice_info.icon,Vector2(20,26),36,spice_info.color);label(preview,"%s %s"%[quality.capitalize(),result.name],Vector2(78,18),19,GameData.COLORS.ink,true);label(preview,"Favors %s"%spice_info.favors,Vector2(78,50),12,GameData.COLORS.muted,false,HORIZONTAL_ALIGNMENT_LEFT,430);label(preview,"Requires %s"%requirement_text(spice_recipe_need(result.name)),Vector2(78,72),11,GameData.COLORS.berry,false,HORIZONTAL_ALIGNMENT_LEFT,430)
+	var craft:=add_button(workbench,"CRAFT SEASONING",Vector2(20,312),Vector2(520,54),func():craft_spice(),"gold");craft.name="CraftSeasoning";craft.disabled=result.is_empty()
+	label(workbench,"QUALITY",Vector2(22,386),14,GameData.COLORS.ink,true)
+	label(workbench,"Basic  →  Good  →  Great  →  Special",Vector2(22,414),17,GameData.COLORS.berry,true)
+	label(workbench,"Quality depends on the average resource tier. Higher quality creates a\nmuch stronger attraction bias and a larger arrival stat bonus.",Vector2(22,448),11,GameData.COLORS.muted,false,HORIZONTAL_ALIGNMENT_LEFT,510)
+	add_back_button(content,BACK_BUTTON_POSITION,func():clear_spice_mix(true);show_resources())
+	# Selected ingredient information, mirroring the cooking menu's info panel.
+	var info_panel:=panel(Rect2(610,112,640,96),Color("#fffaf0"),14);info_panel.clip_contents=true;info_panel.name="SpiceItemInfo";content.add_child(info_panel)
+	if selected_cooking_ingredient.is_empty() or not GameData.INGREDIENTS.has(selected_cooking_ingredient):
+		label(info_panel,"INGREDIENT INFO",Vector2(17,13),15,GameData.COLORS.ink,true);label(info_panel,"Click any unlocked resource below to learn about it.",Vector2(17,46),13,GameData.COLORS.muted)
+	else:
+		var selected_info:Dictionary=GameData.INGREDIENTS[selected_cooking_ingredient];var selected_icon:=add_ingredient_icon(info_panel,selected_info,Vector2(14,12),Vector2(48,66),38);selected_icon.name="SelectedIngredientIcon";label(info_panel,selected_cooking_ingredient,Vector2(73,8),18,GameData.COLORS.ink,true);label(info_panel,"%s • tier %d • ×%d"%[ingredient_tag_text(selected_info),int(selected_info.tier),int(ingredients.get(selected_cooking_ingredient,0))],Vector2(73,36),13,Color.BLACK);label(info_panel,selected_info.feel,Vector2(73,61),11,GameData.COLORS.muted,false,HORIZONTAL_ALIGNMENT_LEFT,549)
+	# Draggable resource catalogue.
+	var catalogue:=panel(Rect2(610,220,640,200),Color("#f7f7f7"),16);content.add_child(catalogue)
+	label(catalogue,"RESOURCES",Vector2(18,12),15,GameData.COLORS.ink,true)
+	var ingredient_grid:=GridContainer.new();ingredient_grid.name="SpiceIngredientGrid";ingredient_grid.position=Vector2(14,38);ingredient_grid.size=Vector2(612,150);ingredient_grid.columns=8;ingredient_grid.add_theme_constant_override("h_separation",8);ingredient_grid.add_theme_constant_override("v_separation",8);catalogue.add_child(ingredient_grid)
+	for ingredient_name in GameData.INGREDIENTS:
+		var card:=IngredientDragCard.new();card.custom_minimum_size=Vector2(67,82);ingredient_grid.add_child(card);card.setup(self,ingredient_name,unlocked_ingredients.has(ingredient_name),1)
+	# Seasoning guide: every spice, but only ones crafted before show their details.
+	var guide:=panel(Rect2(610,430,640,247),Color("#f4f7fb"),18);content.add_child(guide)
+	label(guide,"SEASONING GUIDE",Vector2(18,12),15,GameData.COLORS.ink,true)
+	var spice_names:=GameData.SPICES.keys()
+	for i in spice_names.size():
+		var spice_name:String=spice_names[i];var spice_info:Dictionary=GameData.SPICES[spice_name];var known:=unlocked_spices.has(spice_name)
+		var x:=16+(i%2)*310;var y:=42+(i/2)*50
+		var row:=panel(Rect2(x,y,300,46),Color.WHITE,9);row.name="SpiceGuideRow%d"%i;guide.add_child(row)
+		if known:
+			label(row,spice_info.icon,Vector2(8,6),20,spice_info.color)
+			label(row,spice_name,Vector2(38,4),13,GameData.COLORS.ink,true,HORIZONTAL_ALIGNMENT_LEFT,254)
+			label(row,"Requires "+requirement_text(spice_recipe_need(spice_name)),Vector2(38,24),9,GameData.COLORS.berry,false,HORIZONTAL_ALIGNMENT_LEFT,254)
+		else:
+			label(row,"?",Vector2(8,6),20,GameData.COLORS.muted)
+			label(row,"???",Vector2(38,4),13,GameData.COLORS.muted,true,HORIZONTAL_ALIGNMENT_LEFT,254)
+			label(row,"Requires ???",Vector2(38,24),9,GameData.COLORS.muted,false,HORIZONTAL_ALIGNMENT_LEFT,254)
 
-func add_spice_mix(ingredient_name:String)->void:
-	if spice_mix.size()>=3 or not unlocked_ingredients.has(ingredient_name):return
-	if int(ingredients.get(ingredient_name,0))<=spice_mix.count(ingredient_name):return
-	spice_mix.append(ingredient_name);show_spice_workshop()
+# The tag requirements of the recipe that produces a given spice.
+func spice_recipe_need(spice_name:String)->Dictionary:
+	for recipe in GameData.SPICE_RECIPES:
+		if str(recipe.name)==spice_name:return recipe.need
+	return {}
 
-func remove_spice_mix(index:int)->void:
-	if index>=0 and index<spice_mix.size():spice_mix.remove_at(index)
-	show_spice_workshop()
+# True when one more of this ingredient can be placed: it is unlocked, the bowl
+# has room, and at least one is still in inventory.
+func can_place_spice_ingredient(ingredient_name:String,slot_index:int)->bool:
+	if not unlocked_ingredients.has(ingredient_name):return false
+	if int(ingredients.get(ingredient_name,0))<=0:return false
+	if slot_index<spice_mix.size():return false  # occupied slots are replaced only after a detach
+	return spice_mix.size()<SPICE_MIX_MAX
+
+# Consume one from inventory and add it to the bowl (slots fill left to right).
+func place_spice_ingredient(_slot_index:int,ingredient_name:String)->void:
+	if not can_place_spice_ingredient(ingredient_name,spice_mix.size()):return
+	ingredients[ingredient_name]-=1;spice_mix.append(ingredient_name);selected_cooking_ingredient=ingredient_name;selected_cooking_item={};show_spice_workshop()
+
+# Remove the ingredient at a bowl slot, refund it, and hand it to the drag.
+func detach_spice_ingredient_for_drag(slot_index:int)->Dictionary:
+	if slot_index<0 or slot_index>=spice_mix.size():return {}
+	var ingredient_name:=spice_mix[slot_index]
+	ingredients[ingredient_name]=int(ingredients.get(ingredient_name,0))+1;spice_mix.remove_at(slot_index)
+	return {"kind":"ingredient","name":ingredient_name}
+
+# Empty the bowl, optionally refunding everything to inventory.
+func clear_spice_mix(refund:=true)->void:
+	if refund:
+		for ingredient_name in spice_mix:ingredients[ingredient_name]=int(ingredients.get(ingredient_name,0))+1
+	spice_mix.clear()
+
+func finish_spice_mix_drag()->void:
+	if screen=="spice_workshop" and is_instance_valid(content):show_spice_workshop()
 
 func craft_spice()->void:
-	if spice_mix.size()!=3:return
+	# Ingredients were already consumed as they were dragged in, so crafting only
+	# checks that the current mixture makes a known seasoning, then banks it.
+	if spice_mix.is_empty():return
 	var recipe:=GameData.choose_spice(spice_mix)
 	if recipe.is_empty():toast("That combination does not make a known seasoning.",GameData.COLORS.coral);return
-	var needed:={}
-	for ingredient_name in spice_mix:needed[ingredient_name]=int(needed.get(ingredient_name,0))+1
-	for ingredient_name in needed:
-		if int(ingredients.get(ingredient_name,0))<int(needed[ingredient_name]):toast("Not enough resources for that mixture.",GameData.COLORS.coral);return
 	var quality:=GameData.spice_quality(spice_mix)
-	for ingredient_name in needed:ingredients[ingredient_name]-=int(needed[ingredient_name])
-	spice_inventory[recipe.name][quality]+=1;spice_mix.clear();show_spice_workshop();toast("Crafted %s %s!"%[quality.capitalize(),recipe.name],spice_quality_color(quality))
+	var newly_unlocked:bool=not unlocked_spices.has(recipe.name)
+	if newly_unlocked:unlocked_spices.append(recipe.name)
+	spice_inventory[recipe.name][quality]+=1;spice_mix.clear();selected_cooking_ingredient="";show_spice_workshop()
+	toast(("Discovered %s %s!" if newly_unlocked else "Crafted %s %s!")%[quality.capitalize(),recipe.name],spice_quality_color(quality))
 
 func show_cooking() -> void:
 	if not completed_stew_result.is_empty():show_cook_result();return
@@ -1588,9 +1636,13 @@ func grant_ingredient(ingredient_name:String,amount:int)->void:
 	if not unlocked_ingredients.has(ingredient_name):unlocked_ingredients.append(ingredient_name)
 
 func select_cooking_ingredient(name:String)->void:
-	# Ingredient cards also live on the Training screen; only Cooking has an info panel for them.
-	if screen!="cooking":return
-	if unlocked_ingredients.has(name):selected_cooking_ingredient=name;selected_cooking_item={};show_cooking()
+	# Ingredient cards also live on the Training screen, which has no info panel;
+	# both Cooking and the Spice Workshop show one.
+	if screen not in ["cooking","spice_workshop"]:return
+	if unlocked_ingredients.has(name):
+		selected_cooking_ingredient=name;selected_cooking_item={}
+		if screen=="cooking":show_cooking()
+		else:show_spice_workshop()
 
 func inspect_cooking_item(kind:String,slot_index:int)->void:
 	# Clicking a filled pot, spice, or special slot shows that item in the info panel.
@@ -1731,6 +1783,9 @@ func cook()->void:
 	for i in recruits:
 		var species_index:int=choose_spiced_species(recipe.pool,quality_rarity_multiplier(quality));var level:=maxi(1,average_level+quality_level_offset(quality))
 		var q:=GameData.make_quiblet(species_index,level,"",true)
+		# An arrival is born at its level rather than levelling up to it, so grant the
+		# Lv. 25 milestones it would have earned on the way (one per full 25 levels).
+		apply_arrival_milestones(q)
 		var seasoning:=spice_arrival_bonuses()
 		if not seasoning.is_empty():q.spice_bonuses=seasoning
 		var stone_chance:=quality_stone_chance(quality)
@@ -2190,6 +2245,9 @@ func grant_training_exp(q:Dictionary,amount:int)->void:
 	while int(q.exp)>=GameData.exp_to_level(int(q.level)):
 		q.exp-=GameData.exp_to_level(int(q.level));q.level+=1
 		if int(q.level)%25==0:apply_milestone(q)
+
+func apply_arrival_milestones(q:Dictionary)->void:
+	for milestone in int(q.level)/25:apply_milestone(q)
 
 func apply_milestone(q:Dictionary)->void:
 	var both:bool=q.prodigy;q.prodigy=false
@@ -2977,20 +3035,18 @@ func team_average_level()->int:
 	for idx in team_indices:total+=int(roster[idx].level)
 	return total/maxi(1,team_indices.size())
 
+# Soft meadow lighting: a pale sky-blue ambient fill (a hemisphere light's sky
+# side), one warm gentle sun with no shadows, matte shading, and no haze.
 const STAGE_AMBIENT_ENERGY:=.95
-const STAGE_SUN_ENERGY:=.85
+const STAGE_SUN_ENERGY:=.8
 
 func create_3d_stage()->void:
 	world_root=Node3D.new();world_root.name="World3D";add_child(world_root)
 	camera_3d=Camera3D.new();camera_3d.name="MainCamera";camera_3d.position=Vector3(0,9.5,13.5);camera_3d.fov=48;add_child(camera_3d);camera_3d.look_at(Vector3(0,0,0),Vector3.UP)
-	# Lighting is kept restrained: a soft neutral ambient fill and a single sun
-	# with a little shadow, so the pastel tiles, water, and props keep their colour
-	# instead of washing out toward white.
-	var environment:=WorldEnvironment.new();var env:=Environment.new();env.background_mode=Environment.BG_COLOR;env.background_color=Color("#cfe8df");env.ambient_light_source=Environment.AMBIENT_SOURCE_COLOR;env.ambient_light_color=Color("#cdd8d2");env.ambient_light_energy=STAGE_AMBIENT_ENERGY;env.tonemap_mode=Environment.TONE_MAPPER_FILMIC;env.tonemap_exposure=.92
-	# A gentle soft-light glow rounds the shading off and gives the pastel field its fluffy feel.
-	env.glow_enabled=true;env.glow_intensity=.28;env.glow_strength=.9;env.glow_bloom=.08;env.glow_blend_mode=Environment.GLOW_BLEND_MODE_SOFTLIGHT
+	var environment:=WorldEnvironment.new();var env:=Environment.new();env.background_mode=Environment.BG_COLOR;env.background_color=Color("#cfeeff");env.ambient_light_source=Environment.AMBIENT_SOURCE_COLOR;env.ambient_light_color=Color("#e2f5ff");env.ambient_light_energy=STAGE_AMBIENT_ENERGY;env.tonemap_mode=Environment.TONE_MAPPER_LINEAR;env.tonemap_exposure=1.0
+	env.glow_enabled=false
 	environment.environment=env;environment.name="StageEnvironment";add_child(environment)
-	var sun:=DirectionalLight3D.new();sun.name="StageSun";sun.rotation_degrees=Vector3(-52,-32,0);sun.light_color=Color("#fff3d6");sun.light_energy=STAGE_SUN_ENERGY;sun.shadow_enabled=true;sun.shadow_opacity=.28;add_child(sun)
+	var sun:=DirectionalLight3D.new();sun.name="StageSun";sun.rotation_degrees=Vector3(-52,-32,0);sun.light_color=Color("#fff0c8");sun.light_energy=STAGE_SUN_ENERGY;sun.shadow_enabled=false;add_child(sun)
 	build_camp_world()
 
 func clear_world()->void:
@@ -3011,15 +3067,14 @@ func world_sphere(pos:Vector3,size:Vector3,color:Color)->MeshInstance3D:
 func camp_tree(pos:Vector3,shade:Color)->void:
 	world_box(pos+Vector3(0,.65,0),Vector3(.38,1.5,.38),Color("#76553d"));world_sphere(pos+Vector3(0,1.75,0),Vector3(1.45,1.25,1.35),shade);world_sphere(pos+Vector3(.65,1.5,.15),Vector3(.8,.8,.8),shade.lightened(.05))
 
-# Optional depth haze in the island's own tint. Off by default (STAGE_FOG_DENSITY
-# 0) because it muddied the soft look; raise the density to bring it back.
+# No depth haze: the field stays crisp to its far edge (raise this to bring haze back).
 const STAGE_FOG_DENSITY:=0.0
 func set_stage_fog(biome:Dictionary)->void:
 	var stage_env:WorldEnvironment=find_child("StageEnvironment",false,false)
 	if stage_env==null:return
 	var env:Environment=stage_env.environment
 	if biome.is_empty() or STAGE_FOG_DENSITY<=0.0:env.fog_enabled=false;return
-	env.fog_enabled=true;env.fog_mode=Environment.FOG_MODE_EXPONENTIAL;env.fog_density=STAGE_FOG_DENSITY;env.fog_light_color=Color(biome.ground).lightened(.3);env.fog_light_energy=1.0;env.fog_sun_scatter=0.0;env.fog_aerial_perspective=0.0
+	env.fog_enabled=true;env.fog_mode=Environment.FOG_MODE_EXPONENTIAL;env.fog_density=STAGE_FOG_DENSITY;env.fog_light_color=Color("#d9f1fb").lerp(Color(biome.ground).lightened(.4),.25);env.fog_light_energy=1.0;env.fog_sun_scatter=0.0;env.fog_aerial_perspective=0.0
 
 func build_camp_world()->void:
 	set_stage_fog({})

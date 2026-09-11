@@ -59,6 +59,8 @@ var ended:=false
 const ZONE_SPACING:=10.0
 const ROUTE_SAMPLES:=13
 const ALERT_MARGIN:=2.5
+# How close a taunting Quiblet must be to redirect an enemy onto itself.
+const TAUNT_RANGE:=14.0
 const MAX_DECOR:=40
 var zones:Array[Dictionary]=[]
 var route_points:Array[Vector2]=[]
@@ -165,7 +167,7 @@ func place_actor(actor:QuibletActor3D)->void:
 func build_level()->void:
 	var rng:=RandomNumberGenerator.new();rng.seed=stage_area_index*1009+stage_node_index*131+73
 	biome=GameData.expedition_biome(stage_area_index)
-	fade_weights.clear();obstacles.clear();berry_nodes.clear();zones.clear();route_points.clear();corridor_widths.clear();walkable.clear();rivers.clear();bridges.clear();wall_tiers.clear();props.clear();prop_cells.clear();decor_count=0;cliff_tiers={1:0,2:0,3:0};cache_node=null
+	fade_weights.clear();waterfall_cells.clear();waterfalls.clear();waterfall_bubbles.clear();spanned_cells.clear();bridge_arches.clear();river_crossings.clear();obstacles.clear();berry_nodes.clear();zones.clear();route_points.clear();corridor_widths.clear();walkable.clear();rivers.clear();bridges.clear();wall_tiers.clear();props.clear();prop_cells.clear();decor_count=0;cliff_tiers={1:0,2:0,3:0};cache_node=null
 	if is_instance_valid(decor_root):decor_root.free()
 	if is_instance_valid(props_root):props_root.free()
 	decor_root=Node3D.new();decor_root.name="Decor";add_child(decor_root)
@@ -176,9 +178,25 @@ func build_level()->void:
 	raise_walls(rng)
 	place_props(rng)
 	build_obstacles()
+	plan_bridges()
 	build_terrain(rng)
+	# build_terrain seats harvestable props on the hills too; refresh the obstacle
+	# runs so actors steer around them.
+	obstacles.clear();build_obstacles()
 	place_berry_patches(rng)
 	place_treasure_cache(rng)
+	build_bridges()
+	build_waterfalls()
+	build_clouds(rng)
+	seat_on_terrain()
+
+# Props, patches, and the cache sit on the rolling ground; fighters are seated every frame.
+func seat_on_terrain()->void:
+	for prop in props:
+		if is_instance_valid(prop):prop.position.y=terrain_height_at(Vector2(prop.position.x,prop.position.z))
+	for patch in berry_nodes:
+		if is_instance_valid(patch):patch.position.y=terrain_height_at(Vector2(patch.position.x,patch.position.z))+.2
+	if is_instance_valid(cache_node):cache_node.position.y=terrain_height_at(Vector2(cache_node.position.x,cache_node.position.z))
 
 # Every Boss level hides a cache; a regular level does so only some of the time,
 # decided by the level's own seed so the same node always agrees with itself.
@@ -283,32 +301,46 @@ func carve_rivers(rng:RandomNumberGenerator)->void:
 	if usable_right<=usable_left or usable_bottom<=usable_top:return
 	for river_index in river_count:
 		var horizontal:bool=river_index>=base_count and rng.randf()<.5
-		# Two or three cells wide so the sunken water stays visible from the gameplay camera.
-		var width:=2 if rng.randf()<.6 else 3;var drift:=rng.randf_range(-.35,.35)
+		# Three or four cells wide so the water reads as a proper river from the gameplay camera.
+		var width:=3 if rng.randf()<.6 else 4;var drift:=rng.randf_range(-.35,.35)
 		var cells:Array[Vector2i]=[]
+		# Some rivers start as a waterfall: the channel runs back into the border
+		# hills at its source and drops into the field over the edge.
+		var falls:bool=rng.randf()<WATERFALL_CHANCE;var source_cells:Array[Vector2i]=[]
 		if horizontal:
 			var z:=float(usable_top)+rng.randf()*float(usable_bottom-usable_top)
-			for x in range(field_rect.position.x-1,field_rect.end.x+1):
+			for x in range((field_rect.position.x-WATERFALL_REACH) if falls else (field_rect.position.x-1),field_rect.end.x+1):
 				var wobble:=roundi(sin(float(x)*.22+float(river_index)*1.7)*1.3)+drift*float(x-field_rect.position.x)*.25
 				var cz:=roundi(z+wobble)
-				for w in width:cells.append(Vector2i(x,cz+w))
+				for w in width:
+					cells.append(Vector2i(x,cz+w))
+					if falls and x<field_rect.position.x:source_cells.append(Vector2i(x,cz+w))
 		else:
 			var x:float
 			if river_index<base_count:x=float(usable_left)+(float(river_index)+.5)/float(base_count)*float(usable_right-usable_left)+rng.randf_range(-1.5,1.5)
 			else:x=float(usable_left)+rng.randf()*float(usable_right-usable_left)
-			for z in range(field_rect.position.y-1,field_rect.end.y+1):
+			for z in range((field_rect.position.y-WATERFALL_REACH) if falls else (field_rect.position.y-1),field_rect.end.y+1):
 				var wobble:=roundi(sin(float(z)*.24+float(river_index)*1.7)*1.3)+drift*float(z-field_rect.position.y)*.5
 				var cx:=roundi(x+wobble)
-				for w in width:cells.append(Vector2i(cx+w,z))
+				for w in width:
+					cells.append(Vector2i(cx+w,z))
+					if falls and z<field_rect.position.y:source_cells.append(Vector2i(cx+w,z))
 		var flow:=Vector2(1,0) if horizontal else Vector2(0,1)
 		for cell in cells:
 			if bridges.has(cell):continue
-			# Where the channel passes through a clearing the ground stays, as a bridge
-			# slab with the water flowing on beneath it rather than a full block.
-			if zones.any(func(zone):return Vector2(zone.center).distance_to(Vector2(cell))<2.6):
-				if walkable.has(cell):bridges[cell]=true;river_flow[cell]=flow
-				continue
+			# A clearing is left as dry, walkable ground: the river simply fords it
+			# rather than flooding an arena, and no blob bridge is placed there.
+			if zones.any(func(zone):return Vector2(zone.center).distance_to(Vector2(cell))<2.0):continue
 			rivers[cell]=true;river_flow[cell]=flow;walkable.erase(cell)
+		if falls and not source_cells.is_empty():
+			for cell in source_cells:
+				if rivers.has(cell):waterfall_cells[cell]=true
+			# The lip sits on the field's edge, across the channel's width.
+			var lip:=Vector2.ZERO;var count:=0
+			for cell in source_cells:
+				var edge_cell:Vector2i=Vector2i(field_rect.position.x-1,cell.y) if horizontal else Vector2i(cell.x,field_rect.position.y-1)
+				if cell==edge_cell:lip+=Vector2(cell);count+=1
+			if count>0:waterfalls.append({"lip":lip/float(count)+flow*.5,"flow":flow,"half_width":float(width)*.5})
 		# Bridges where the trail crosses this river, then maybe one more.
 		var bridge_keys:Array[int]=[]
 		for i in range(1,zones.size()):
@@ -318,9 +350,11 @@ func carve_rivers(rng:RandomNumberGenerator)->void:
 				if not bridge_keys.has(key):bridge_keys.append(key)
 		if rng.randf()<.5:bridge_keys.append(rng.randi_range(field_rect.position.x+2,field_rect.end.x-3) if horizontal else rng.randi_range(field_rect.position.y+2,field_rect.end.y-3))
 		for key in bridge_keys:
+			var band:Array[Vector2i]=[]
 			for cell in cells:
 				var along:int=cell.x if horizontal else cell.y
-				if absi(along-key)<=1:rivers.erase(cell);bridges[cell]=true;walkable[cell]=true
+				if absi(along-key)<=1 and rivers.has(cell):rivers.erase(cell);bridges[cell]=true;walkable[cell]=true;band.append(cell)
+			if not band.is_empty():river_crossings.append({"cells":band,"flow":flow})
 	# Safety net: if two rivers or an odd meander still cut a clearing off, bridge
 	# every river cell along the straight line from the start to that clearing.
 	var guard:=0
@@ -328,14 +362,26 @@ func carve_rivers(rng:RandomNumberGenerator)->void:
 		guard+=1
 		for zone in zones:
 			var goal:Vector2=zone.center
-			# Only the river cells nearest the clearing become a bridge, so a river
-			# running alongside the line is crossed once instead of planked over.
-			var crossing:Array=rivers.keys().filter(func(cell):return Geometry2D.get_closest_point_to_segment(Vector2(cell),zones[0].center,goal).distance_to(Vector2(cell))<1.0)
-			crossing.sort_custom(func(a,b):return Vector2(a).distance_to(goal)<Vector2(b).distance_to(goal))
-			for cell in crossing.slice(0,4):
-				for offset in [Vector2i(0,-1),Vector2i(0,0),Vector2i(0,1),Vector2i(-1,0),Vector2i(1,0)]:
-					var span:Vector2i=cell+offset
-					if rivers.has(span):rivers.erase(span);bridges[span]=true;walkable[span]=true
+			# Find where the straight line from the start to this clearing meets a
+			# river, then bridge straight across that river (perpendicular to its
+			# flow, bank to bank) rather than planking along it.
+			var on_line:Array=rivers.keys().filter(func(cell):return Geometry2D.get_closest_point_to_segment(Vector2(cell),zones[0].center,goal).distance_to(Vector2(cell))<1.2)
+			on_line.sort_custom(func(a,b):return Vector2(a).distance_to(goal)<Vector2(b).distance_to(goal))
+			if on_line.is_empty():continue
+			var here:Vector2i=on_line[0];var flow:Vector2=river_flow.get(here,Vector2(0,1))
+			var flow_dir:Vector2i=Vector2i(0,1) if absf(flow.y)>=absf(flow.x) else Vector2i(1,0)
+			var width_dir:Vector2i=Vector2i(flow_dir.y,flow_dir.x)
+			var band:Array[Vector2i]=[]
+			for thick in [-1,0,1]:
+				var base:Vector2i=here+flow_dir*thick
+				for dir in [-1,1]:
+					var step:=0
+					while step<8:
+						var span:Vector2i=base+width_dir*dir*step
+						if not rivers.has(span):break
+						rivers.erase(span);bridges[span]=true;walkable[span]=true;band.append(span);step+=1
+				if rivers.has(base):rivers.erase(base);bridges[base]=true;walkable[base]=true;band.append(base)
+			if not band.is_empty():river_crossings.append({"cells":band,"flow":flow})
 
 # The river cell where the straight trail segment a→b meets the river, or null.
 func trail_crossing_cell(a:Vector2,b:Vector2,cells:Array[Vector2i]):
@@ -349,24 +395,23 @@ func trail_crossing_cell(a:Vector2,b:Vector2,cells:Array[Vector2i]):
 # Walls: blocky clusters one to three cells wide with a taller core, dropped in
 # the open. Count follows the biome's walls value (plains few, caves many).
 # Any cluster that would cut the route off is discarded.
+# Hills: clusters of raised cells in the open. They are terrain, not walls: every
+# hill stays walkable and Quiblets simply climb over it (they ride the ground
+# height), so only rivers ever block a route.
 func raise_walls(rng:RandomNumberGenerator)->void:
 	var area_scale:=float(field_rect.size.x*field_rect.size.y)/(30.0*22.0)
 	var target:=roundi((2.0+14.0*float(biome.walls))*area_scale)
 	var placed:=0;var attempts:=0
 	while placed<target and attempts<target*12:
 		attempts+=1
-		var w:=rng.randi_range(1,3);var d:=rng.randi_range(1,3)
+		var w:=rng.randi_range(2,4);var d:=rng.randi_range(2,4)
 		var origin:=Vector2i(rng.randi_range(field_rect.position.x+1,field_rect.end.x-1-w),rng.randi_range(field_rect.position.y+1,field_rect.end.y-1-d))
 		var cluster:Array[Vector2i]=[]
 		for dx in w:
 			for dz in d:cluster.append(origin+Vector2i(dx,dz))
-		if cluster.any(func(cell):return not walkable.has(cell) or rivers.has(cell) or bridges.has(cell)):continue
+		if cluster.any(func(cell):return not walkable.has(cell) or rivers.has(cell) or bridges.has(cell) or wall_tiers.has(cell)):continue
 		if cluster.any(func(cell):return zones.any(func(zone):return Vector2(zone.center).distance_to(Vector2(cell))<3.2)):continue
 		if cluster.any(func(cell):return route_distance(Vector2(cell))<1.2):continue
-		for cell in cluster:walkable.erase(cell)
-		if not zones_connected():
-			for cell in cluster:walkable[cell]=true
-			continue
 		var core:=cluster[rng.randi_range(0,cluster.size()-1)]
 		for cell in cluster:wall_tiers[cell]=(3 if cell==core else (2 if rng.randf()<.45 else 1)) if cluster.size()>1 else rng.randi_range(1,2)
 		placed+=1
@@ -419,7 +464,7 @@ func place_props(rng:RandomNumberGenerator)->void:
 	var candidates:Array[Vector2i]=[]
 	for cell in walkable:
 		var point:=Vector2(cell)
-		if not cell_open(cell) or route_distance(point)<1.6:continue
+		if not cell_open(cell) or route_distance(point)<1.6 or wall_tiers.has(cell):continue
 		if zones.any(func(zone):return Vector2(zone.center).distance_to(point)<3.5):continue
 		if bridges.keys().any(func(bridge):return Vector2(bridge).distance_to(point)<2.0):continue
 		candidates.append(cell)
@@ -495,14 +540,22 @@ func build_obstacles()->void:
 # continuous heightfield: open ground is a flat plain, blocked cells rise into
 # rounded hills whose height grows with the distance from the nearest open
 # ground, and rivers sink into soft troughs. Nothing in the mesh follows a cell edge.
+# Three samples per cell: the ground is a smoothly shaded rolling sheet.
 const TERRAIN_SUBDIV:=3
+# Broad rolling swells on the open ground (fighters ride the surface, so slopes are fine).
+const PLAIN_ROLL:=.8
+# Hills spread out: their lower slopes skirt this far into the open ground around
+# them, starting at this share of the hill's height, so a wall reads as a broad
+# hill rather than a mound sitting on a flat floor.
+const HILL_SKIRT_RADIUS:=3.5
+const HILL_SKIRT_SHARE:=.45
 # A hill climbs over this run at most; thinner walls become lower, rounder bumps
 # (their height is capped by their half-thickness) so slopes stay gentle.
 const HILL_RAMP:=3.2
 const HILL_MIN_HALF:=.55
-const HILL_THICKNESS_GAIN:=.8
-const HILL_THICKNESS_BASE:=.2
-const RIVER_RAMP:=.9
+const HILL_THICKNESS_GAIN:=1.6
+const HILL_THICKNESS_BASE:=.6
+const RIVER_RAMP:=1.4
 const POND_DEPTH:=.45
 const HILL_ROLL:=.22
 # Hill heights per wall tier, in units (outer rings and thick walls stand taller).
@@ -538,7 +591,12 @@ func build_terrain(rng:RandomNumberGenerator)->void:
 	for x in range(grid_min.x,grid_max.x+1):
 		for z in range(grid_min.y,grid_max.y+1):
 			var cell:=Vector2i(x,z)
-			if walkable.has(cell) or prop_cells.has(cell):terrain_heights[cell]=0.0;ground_tile_count+=1;continue
+			# Cells under an arched bridge stay part of the channel: the deck carries the walker.
+			if spanned_cells.has(cell):terrain_heights[cell]=-RIVER_DEPTH;continue
+			if walkable.has(cell) or prop_cells.has(cell):
+				if wall_tiers.has(cell):
+					cliff_tiers[int(wall_tiers[cell])]=int(cliff_tiers.get(int(wall_tiers[cell]),0))+1;tiers[cell]=int(wall_tiers[cell]);peaks[cell]=float(CLIFF_TIER_LAYERS[int(wall_tiers[cell])-1]);ground_tile_count+=1;continue
+				terrain_heights[cell]=0.0;ground_tile_count+=1;continue
 			if rivers.has(cell):terrain_heights[cell]=-RIVER_DEPTH;continue
 			var tier:=int(wall_tiers[cell]) if wall_tiers.has(cell) else clampi(int(distance.get(cell,4)),1,3)
 			if biome.water and tier==1 and not wall_tiers.has(cell) and rng.randf()<.4:pond_cells[cell]=true;terrain_heights[cell]=-POND_DEPTH;continue
@@ -559,33 +617,57 @@ func build_terrain(rng:RandomNumberGenerator)->void:
 	height_origin=Vector2(float(grid_min.x)-.5,float(grid_min.y)-.5)
 	height_cols=(grid_max.x-grid_min.x+1)*subdiv+1;height_rows=(grid_max.y-grid_min.y+1)*subdiv+1
 	var sample_count:=height_cols*height_rows;var step:=1.0/float(subdiv)
-	var classes:=PackedByteArray();classes.resize(sample_count)
+	# A sample takes its class from every cell it touches (a corner sample touches
+	# four): open ground wins, then water, then hill. That keeps every open cell
+	# perfectly flat and puts the ramps inside the hill and river cells instead.
+	var classes:=PackedByteArray();classes.resize(sample_count);var sample_cells:Array=[];sample_cells.resize(sample_count)
 	for r in height_rows:
 		for c in height_cols:
-			var cell:=Vector2i(grid_min.x+mini(c/subdiv,grid_max.x-grid_min.x),grid_min.y+mini(r/subdiv,grid_max.y-grid_min.y))
-			var h:float=float(terrain_heights.get(cell,0.0))
-			classes[r*height_cols+c]=0 if h==0.0 else (1 if h<0.0 else 2)
+			var point:=height_origin+Vector2(c,r)*step;var touching:Array=touching_cells(point,grid_min,grid_max)
+			var kind:=2;var owner:Vector2i=touching[0]
+			for cell in touching:
+				var h:float=float(terrain_heights.get(cell,0.0))
+				var cell_kind:int=0 if h==0.0 else (1 if h<0.0 else 2)
+				if cell_kind<kind:kind=cell_kind;owner=cell
+			classes[r*height_cols+c]=kind;sample_cells[r*height_cols+c]=owner
 	# Distance from every water or hill sample to the nearest sample of another class.
 	var water_edge:=edge_distance(classes,1,step);var hill_edge:=edge_distance(classes,2,step)
 	terrain_classes=classes;water_edge_field=water_edge;hill_edge_field=hill_edge
 	# Each hill sample's ridge distance: the greatest edge distance nearby, i.e. how
 	# thick the hill is around it. Thin walls peak low and round; thick masses climb the full ramp.
 	var ridge:=local_max(hill_edge,2*subdiv)
+	# How far every open or water sample is from the nearest hill, and the tallest
+	# hill peak nearby, for the skirts that spread each hill into its surroundings.
+	var to_hill:=distance_to_class(classes,2,step)
+	var peak_field:=PackedFloat32Array();peak_field.resize(sample_count)
+	for r in height_rows:
+		for c in height_cols:
+			var i:=r*height_cols+c
+			if classes[i]!=2:peak_field[i]=0.0;continue
+			var half:float=maxf(HILL_MIN_HALF,float(ridge[i]))
+			peak_field[i]=minf(peak_at(height_origin+Vector2(c,r)*step,sample_cells[i],peaks),HILL_THICKNESS_BASE+half*HILL_THICKNESS_GAIN)
+	var nearby_peak:=local_max(peak_field,int(HILL_SKIRT_RADIUS*subdiv)+1)
 	height_field.resize(sample_count)
 	for r in height_rows:
 		for c in height_cols:
 			var index:=r*height_cols+c;var point:=height_origin+Vector2(c,r)*step
-			# The same cell the sample was classified by (floor mapping), never a rounded neighbour.
-			var cell:=Vector2i(grid_min.x+mini(c/subdiv,grid_max.x-grid_min.x),grid_min.y+mini(r/subdiv,grid_max.y-grid_min.y))
-			var kind:int=classes[index];var h:=0.0
-			if kind==1:
+			# The cell the sample was classified by, never a rounded neighbour.
+			var cell:Vector2i=sample_cells[index]
+			var kind:int=classes[index];var h:=plain_roll(point)
+			# The skirt: the nearest hill's lower slope, fading out over HILL_SKIRT_RADIUS.
+			var skirt_top:float=float(nearby_peak[index])*HILL_SKIRT_SHARE
+			if kind!=2:h+=skirt_top*(1.0-smoothstep(0.0,HILL_SKIRT_RADIUS,float(to_hill[index])))
+			if kind==1 and waterfall_cells.has(cell):
+				# The source channel runs high through the border hills, then drops over the lip.
+				h=WATERFALL_TOP-.6*smoothstep(0.0,RIVER_RAMP,float(water_edge[index]))
+			elif kind==1:
 				var depth:float=-float(terrain_heights.get(cell,-RIVER_DEPTH))
-				h=-depth*smoothstep(0.0,RIVER_RAMP,float(water_edge[index]))
+				h-=depth*smoothstep(0.0,RIVER_RAMP,float(water_edge[index]))
 			elif kind==2:
 				var half:float=maxf(HILL_MIN_HALF,float(ridge[index]))
 				var rise:=smoothstep(0.0,minf(HILL_RAMP,half),float(hill_edge[index]))
-				var peak:float=minf(peak_at(point,cell,peaks),HILL_THICKNESS_BASE+half*HILL_THICKNESS_GAIN)
-				h=(peak+HILL_ROLL*sin(point.x*.9+.3)*sin(point.y*.8+1.1)*minf(1.0,peak*.5))*rise
+				var peak:float=peak_field[index];var base:float=peak*HILL_SKIRT_SHARE
+				h+=base+(peak-base+HILL_ROLL*sin(point.x*.9+.3)*sin(point.y*.8+1.1)*minf(1.0,peak*.5))*rise
 			height_field[index]=h
 	build_terrain_mesh(classes,water_edge,hill_edge,rng)
 	# Details on the open grass, decor on the hills nearest the open ground.
@@ -596,8 +678,32 @@ func build_terrain(rng:RandomNumberGenerator)->void:
 	for cell in peaks:
 		var tier:int=int(tiers[cell])
 		var rim:=[Vector2i(1,0),Vector2i(-1,0),Vector2i(0,1),Vector2i(0,-1)].any(func(offset):return walkable.has(cell+offset))
-		if rim and (tier==1 or wall_tiers.has(cell)) and decor_count<MAX_DECOR and rng.randf()<float(biome.density):add_decor(Vector3(cell.x,terrain_height_at(Vector2(cell)),cell.y),rng)
+		if rim and (tier==1 or wall_tiers.has(cell)) and decor_count<MAX_DECOR and rng.randf()<float(biome.density):add_hill_prop(cell,rng)
 	build_rivers(rng)
+
+# Broad swells of the open ground: a few overlapping long sine waves.
+func plain_roll(point:Vector2)->float:
+	return PLAIN_ROLL*(.6*sin(point.x*.17+1.3)*cos(point.y*.15)+.3*sin(point.x*.37+.5)*sin(point.y*.31)+.1*sin(point.x*.8)*cos(point.y*.7+1.0))
+
+# Distance from every sample to the nearest sample of `target` class (0 on that class).
+func distance_to_class(classes:PackedByteArray,target:int,step:float)->PackedFloat32Array:
+	var flipped:=PackedByteArray();flipped.resize(classes.size())
+	for i in classes.size():flipped[i]=9 if classes[i]!=target else target
+	return edge_distance(flipped,9,step)
+
+# The cells whose area contains the point: one inside a cell, two on an edge, four on a corner.
+func touching_cells(point:Vector2,grid_min:Vector2i,grid_max:Vector2i)->Array:
+	var xs:Array=[];var zs:Array=[]
+	var fx:=point.x+.5;var fz:=point.y+.5
+	var bx:=floori(fx+.0001);var bz:=floori(fz+.0001)
+	if absf(fx-roundf(fx))<.001:xs=[bx-1,bx]
+	else:xs=[bx]
+	if absf(fz-roundf(fz))<.001:zs=[bz-1,bz]
+	else:zs=[bz]
+	var cells:Array=[]
+	for x in xs:
+		for z in zs:cells.append(Vector2i(clampi(x,grid_min.x,grid_max.x),clampi(z,grid_min.y,grid_max.y)))
+	return cells
 
 # Peak height for a point on the hills: bilinear across the four surrounding
 # cell centres, each falling back to the point's own cell where no hill is.
@@ -657,8 +763,12 @@ func edge_distance(classes:PackedByteArray,kind:int,step:float)->PackedFloat32Ar
 	for i in result.size():result[i]=(result[i] if result[i]<far else 0.0)*step
 	return result
 
-# Height of the ground surface at any point (bilinear over the sample grid).
+# Height a walker stands at: the ground, or a bridge deck where one spans the point.
 func terrain_height_at(point:Vector2)->float:
+	return maxf(raw_height_at(point),deck_height_at(point))
+
+# Height of the ground surface itself (bilinear over the sample grid).
+func raw_height_at(point:Vector2)->float:
 	if height_field.is_empty():return 0.0
 	var local:=(point-height_origin)*float(TERRAIN_SUBDIV)
 	var c0:=clampi(floori(local.x),0,height_cols-1);var r0:=clampi(floori(local.y),0,height_rows-1)
@@ -671,25 +781,34 @@ func terrain_height_at(point:Vector2)->float:
 func sample_height(c:int,r:int)->float:
 	return height_field[clampi(r,0,height_rows-1)*height_cols+clampi(c,0,height_cols-1)]
 
-func build_terrain_mesh(classes:PackedByteArray,water_edge:PackedFloat32Array,hill_edge:PackedFloat32Array,_rng:RandomNumberGenerator)->void:
-	var ground:Color=biome.ground;var path:Color=biome.path;var cliff:Color=biome.cliff;var bed:Color=Color("#2a1d14")
-	var hill_grass:Color=ground.darkened(.06);var step:=1.0/float(TERRAIN_SUBDIV)
+# Ground colours come straight from the island's palette: the ground colour
+# brightens with height, the path colour lines the troughs and darkens along the
+# trail, a lightened cliff tone lies under the water, and the highest ground
+# takes an accent-tinted plateau colour; a faint long-wave noise breaks it up.
+func build_terrain_mesh(classes:PackedByteArray,water_edge:PackedFloat32Array,_hill_edge:PackedFloat32Array,_rng:RandomNumberGenerator)->void:
+	# Smoothly shaded: vertices are shared and normals come from the neighbouring samples.
+	# Every island keeps exactly its own colours: sand is sand, cave rock is rock,
+	# night ground is purple; nothing is pulled toward the meadow's greens.
+	var tint:Color=biome.ground;var grass_low:Color=tint;var grass_high:Color=tint.lightened(.3)
+	var sand:Color=Color(biome.path);var bed:Color=Color(biome.cliff).lightened(.35);var dirt:Color=Color(biome.path).darkened(.12);var plateau:Color=Color(biome.accent).lerp(tint.lightened(.15),.6)
+	var step:=1.0/float(TERRAIN_SUBDIV);var water_top:=WATER_LEVEL
 	var st:=SurfaceTool.new();st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	for r in height_rows:
 		for c in height_cols:
 			var index:=r*height_cols+c;var point:=height_origin+Vector2(c,r)*step;var h:float=height_field[index]
-			# Normal from central differences; slope drives the grass-to-dirt blend on hills.
 			var dx:float=(sample_height(c+1,r)-sample_height(c-1,r))/(2.0*step);var dz:float=(sample_height(c,r+1)-sample_height(c,r-1))/(2.0*step)
-			var normal:=Vector3(-dx,1.0,-dz).normalized();var slope:=Vector2(dx,dz).length()
-			var mottle:=sin(point.x*.42+point.y*.17)*sin(point.y*.39-point.x*.11)
-			var shade:float=.045 if mottle>.15 else (-.03 if mottle<-.35 else 0.0)
+			var normal:=Vector3(-dx,1.0,-dz).normalized()
 			var color:Color
-			match int(classes[index]):
-				0:color=path if route_distance(point)<2.1+sin(point.x*.9+point.y*.6)*.5 else ground
-				1:color=ground.lerp(bed,smoothstep(0.0,RIVER_RAMP,float(water_edge[index])))
-				_:color=hill_grass.lerp(cliff,smoothstep(1.3,2.0,slope)).lightened(clampf(h*.025,0.0,.08))
-			color=color.darkened(maxf(shade,0.0)).lightened(maxf(-shade,0.0))
-			st.set_normal(normal);st.set_color(color);st.set_uv(Vector2(point.x,point.y));st.add_vertex(Vector3(point.x,h,point.y))
+			if classes[index]==1 and h<water_top+.35:color=bed
+			elif classes[index]==1 and float(water_edge[index])>0.0:color=sand
+			else:
+				color=grass_low.lerp(grass_high,clampf((h+1.0)/6.0,0.0,1.0))
+				if h>2.4:color=color.lerp(plateau,.5)
+				var trail:float=route_distance(point)
+				if trail<2.6 and classes[index]==0:color=color.lerp(dirt,smoothstep(0.0,1.0,(2.6-trail)/1.6))
+			var noise:float=.975+.045*sin(point.x*.83+.4)*cos(point.y*.71)
+			color=Color(color.r*noise,color.g*noise,color.b*noise)
+			st.set_normal(normal);st.set_color(color);st.add_vertex(Vector3(point.x,h,point.y))
 	for r in height_rows-1:
 		for c in height_cols-1:
 			var i00:=r*height_cols+c;var i10:=i00+1;var i01:=i00+height_cols;var i11:=i01+1
@@ -698,7 +817,7 @@ func build_terrain_mesh(classes:PackedByteArray,water_edge:PackedFloat32Array,hi
 	var mesh:=st.commit()
 	terrain_material=ShaderMaterial.new();terrain_material.shader=terrain_shader()
 	terrain_fade_material=ShaderMaterial.new();terrain_fade_material.shader=terrain_fade_shader();terrain_material.next_pass=terrain_fade_material
-	for material in terrain_materials():material.set_shader_parameter("detail",GameData.terrain_tile_texture());material.set_shader_parameter("fade_count",0)
+	for material in terrain_materials():material.set_shader_parameter("fade_count",0)
 	terrain_mesh=MeshInstance3D.new();terrain_mesh.name="TerrainMesh";terrain_mesh.mesh=mesh;terrain_mesh.material_override=terrain_material;add_child(terrain_mesh)
 
 # --- Terrain shader and occlusion fading ----------------------------------------
@@ -718,7 +837,6 @@ const MAX_FADE_POINTS:=16
 var fade_weights:={}
 var terrain_fade_material:ShaderMaterial
 const TERRAIN_SHADER_COMMON:="""
-uniform sampler2D detail:filter_nearest,repeat_enable;
 uniform int fade_count=0;
 uniform vec3 fade_points[16];
 uniform float fade_weights[16];
@@ -745,7 +863,7 @@ render_mode cull_back;
 """+TERRAIN_SHADER_COMMON+"""
 void fragment(){
 	if(fade_factor()>.02)discard;
-	ALBEDO=pow(tint.rgb,vec3(2.2))*texture(detail,UV).rgb;ROUGHNESS=.95;
+	ALBEDO=pow(tint.rgb,vec3(2.2));ROUGHNESS=1.0;SPECULAR=0.0;
 }
 """
 const TERRAIN_FADE_SHADER:="""
@@ -755,7 +873,7 @@ render_mode cull_back,blend_mix,depth_draw_never;
 void fragment(){
 	float f=fade_factor();
 	if(f<=.02)discard;
-	ALBEDO=pow(tint.rgb,vec3(2.2))*texture(detail,UV).rgb;ROUGHNESS=.95;ALPHA=1.0-f*(1.0-fade_alpha);
+	ALBEDO=pow(tint.rgb,vec3(2.2));ROUGHNESS=1.0;SPECULAR=0.0;ALPHA=1.0-f*(1.0-fade_alpha);
 }
 """
 static var terrain_shader_resource:Shader
@@ -825,61 +943,277 @@ func add_ground_detail(entries:Array[Dictionary],point:Vector2,ground:Color,flow
 # Flowing water: crests scroll along each river's flow direction (carried per
 # tile in the instance custom data) and the surface bobs gently. Ripple slivers
 # use the same shader so they drift downstream and wrap within their tile.
+# Water is one smooth translucent sheet per level. Each vertex carries its flow
+# direction (COLOR.rgb, encoded), a phase (COLOR.a, one value per sheet so the
+# crests never break at a cell edge), and how deep the
+# water is below it (UV2.x), so crests scroll downstream, the surface bobs and
+# glints in the sun, and pale foam gathers along the shallow banks. The same
+# shader drives the falling sheets of waterfalls with a downward flow.
 const WATER_SHADER:="""
 shader_type spatial;
-render_mode blend_mix, depth_draw_opaque, cull_back;
-uniform float flow_speed=1.4;
-uniform float crest_scale=1.6;
-uniform float crest_strength=.42;
-uniform float drift=0.0;
+render_mode blend_mix, depth_draw_opaque, cull_disabled;
+uniform vec4 tint:source_color=vec4(.5,.84,.97,.82);
+uniform float flow_speed=1.2;
+uniform float crest_scale=1.3;
+uniform float shore_foam=.55;
 varying vec3 world_pos;
-varying vec4 flow;
-varying vec4 tint;
+varying vec3 flow_dir;
+varying float phase;
+varying float depth;
 void vertex(){
-	flow=INSTANCE_CUSTOM;tint=COLOR;
-	vec3 shift=vec3(flow.x,0.0,flow.y)*fract(TIME*flow_speed*.35+flow.z)*drift;
+	flow_dir=normalize(COLOR.rgb*2.0-1.0);phase=COLOR.a;depth=UV2.x;
 	world_pos=(MODEL_MATRIX*vec4(VERTEX,1.0)).xyz;
-	VERTEX+=(inverse(mat3(MODEL_MATRIX))*shift)*(1.0/max(length(MODEL_MATRIX[0].xyz),.001))*length(MODEL_MATRIX[0].xyz);
-	VERTEX.y+=sin(world_pos.x*1.7+world_pos.z*1.3+TIME*2.2)*.025/max(length(MODEL_MATRIX[1].xyz),.001);
+	float bob=sin(world_pos.x*1.3+world_pos.z*1.1+TIME*1.6+phase*6.283)*.03*(1.0-abs(flow_dir.y));
+	VERTEX+=inverse(mat3(MODEL_MATRIX))*vec3(0.0,bob,0.0);
 }
 void fragment(){
-	float along=dot(world_pos.xz,flow.xy);
-	float wave=sin(along*crest_scale*3.14159-TIME*flow_speed*3.0+flow.z*6.283);
-	float second=sin(along*crest_scale*7.1+dot(world_pos.xz,vec2(-flow.y,flow.x))*2.3-TIME*flow_speed*4.7);
-	float crest=smoothstep(.55,.95,wave)*.7+smoothstep(.7,1.0,second)*.3;
-	vec3 base=pow(tint.rgb,vec3(2.2));  // instance colour is sRGB
-	ALBEDO=mix(base,base+vec3(.4),crest*crest_strength*2.0);
-	ALPHA=tint.a;ROUGHNESS=.2;METALLIC=.1;EMISSION=base*.15+vec3(.25)*crest*crest_strength;
+	vec3 side=normalize(cross(flow_dir,abs(flow_dir.y)>.5?vec3(1.0,0.0,0.0):vec3(0.0,1.0,0.0)));
+	float along=dot(world_pos,flow_dir);float across=dot(world_pos,side);float t=TIME*flow_speed;
+	float wave=sin(along*crest_scale*3.14159-t*3.0+phase*6.283+sin(across*1.7)*.8);
+	float second=sin(along*crest_scale*7.1+across*2.3-t*4.7+phase*3.0);
+	float crest=smoothstep(.6,.95,wave)*.6+smoothstep(.75,1.0,second)*.4;
+	float shallow=1.0-smoothstep(0.0,.5,depth);
+	float foam=shallow*(.5+.5*sin(along*4.0-t*2.5+across*3.0))*shore_foam;
+	vec3 color=mix(tint.rgb,tint.rgb*.72,depth*.45);
+	color=mix(color,vec3(1.0),clamp(crest*.35+foam,0.0,1.0));
+	ALBEDO=color;ALPHA=clamp(tint.a-depth*.05+foam*.2,0.0,1.0);
+	ROUGHNESS=.12;METALLIC=.05;SPECULAR=.7;
+	vec3 bump=flow_dir*cos(along*crest_scale*3.14159-t*3.0)*.12+side*sin(across*2.3-t*1.3)*.06;
+	NORMAL=normalize(NORMAL+(VIEW_MATRIX*vec4(bump,0.0)).xyz);
+	EMISSION=tint.rgb*.1+vec3(.2)*crest*.5;
 }
 """
-func flowing_water_material(for_ripples:bool)->ShaderMaterial:
-	var shader:=Shader.new();shader.code=WATER_SHADER
-	var material:=ShaderMaterial.new();material.shader=shader
-	material.set_shader_parameter("drift",.9 if for_ripples else 0.0);material.set_shader_parameter("crest_strength",.25 if for_ripples else .42)
+static var water_shader_resource:Shader
+func water_shader()->Shader:
+	if water_shader_resource==null:water_shader_resource=Shader.new();water_shader_resource.code=WATER_SHADER
+	return water_shader_resource
+
+func water_material()->ShaderMaterial:
+	var material:=ShaderMaterial.new();material.shader=water_shader()
+	var water:Color=biome.water_color;material.set_shader_parameter("tint",Color(water.r,water.g,water.b,.82))
 	return material
 
-# River channels are proper divots: a dark bed RIVER_DEPTH below the ground,
-# soil banks down every edge that meets ground, a translucent glossy water
-# slab just above the bed with a scatter of pale ripple slivers, and plank
-# bridges that span the gap at ground level.
+# Encode a flow direction and a phase into a vertex colour for the water shader.
+func water_vertex_color(flow:Vector3,phase:float)->Color:
+	var f:=flow.normalized()*.5+Vector3(.5,.5,.5);return Color(f.x,f.y,f.z,phase)
+
+# One quad of a water sheet, TERRAIN_SUBDIV × TERRAIN_SUBDIV small quads per
+# cell so the shore depth fades smoothly along the banks.
+func add_water_cell(st:SurfaceTool,cell:Vector2i,level:float,flow:Vector2,phase:float)->void:
+	var color:=water_vertex_color(Vector3(flow.x,0,flow.y),phase);var subdiv:=TERRAIN_SUBDIV;var step:=1.0/float(subdiv)
+	for i in subdiv:
+		for j in subdiv:
+			var corners:Array=[]
+			for corner in [Vector2(i,j),Vector2(i+1,j),Vector2(i,j+1),Vector2(i+1,j+1)]:
+				var point:Vector2=Vector2(float(cell.x)-.5,float(cell.y)-.5)+corner*step
+				var depth:float=clampf((level-raw_height_at(point))/1.1,0.0,1.0)
+				corners.append({"pos":Vector3(point.x,level,point.y),"depth":depth,"uv":point})
+			for tri in [[0,1,2],[1,3,2]]:
+				for k in tri:
+					var v:Dictionary=corners[k]
+					st.set_normal(Vector3.UP);st.set_color(color);st.set_uv(v.uv);st.set_uv2(Vector2(float(v.depth),0));st.add_vertex(v.pos)
+
 const RIVER_DEPTH:=1.3
+# Waterfalls: a river may begin in the border hills and drop over the field's edge.
+const WATERFALL_CHANCE:=.5
+const WATERFALL_REACH:=4
+const WATERFALL_TOP:=1.5
+var waterfall_cells:={}
+var waterfalls:Array=[]
+# Recorded crossings: each is {cells:Array[Vector2i], flow:Vector2}. One arch is
+# built per crossing so its deck spans that river with the right orientation.
+var river_crossings:Array=[]
+# Little white spheres at each waterfall foot that pulse bigger and smaller.
+var waterfall_bubbles:Array=[]
 func build_rivers(rng:RandomNumberGenerator)->void:
-	if rivers.is_empty() and pond_cells.is_empty():return
-	var water:Color=biome.water_color
-	var water_entries:Array[Dictionary]=[];var ripple_entries:Array[Dictionary]=[]
-	# Flat water sheets sit in the troughs: rivers at their depth, ponds shallower.
-	# The trough itself is the terrain mesh, so there is no separate bed to draw.
-	for cell in rivers.keys()+pond_cells.keys():
-		var x:=float(cell.x);var z:=float(cell.y);var checker:=.03 if (cell.x+cell.y)%2==0 else 0.0
-		var water_top:float=(-RIVER_DEPTH+.28) if rivers.has(cell) else (-POND_DEPTH+.22)
-		var flow:Vector2=river_flow.get(cell,Vector2(0,1));var flow_data:=Color(flow.x,flow.y,rng.randf(),0)
-		water_entries.append({"transform":Transform3D(Basis.IDENTITY.scaled(Vector3(1,.16,1)),Vector3(x,water_top-.08,z)),"color":Color(water.r,water.g,water.b,.88).darkened(checker),"custom":flow_data})
-		# Long pale streaks along the flow, like the reference's white water lines.
-		if rivers.has(cell) and rng.randf()<.3:
-			var streak:=Vector3(rng.randf_range(.9,1.6),.02,rng.randf_range(.05,.08))
-			ripple_entries.append({"transform":Transform3D(Basis.IDENTITY.scaled(streak).rotated(Vector3.UP,atan2(flow.y,flow.x)*-1.0+rng.randf_range(-.08,.08)),Vector3(x+rng.randf_range(-.2,.2),water_top+.02,z+rng.randf_range(-.2,.2))),"color":Color("#f4fbff"),"custom":flow_data})
-	var water_node:=build_multimesh("RiverWater",BoxMesh.new(),water_entries);water_node.material_override=flowing_water_material(false)
-	var ripples:=build_multimesh("RiverRipples",BoxMesh.new(),ripple_entries);ripples.material_override=flowing_water_material(true)
+	if rivers.is_empty() and pond_cells.is_empty() and spanned_cells.is_empty():return
+	# One smooth sheet: rivers at their level, source channels up in the hills,
+	# ponds shallower, and the water running on under every bridge.
+	var st:=SurfaceTool.new();st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for cell in rivers.keys()+pond_cells.keys()+spanned_cells.keys():
+		var level:float=(WATERFALL_TOP-.25) if waterfall_cells.has(cell) else (WATER_LEVEL if (rivers.has(cell) or spanned_cells.has(cell)) else (-POND_DEPTH+.22))
+		add_water_cell(st,cell,level,river_flow.get(cell,Vector2(0,1)),0.0)
+	var water_node:=MeshInstance3D.new();water_node.name="RiverWater";water_node.mesh=st.commit();water_node.material_override=water_material();add_child(water_node)
+
+# --- Bridges -------------------------------------------------------------------
+# Each run of bridge cells is a crossing. The bridge is planned before the
+# terrain is built: its axis is whichever direction lands both ends on dry
+# ground (never in the water), and the cells it spans stay part of the channel
+# so the river runs on underneath. The arched deck is what Quiblets walk on.
+const BRIDGE_RISE:=.55
+const BRIDGE_MAX_HALF_WIDTH:=1.6
+# River water sits this high in the trough (the trough floor is RIVER_DEPTH down).
+const WATER_LEVEL:=-RIVER_DEPTH+.55
+var bridge_arches:Array=[]
+var spanned_cells:={}
+
+# The deck's height over a point, or -INF where no bridge spans it.
+# The deck's world height along its span (t: 0 at the start bank, 1 at the end):
+# it meets each bank at that bank's ground height and arches to the higher bank
+# plus BRIDGE_RISE at the middle, so it always clears the channel.
+func bridge_deck_y(t:float,start_h:float,end_h:float)->float:
+	var line:float=lerpf(start_h,end_h,t)
+	return line+(maxf(start_h,end_h)-line+BRIDGE_RISE)*sin(PI*t)
+
+func deck_height_at(point:Vector2)->float:
+	var best:=-INF
+	for arch in bridge_arches:
+		var local:Vector2=point-arch.center;var along:float=local.dot(arch.axis);var across:float=absf(local.dot(Vector2(-arch.axis.y,arch.axis.x)))
+		if across>float(arch.half_width)+.2 or absf(along)>float(arch.half_span):continue
+		var t:float=along/float(arch.half_span)*.5+.5
+		var sh:float=float(arch.get("start_h",arch.get("base",0.0)));var eh:float=float(arch.get("end_h",arch.get("base",0.0)))
+		best=maxf(best,bridge_deck_y(t,sh,eh))
+	return best
+
+func bridge_lift(point:Vector2)->float:
+	return maxf(0.0,deck_height_at(point)-raw_height_at(point))
+
+func plan_bridges()->void:
+	bridge_arches.clear();spanned_cells.clear()
+	# One arch per recorded crossing: it spans that river across its own flow and
+	# reaches onto the banks, and its cells stay part of the channel so the water
+	# runs on underneath. Nothing is ever left as a dry, waterless gap.
+	for crossing in river_crossings:
+		var cells:Array=crossing.cells
+		if cells.is_empty():continue
+		var flow:Vector2=crossing.flow;if flow.length()<.01:flow=Vector2(0,1)
+		var center:=Vector2.ZERO
+		for cell in cells:center+=Vector2(cell)
+		center/=cells.size()
+		var axis:Vector2=Vector2(1,0) if absf(flow.y)>=absf(flow.x) else Vector2(0,1);var side:=Vector2(axis.y,axis.x)
+		var half_span:=0.0;var half_width:=0.0
+		for cell in cells:half_span=maxf(half_span,absf((Vector2(cell)-center).dot(axis)));half_width=maxf(half_width,absf((Vector2(cell)-center).dot(side)))
+		half_span+=.5;half_width=maxf(half_width+.5,.9)
+		# Reach a little further so each end settles on the bank, capped short.
+		for reach in 3:
+			var grew:=false
+			for end_sign in [-1.0,1.0]:
+				if not walkable.has(cell_of(center+axis*end_sign*(half_span+1.0))):grew=true
+			if not grew:break
+			half_span+=1.0
+		bridge_arches.append({"center":center,"axis":axis,"half_span":half_span,"half_width":half_width,"base":0.0})
+		for cell in cells:spanned_cells[cell]=true
+	# Any stray bridge cell without an arch still gets water under it (defensive).
+	for cell in bridges:
+		if not spanned_cells.has(cell):spanned_cells[cell]=true
+
+# The exact ground colour the terrain mesh paints at a point and height, so the
+# bridge deck (and anything else) can match the surrounding ground precisely.
+func terrain_surface_color(point:Vector2,h:float)->Color:
+	var tint:Color=biome.ground;var grass_low:Color=tint;var grass_high:Color=tint.lightened(.3)
+	var dirt:Color=Color(biome.path).darkened(.12);var plateau:Color=Color(biome.accent).lerp(tint.lightened(.15),.6)
+	var color:=grass_low.lerp(grass_high,clampf((h+1.0)/6.0,0.0,1.0))
+	if h>2.4:color=color.lerp(plateau,.5)
+	var trail:float=route_distance(point)
+	if trail<2.6:color=color.lerp(dirt,smoothstep(0.0,1.0,(2.6-trail)/1.6))
+	var noise:float=.975+.045*sin(point.x*.83+.4)*cos(point.y*.71)
+	return Color(color.r*noise,color.g*noise,color.b*noise)
+
+func build_bridges()->void:
+	if bridge_arches.is_empty():return
+	var bridge_root:=Node3D.new();bridge_root.name="Bridges";add_child(bridge_root)
+	# A crossing is a smooth earthen arch made of the ground itself: it takes the
+	# terrain's own surface colour along its length and meets each bank exactly at
+	# that bank's ground height, so the deck reads as a raised piece of the terrain
+	# with no seam and no planks or rails.
+	for arch_data in bridge_arches:
+		var center:Vector2=arch_data.center;var axis:Vector2=arch_data.axis;var half_span:float=arch_data.half_span;var half_width:float=arch_data.half_width
+		var perp:=Vector2(-axis.y,axis.x)
+		var start_h:float=raw_height_at(center-axis*half_span);var end_h:float=raw_height_at(center+axis*half_span)
+		arch_data.base=maxf(start_h,end_h);arch_data.start_h=start_h;arch_data.end_h=end_h
+		var base:float=arch_data.base
+		var deck:=MeshInstance3D.new();deck.name="BridgeDeck";deck.position=Vector3(center.x,base,center.y);deck.rotation.y=atan2(axis.x,axis.y);bridge_root.add_child(deck)
+		var st:=SurfaceTool.new();st.begin(Mesh.PRIMITIVE_TRIANGLES);var segments:=maxi(12,int(half_span*8.0));var thickness:=.5
+		# Top surface, then the two banked sides, as one flat-shaded earthen ribbon.
+		for i in segments:
+			var t0:=float(i)/float(segments);var t1:=float(i+1)/float(segments)
+			var a0:=(t0-.5)*2.0*half_span;var a1:=(t1-.5)*2.0*half_span
+			# Meet the bank height at each end (t=0/1) and arch up in between.
+			var y0:=bridge_deck_y(t0,start_h,end_h)-base;var y1:=bridge_deck_y(t1,start_h,end_h)-base
+			# Colour each segment from the terrain's own surface colour at its midpoint.
+			var mid:=(t0+t1)*.5;var mid_pt:=center+axis*((a0+a1)*.5);var mid_y:=bridge_deck_y(mid,start_h,end_h)
+			var top_color:=terrain_surface_color(mid_pt,mid_y);var side_color:=top_color.darkened(.22)
+			# Top quad.
+			_deck_quad(st,Vector3(-half_width,y0,a0),Vector3(half_width,y0,a0),Vector3(-half_width,y1,a1),Vector3(half_width,y1,a1),top_color)
+			# Sides drop to a thickness below the deck so it reads as solid earth.
+			_deck_quad(st,Vector3(-half_width,y0-thickness,a0),Vector3(-half_width,y0,a0),Vector3(-half_width,y1-thickness,a1),Vector3(-half_width,y1,a1),side_color)
+			_deck_quad(st,Vector3(half_width,y0,a0),Vector3(half_width,y0-thickness,a0),Vector3(half_width,y1,a1),Vector3(half_width,y1-thickness,a1),side_color)
+		st.generate_normals()
+		deck.mesh=st.commit();deck.material_override=plain_material(Color.WHITE);deck.material_override.vertex_color_use_as_albedo=true
+
+# One flat-shaded quad (two triangles) into the deck surface tool.
+func _deck_quad(st:SurfaceTool,a:Vector3,b:Vector3,c:Vector3,d:Vector3,color:Color)->void:
+	for vert in [a,b,c,b,d,c]:st.set_color(color);st.add_vertex(vert)
+
+# --- Waterfalls ----------------------------------------------------------------
+# Where a source channel meets the field's edge, a sheet of falling water drops
+# from the high channel into the trough, with foam at its foot.
+func build_waterfalls()->void:
+	if waterfalls.is_empty():return
+	var root:=Node3D.new();root.name="Waterfalls";add_child(root)
+	for fall in waterfalls:
+		var lip:Vector2=fall.lip;var flow:Vector2=fall.flow;var half_width:float=fall.half_width
+		var node:=Node3D.new();node.position=Vector3(lip.x,0,lip.y);node.rotation.y=atan2(flow.x,flow.y);root.add_child(node)
+		var top:=WATERFALL_TOP-.25;var bottom:=WATER_LEVEL+.05
+		# The falling sheet is the river's own water shader flowing straight down; it
+		# bulges out near the top but tucks back in at the bottom so the foot of the
+		# fall stays open rather than overhanging the pool.
+		var st:=SurfaceTool.new();st.begin(Mesh.PRIMITIVE_TRIANGLES);var columns:=maxi(3,int(half_width*4.0));var rows:=8
+		for i in columns:
+			for j in rows:
+				var corners:Array=[]
+				for corner in [Vector2(i,j),Vector2(i+1,j),Vector2(i,j+1),Vector2(i+1,j+1)]:
+					var u:float=corner.x/float(columns);var v:float=corner.y/float(rows)
+					var y:float=lerpf(top,bottom,v);var bulge:float=.34*sin(v*PI*.5)*(1.0-v)
+					corners.append({"pos":Vector3(-half_width+u*half_width*2.0,y,.12+bulge),"depth":clampf(.35+.55*sin(v*PI),0.0,1.0),"uv":Vector2(u*half_width*2.0,y)})
+				for tri in [[0,2,1],[1,2,3]]:
+					for k in tri:
+						var vert:Dictionary=corners[k]
+						st.set_normal(Vector3(0,0,1));st.set_color(water_vertex_color(Vector3(0,-1,0),0.0));st.set_uv(vert.uv);st.set_uv2(Vector2(float(vert.depth),0));st.add_vertex(vert.pos)
+		var sheet:=MeshInstance3D.new();sheet.name="WaterfallSheet";sheet.mesh=st.commit();sheet.material_override=water_material();node.add_child(sheet)
+		# Lots of little white spheres churn at the foot, growing and shrinking over
+		# time. They spread in front of the sheet so the base reads as froth, not a wall.
+		var foam_rng:=RandomNumberGenerator.new();foam_rng.seed=int(absf(lip.x*337.0+lip.y*911.0))
+		var count:int=maxi(10,int(half_width*2.0*7.0))
+		for i in count:
+			var base_r:float=foam_rng.randf_range(.08,.2)
+			var bubble:=MeshInstance3D.new();bubble.mesh=GameData.leaf_sphere()
+			bubble.position=Vector3(foam_rng.randf_range(-half_width-.2,half_width+.2),bottom+foam_rng.randf_range(-.05,.22),foam_rng.randf_range(.25,.95))
+			bubble.scale=Vector3.ONE*base_r*2.0;bubble.material_override=plain_material(Color("#f6fcff"));node.add_child(bubble)
+			waterfall_bubbles.append({"node":bubble,"base":base_r,"phase":foam_rng.randf()*TAU,"freq":foam_rng.randf_range(3.5,6.5),"amp":foam_rng.randf_range(.35,.7)})
+
+# Each foam bubble quickly swells and shrinks on its own rhythm.
+func update_waterfall_bubbles()->void:
+	for bubble in waterfall_bubbles:
+		var node:MeshInstance3D=bubble.node
+		if not is_instance_valid(node):continue
+		var pulse:float=1.0+float(bubble.amp)*sin(elapsed*float(bubble.freq)+float(bubble.phase))
+		node.scale=Vector3.ONE*float(bubble.base)*2.0*maxf(.15,pulse)
+
+func plain_material(color:Color)->StandardMaterial3D:
+	var mat:=StandardMaterial3D.new();mat.albedo_color=color;mat.roughness=1.0;mat.specular_mode=BaseMaterial3D.SPECULAR_DISABLED;return mat
+
+# --- Clouds ----------------------------------------------------------------------
+# A few puffy sphere clouds drift slowly high over the field.
+var clouds:Array=[]
+func build_clouds(rng:RandomNumberGenerator)->void:
+	clouds.clear()
+	var cloud_root:=Node3D.new();cloud_root.name="Clouds";add_child(cloud_root)
+	for i in 4:
+		var cloud:=Node3D.new();cloud.position=Vector3(rng.randf_range(field_rect.position.x,field_rect.end.x),rng.randf_range(9.0,12.0),rng.randf_range(field_rect.position.y,field_rect.end.y));cloud_root.add_child(cloud)
+		# The reference's proportions: puffs overlap into one cloud rather than a row of balls.
+		var puff_scale:float=rng.randf_range(.32,.46)
+		for puff in [[0,0,0,5.0],[-4.5,-.6,.5,3.4],[4.5,-.6,-.4,3.6],[1.5,1.8,0,3.0]]:
+			var ball:=MeshInstance3D.new();ball.mesh=GameData.leaf_sphere();ball.scale=Vector3.ONE*float(puff[3])*2.0*puff_scale;ball.position=Vector3(puff[0],puff[1],puff[2])*puff_scale;ball.material_override=plain_material(Color.WHITE);cloud.add_child(ball)
+		clouds.append({"node":cloud,"speed":rng.randf_range(.12,.2)*(1.0 if i%2==0 else -1.0)})
+
+func update_clouds(delta:float)->void:
+	for cloud in clouds:
+		var node:Node3D=cloud.node
+		if not is_instance_valid(node):continue
+		node.position.x+=float(cloud.speed)*delta
+		if node.position.x>field_rect.end.x+6:node.position.x=field_rect.position.x-6
+		if node.position.x<field_rect.position.x-6:node.position.x=field_rect.end.x+6
 
 func build_multimesh(node_name:String,mesh:Mesh,entries:Array[Dictionary])->MultiMeshInstance3D:
 	var multimesh:=MultiMesh.new();multimesh.transform_format=MultiMesh.TRANSFORM_3D;multimesh.use_colors=true;multimesh.use_custom_data=entries.any(func(entry):return entry.has("custom"));multimesh.mesh=mesh;multimesh.instance_count=entries.size()
@@ -894,6 +1228,27 @@ func build_multimesh(node_name:String,mesh:Mesh,entries:Array[Dictionary])->Mult
 # Props on cliff rims and wall tops. Each biome lists the kinds it grows; open
 # plains lean on trees and small rocks while caves, ruins, and craters use
 # boulders, big mushrooms, crystals, pillars, and blocks instead.
+# Decor in the soft-meadow style: smooth blobs, tapered trunks, and a faint shadow disc.
+const LEAF_GREENS:=["#5cb15c","#6fbf6a","#8ccf80","#9fd98f"]
+func leaf_green(index:int)->Color:
+	return Color(LEAF_GREENS[index%LEAF_GREENS.size()]).lerp(biome.get("accent",Color("#6fbf6a")),.3)
+
+# A hill-top prop: the same harvestable ExpeditionProp3D used on open ground, so
+# every prop the player sees (on flat land or on a hill) can be gathered. It
+# blocks its own cell like any prop; hills stay walkable around it.
+func add_hill_prop(cell:Vector2i,rng:RandomNumberGenerator)->void:
+	if prop_cells.has(cell) or not field_rect.has_point(cell):return
+	if prop_cells.keys().any(func(other):return Vector2(other).distance_to(Vector2(cell))<PROP_SPACING):return
+	var had:bool=walkable.has(cell)
+	walkable.erase(cell)
+	if not zones_connected():
+		if had:walkable[cell]=true
+		return
+	decor_count+=1
+	var kinds:=prop_kinds()
+	var prop=PROP_SCRIPT.new();prop.setup(kinds[rng.randi_range(0,kinds.size()-1)],cell,biome,stage_level,rng)
+	prop.destroyed.connect(_on_prop_destroyed);props_root.add_child(prop);props.append(prop);prop_cells[cell]=prop
+
 func add_decor(pos:Vector3,rng:RandomNumberGenerator)->void:
 	decor_count+=1
 	var accent:Color=biome.accent;var cliff:Color=biome.cliff
@@ -901,70 +1256,73 @@ func add_decor(pos:Vector3,rng:RandomNumberGenerator)->void:
 	match str(kinds[rng.randi_range(0,kinds.size()-1)]):
 		"tree":add_tree(pos)
 		"bush":add_bush(pos)
-		"rock":add_box(pos+Vector3(0,.24,0),Vector3(rng.randf_range(.4,.6),.45,rng.randf_range(.4,.6)),rock_color())
-		"boulder":
-			var size:=rng.randf_range(.9,1.4);var rock:=add_box(pos+Vector3(0,size*.45,0),Vector3(size,size*.9,size*.95),rock_color());rock.rotation.y=rng.randf_range(-.3,.3)
-			add_box(pos+Vector3(size*.45,size*.25,size*.2),Vector3(size*.5,size*.5,size*.5),rock_color().darkened(.08))
+		"rock","boulder":add_rocks(pos,rng.randf_range(.6,1.0),rng)
 		"big_mushroom":
-			var height:=rng.randf_range(1.4,2.1);add_box(pos+Vector3(0,height*.5,0),Vector3(.4,height,.4),GameData.COLORS.cream)
-			add_sphere(pos+Vector3(0,height+.1,0),Vector3(1.4,.5,1.4),accent);add_sphere(pos+Vector3(.5,height+.35,.3),Vector3(.25,.12,.25),GameData.COLORS.cream)
+			var height:=rng.randf_range(1.4,2.1);add_cylinder(pos+Vector3(0,height*.5,0),.2,.26,height,GameData.COLORS.cream);add_sphere(pos+Vector3(0,height+.1,0),Vector3(.7,.28,.7),accent);add_shadow(pos,.8)
 		"block":
 			var block:=add_box(pos+Vector3(0,.55,0),Vector3(1.1,1.1,1.1),cliff.lightened(.12));block.rotation.y=rng.randf_range(-.4,.4)
 		"crystal":
 			var crystal:=add_box(pos+Vector3(0,.7,0),Vector3(.35,1.5,.35),accent);crystal.rotation=Vector3(.15,rng.randf()*TAU,.1)
-		"pillar":add_box(pos+Vector3(0,1.05,0),Vector3(.7,2.2,.7),cliff.lightened(.1))
-		"cactus":add_box(pos+Vector3(0,.7,0),Vector3(.4,1.4,.4),accent);add_box(pos+Vector3(.35,.9,0),Vector3(.3,.6,.3),accent)
-		"mushroom":add_box(pos+Vector3(0,.35,0),Vector3(.25,.7,.25),GameData.COLORS.cream);add_sphere(pos+Vector3(0,.8,0),Vector3(.55,.25,.55),accent)
+		"pillar":add_cylinder(pos+Vector3(0,1.05,0),.3,.36,2.1,cliff.lightened(.1))
+		"cactus":add_cylinder(pos+Vector3(0,.7,0),.2,.22,1.4,accent);add_sphere(pos+Vector3(0,1.4,0),Vector3(.2,.2,.2),accent)
+		"mushroom":add_cylinder(pos+Vector3(0,.35,0),.1,.13,.7,GameData.COLORS.cream);add_sphere(pos+Vector3(0,.8,0),Vector3(.5,.22,.5),accent)
 		_:add_sphere(pos+Vector3(0,.2,0),Vector3(.6,.35,.6),accent)
 
-# Rocks are neutral grey with a touch of the island's cliff tone, never plain dirt.
 func rock_color()->Color:
 	if biome.has("rock"):return Color(biome.rock)
-	return Color("#b7bfb4").lerp(Color(biome.cliff),.12)
+	return Color("#b9c3cb")
 
-# Birch-striped trunks on islands that ask for them, plain brown otherwise.
+# A tight cluster of squashed grey blobs, each seated on the ground under it.
+func add_rocks(pos:Vector3,scale:float,_rng:RandomNumberGenerator)->void:
+	var grey:Color=rock_color();var light:Color=grey.lightened(.14);var dark:Color=grey.darkened(.1)
+	# One cohesive rounded rock: overlapping squashed lumps, lighter on top, darker low.
+	var lumps:Array=[[0,.40,0,.72,.50,.64,dark],[.36,.54,.12,.50,.42,.46,grey],[-.32,.50,-.16,.46,.40,.44,grey],[.06,.74,.04,.42,.36,.40,light],[-.10,.36,.34,.40,.32,.38,grey]]
+	for lump in lumps:
+		var offset:Vector3=Vector3(lump[0],0,lump[2])*scale;var radii:Vector3=Vector3(lump[3],lump[4],lump[5])*scale
+		var ground:float=terrain_height_at(Vector2(pos.x+offset.x,pos.z+offset.z))
+		add_sphere(Vector3(pos.x+offset.x,ground+float(lump[1])*scale,pos.z+offset.z),radii,lump[6])
+	add_shadow(pos,1.05*scale)
+
 func add_trunk(pos:Vector3,height:float,width:float)->void:
-	if str(biome.get("trunk",""))=="birch":
-		var bands:int=maxi(2,roundi(height/.3))
-		for i in bands:add_box(pos+Vector3(0,(float(i)+.5)*height/float(bands),0),Vector3(width,height/float(bands),width),Color("#e9e6dc") if i%2==0 else Color("#7f9a6a"),"trunk")
-	else:add_box(pos+Vector3(0,height*.5,0),Vector3(width,height,width),Color("#8a5b36"),"trunk")
+	add_cylinder(pos+Vector3(0,height*.5,0),width*.75,width,height,Color("#a96f42"))
 
-func add_box(pos:Vector3,size:Vector3,color:Color,detail:="specks")->MeshInstance3D:
-	var mesh:=GameData.rounded_box(size,minf(size.x,minf(size.y,size.z))*.2);var node:=MeshInstance3D.new();node.mesh=mesh;node.position=pos;var mat:=StandardMaterial3D.new();mat.albedo_color=color;mat.roughness=.88
-	if detail=="specks":GameData.apply_prop_specks(mat)
-	else:GameData.apply_detail(mat,detail)
-	node.material_override=mat;(decor_root if is_instance_valid(decor_root) else self).add_child(node);return node
+# Plain matte pieces: a rounded box, a tapered cylinder, or a smooth blob.
+func add_box(pos:Vector3,size:Vector3,color:Color)->MeshInstance3D:
+	var node:=MeshInstance3D.new();node.mesh=GameData.rounded_box(size,minf(size.x,minf(size.y,size.z))*.2);node.position=pos;node.material_override=plain_material(color);(decor_root if is_instance_valid(decor_root) else self).add_child(node);return node
+
+func add_cylinder(pos:Vector3,top_radius:float,bottom_radius:float,height:float,color:Color)->MeshInstance3D:
+	var mesh:=CylinderMesh.new();mesh.top_radius=top_radius;mesh.bottom_radius=bottom_radius;mesh.height=height;mesh.radial_segments=12
+	var node:=MeshInstance3D.new();node.mesh=mesh;node.position=pos;node.material_override=plain_material(color);(decor_root if is_instance_valid(decor_root) else self).add_child(node);return node
 
 func add_sphere(pos:Vector3,size:Vector3,color:Color)->MeshInstance3D:
-	var node:=MeshInstance3D.new();node.mesh=GameData.leaf_sphere();node.position=pos;node.scale=size*2.0;var mat:=StandardMaterial3D.new();mat.albedo_color=color;mat.roughness=.9;node.material_override=mat;(decor_root if is_instance_valid(decor_root) else self).add_child(node);return node
+	var node:=MeshInstance3D.new();node.mesh=GameData.leaf_sphere();node.position=pos;node.scale=size*2.0;node.material_override=plain_material(color);(decor_root if is_instance_valid(decor_root) else self).add_child(node);return node
 
-# Rim trees match the field props: either a tall column tree (a slim trunk under
-# a tall dark canopy) or a big round one (a wide bright canopy with a smaller cube on top).
-# Canopies and shrubs are clusters of many overlapping leaf spheres in slightly
-# different shades (the same recipe the field props use), so every tree still
-# rolls its own shape, size, and tint from its position.
-func add_leaf_cluster(center:Vector3,extent:Vector3,count:int,radius:float,leaf:Color,rng:RandomNumberGenerator)->void:
-	for entry in GameData.leaf_cluster(center,extent,count,radius,leaf,rng):add_sphere(entry.pos,Vector3.ONE*float(entry.radius),entry.color)
+# A soft translucent disc on the ground under a tree, bush, or rock pile.
+func add_shadow(pos:Vector3,radius:float)->MeshInstance3D:
+	var mesh:=CylinderMesh.new();mesh.top_radius=radius;mesh.bottom_radius=radius;mesh.height=.02;mesh.radial_segments=20
+	var node:=MeshInstance3D.new();node.mesh=mesh;node.position=pos+Vector3(0,.06,0)
+	var mat:=StandardMaterial3D.new();mat.albedo_color=Color(.2,.31,.16,.16);mat.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA;mat.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED;node.material_override=mat
+	(decor_root if is_instance_valid(decor_root) else self).add_child(node);return node
 
+# A tree is a tapered trunk under five round leaf blobs in four greens, over a shadow disc.
 func add_tree(pos:Vector3)->void:
 	var rng:=RandomNumberGenerator.new();rng.seed=int(absf(pos.x*1327.0+pos.z*7919.0))+stage_area_index
-	var leaf:Color=biome.get("accent",Color("#3f7650")).lightened(rng.randf_range(-.06,.1))
-	if rng.randf()<.5:
-		var height:=rng.randf_range(1.6,2.6);var width:=rng.randf_range(.8,1.15);var trunk_height:=rng.randf_range(.6,1.1)
-		add_trunk(pos,trunk_height,.3)
-		add_leaf_cluster(pos+Vector3(0,trunk_height-.05+height*.5,0),Vector3(width*.5,height*.5,width*.5),9,width*.42,leaf.darkened(.1),rng)
-		add_leaf_cluster(pos+Vector3(0,trunk_height+height+.05,0),Vector3(width*.3,.2,width*.3),3,width*.28,leaf.darkened(.02),rng)
-	else:
-		var width:=rng.randf_range(1.4,2.0);var height:=rng.randf_range(1.2,1.7);var trunk_height:=rng.randf_range(.8,1.2)
-		add_trunk(pos,trunk_height,.36)
-		add_leaf_cluster(pos+Vector3(0,trunk_height-.05+height*.5,0),Vector3(width*.5,height*.5,width*.5*rng.randf_range(.85,1.0)),13,width*.3,leaf.lightened(.1),rng)
-		add_leaf_cluster(pos+Vector3(rng.randf_range(-.25,.25),trunk_height+height+.15,rng.randf_range(-.2,.2)),Vector3(width*.25,.2,width*.25),4,width*.2,leaf.lightened(.18),rng)
+	var s:float=rng.randf_range(.28,.38)
+	add_trunk(pos,6.0*s,1.05*s)
+	var blobs:Array=[[0,8.6,0,4.6],[-3.4,7,.6,3],[3.4,7,-.6,3],[0,11,.4,2.8],[1.6,8.4,2.6,2.4]]
+	for i in blobs.size():
+		var blob:Array=blobs[i];add_sphere(pos+Vector3(blob[0],blob[1],blob[2])*s,Vector3.ONE*float(blob[3])*s,leaf_green(i))
+	add_shadow(pos,5.2*s)
 
+# A bush is three leaf blobs.
 func add_bush(pos:Vector3)->void:
 	var rng:=RandomNumberGenerator.new();rng.seed=int(absf(pos.x*911.0+pos.z*4177.0))+stage_area_index
-	var leaf:Color=biome.get("accent",Color("#3f7650")).darkened(.08)
-	add_leaf_cluster(pos+Vector3(0,.42,0),Vector3(.48,.3,.45),6,.3,leaf,rng)
-	add_leaf_cluster(pos+Vector3(.08,.82,.04),Vector3(.25,.1,.22),3,.2,leaf.lightened(.08),rng)
+	var s:float=rng.randf_range(.95,1.2)
+	# A full, rounded dome of overlapping leaves rather than three stray balls.
+	var blobs:Array=[[0,.40,0,.50],[.34,.32,.05,.37],[-.34,.32,-.05,.37],[.05,.32,.34,.35],[-.05,.32,-.34,.35],[.12,.60,.06,.35],[-.12,.55,-.08,.31]]
+	for i in blobs.size():
+		var blob:Array=blobs[i];add_sphere(pos+Vector3(blob[0],blob[1],blob[2])*s,Vector3.ONE*float(blob[3])*s,leaf_green(i%3))
+	add_shadow(pos,.85*s)
 
 # Each patch is rolled its ingredient up front and is shaped after it, so the
 # team can tell from a distance what a patch is likely to give. Any resource can
@@ -1108,6 +1466,11 @@ func _process(delta:float)->void:
 	elapsed+=delta
 	update_group_camera(delta)
 	update_wall_fades(delta)
+	update_clouds(delta)
+	update_waterfall_bubbles()
+	# Fighters ride the rolling ground (and the bridge arches).
+	for actor in team+enemies:
+		if is_instance_valid(actor):actor.position.y=terrain_height_at(Vector2(actor.position.x,actor.position.z))
 	if intermission>0:
 		intermission-=delta
 		if intermission<=0:
@@ -1268,8 +1631,14 @@ func update_group_camera(delta:float)->void:
 	camera.look_at(camera_focus+Vector3(0,.45,0),Vector3.UP)
 
 func nearest(from:QuibletActor3D,pool:Array[QuibletActor3D])->QuibletActor3D:
-	var result:QuibletActor3D;var best:=INF
+	# A Taunt/Distract pulls attention: while any reachable candidate is taunting,
+	# only taunters are considered, so enemies converge on the tank.
+	var taunters:Array[QuibletActor3D]=[]
 	for candidate in pool:
+		if candidate.current_hp>0 and candidate.statuses.has("taunt") and from.horizontal_distance(from.position,candidate.position)<=TAUNT_RANGE:taunters.append(candidate)
+	var considered:Array[QuibletActor3D]=taunters if not taunters.is_empty() else pool
+	var result:QuibletActor3D;var best:=INF
+	for candidate in considered:
 		if candidate.current_hp<=0:continue
 		var d:=from.horizontal_distance(from.position,candidate.position)
 		if d<best:best=d;result=candidate

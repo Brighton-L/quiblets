@@ -37,6 +37,44 @@ func _draw() -> void:
 		"tuft", "crest":
 			var pts := PackedVector2Array([center+Vector2(-r*.55,-r*.62),center+Vector2(-r*.2,-r*1.2),center+Vector2(0,-r*.72),center+Vector2(r*.35,-r*1.3),center+Vector2(r*.55,-r*.58)])
 			draw_colored_polygon(pts, a)
+		"fists":
+			for fx in [-1.0, 1.0]:
+				var fist := center + Vector2(fx*r*1.12, -r*.1)
+				draw_circle(fist, r*.34, a)
+				draw_arc(fist, r*.34, 0, TAU, 20, c, 2.0)
+				for knuckle in range(3):
+					draw_circle(fist+Vector2(fx*r*.24,(knuckle-1)*r*.18), r*.06, c)
+		"puff":
+			for i in 7:
+				var ang := TAU*i/7.0 - PI*.5
+				draw_circle(center+Vector2(cos(ang),sin(ang))*r*1.02, r*.32, Color(a,.9))
+		"boulder":
+			for off in [Vector2(-r*.5,-r*.55),Vector2(r*.1,-r*.85),Vector2(r*.55,-r*.5)]:
+				draw_circle(center+off, r*.4, a)
+		"web":
+			for fx in [-1.0,1.0]:
+				for k in 3:
+					draw_line(center, center+Vector2(fx*r*(.9+k*.15),-r*.3+k*r*.45), a, 2.5)
+		"gloop":
+			for off in [Vector2(-r*.5,-r*.5),Vector2(r*.2,-r*.75),Vector2(r*.55,-r*.4)]:
+				draw_circle(center+off, r*.3, a)
+				draw_circle(center+off+Vector2(0,r*.34), r*.14, a)
+		"balloon":
+			for i in 8:
+				var ang := TAU*i/8.0
+				var base := center+Vector2(cos(ang),sin(ang))*r*.98
+				draw_colored_polygon(PackedVector2Array([base-Vector2(cos(ang+.4),sin(ang+.4))*r*.12,base-Vector2(cos(ang-.4),sin(ang-.4))*r*.12,center+Vector2(cos(ang),sin(ang))*r*1.32]), a)
+		"spikes":
+			for i in 5:
+				var sx := (i-2)*r*.42
+				draw_colored_polygon(PackedVector2Array([center+Vector2(sx-r*.16,-r*.5),center+Vector2(sx,-r*1.25),center+Vector2(sx+r*.16,-r*.5)]), a)
+		"beak":
+			draw_colored_polygon(PackedVector2Array([center+Vector2(-r*.5,-r*.35),center+Vector2(-r*.35,-r*1.15),center+Vector2(r*.05,-r*.55)]), c)
+			draw_colored_polygon(PackedVector2Array([center+Vector2(-r*.32,-r*.72),center+Vector2(r*.28,-r*.72),center+Vector2(-r*.02,-r*.4)]), a)
+		"twinbeak":
+			for fx in [-1.0,1.0]:
+				draw_colored_polygon(PackedVector2Array([center+Vector2(fx*r*.24,-r*.4),center+Vector2(fx*r*.5,-r*1.2),center+Vector2(fx*r*.62,-r*.5)]), c)
+				draw_colored_polygon(PackedVector2Array([center+Vector2(fx*r*.34,-r*.78),center+Vector2(fx*r*.72,-r*.7),center+Vector2(fx*r*.5,-r*.5)]), a)
 		"moon":
 			draw_circle(center+Vector2(r*.28,-r*.62),r*.46,a)
 			draw_circle(center+Vector2(r*.43,-r*.72),r*.37,c)
