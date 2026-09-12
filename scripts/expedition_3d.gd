@@ -611,6 +611,19 @@ func build_terrain(rng:RandomNumberGenerator)->void:
 				if peaks.has(cell+offset):total+=float(peaks[cell+offset]);count+=1
 			blended[cell]=total/float(count)
 		peaks=blended
+	# Open an amphitheatre around each waterfall's mouth so it is not walled into a
+	# slot canyon: cut the flanking hills back down toward the plain, strongest at
+	# the foot (a little downstream of the lip) and fading out with distance.
+	if not waterfalls.is_empty():
+		for cell in peaks.keys():
+			var reduce:=0.0
+			for fall in waterfalls:
+				var flow:Vector2=fall.flow;if flow.length()>.001:flow=flow.normalized()
+				var center:Vector2=Vector2(fall.lip)+flow*WATERFALL_CLEARING_OFFSET
+				var radius:float=float(fall.half_width)+WATERFALL_CLEARING
+				var d:float=Vector2(cell).distance_to(center)
+				if d<radius:reduce=maxf(reduce,1.0-smoothstep(radius*.4,radius,d))
+			if reduce>0.0:peaks[cell]=lerpf(float(peaks[cell]),0.0,reduce*WATERFALL_CLEARING_DEPTH)
 	for cell in peaks:terrain_heights[cell]=float(peaks[cell])
 	# The fine sample grid: TERRAIN_SUBDIV samples per cell edge, from the grid's outer edge.
 	var subdiv:=TERRAIN_SUBDIV
@@ -1018,6 +1031,11 @@ const RIVER_DEPTH:=1.3
 const WATERFALL_CHANCE:=.5
 const WATERFALL_REACH:=4
 const WATERFALL_TOP:=1.5
+# The hills flanking a waterfall are cut back into an open amphitheatre so the
+# fall and its foot are not boxed into a slot canyon.
+const WATERFALL_CLEARING:=5.0
+const WATERFALL_CLEARING_OFFSET:=2.5
+const WATERFALL_CLEARING_DEPTH:=.9
 var waterfall_cells:={}
 var waterfalls:Array=[]
 # Recorded crossings: each is {cells:Array[Vector2i], flow:Vector2}. One arch is
