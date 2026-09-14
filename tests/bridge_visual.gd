@@ -16,4 +16,9 @@ func run()->void:
 	e.camera.global_position=focus-back+Vector3(0,1.6,0);e.camera.look_at(focus,Vector3.UP)
 	await create_timer(.4).timeout;await RenderingServer.frame_post_draw
 	root.get_texture().get_image().save_png("/private/tmp/quiblets-bridge-under.png")
+	var arch:Dictionary=e.bridge_arches[0];var center:Vector2=arch.center;var axis:Vector2=arch.axis;var side:=Vector2(-axis.y,axis.x)
+	var top_focus:=Vector3(center.x,e.deck_height_at(center),center.y)
+	e.camera.global_position=top_focus+Vector3(axis.x*7+side.x*9,10,axis.y*7+side.y*9);e.camera.look_at(top_focus,Vector3.UP)
+	await create_timer(.4).timeout;await RenderingServer.frame_post_draw
+	root.get_texture().get_image().save_png("/private/tmp/quiblets-bridge-top.png")
 	print("QUIBLETS_BRIDGE_VISUAL_OK");quit()

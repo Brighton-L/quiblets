@@ -54,6 +54,7 @@ func run()->void:
 		if p.mode=="buff":check((ally if p.get("ally",false) else user).statuses.has(p.status),move_name+" did not grant its specific buff")
 		elif p.mode=="cleanse":check(not user.statuses.has("burn"),move_name+" did not cleanse")
 		elif p.mode in ["heal","heal_field"]:check(user.current_hp>2000 and ally.current_hp>2000,move_name+" did not heal both user and nearby ally")
+		elif p.get("no_damage",false):check(is_equal_approx(victim.current_hp,10000.0) and (victim.statuses.has(p.get("status","")) or victim.retreating),move_name+" should apply its effect without dealing damage")
 		else:check(victim.current_hp<10000,move_name+" did not apply damage through its delivery mechanic")
 		if p.has("status") and p.mode!="buff" and p.status!="leech":check(victim.statuses.has(p.status),move_name+" did not apply "+p.status)
 		if p.has("burn"):check(victim.statuses.has("burn"),move_name+" did not apply Burn")

@@ -110,7 +110,7 @@ func run()->void:
 			else:
 				check(river_meshes.size()==1 and river_meshes[0].name=="RiverWater" and river_meshes[0].mesh is ArrayMesh and e.find_child("RiverBed",true,false)==null,"Rivers are troughs in the ground mesh with one translucent water sheet, no bed cubes or ripple slivers")
 				check(e.bridges.keys().all(func(cell):return e.walkable.has(cell)) and (e.bridge_arches.is_empty() or (e.get_node("Bridges").get_child_count()==e.bridge_arches.size() and e.spanned_cells.keys().any(func(cell):return e.bridge_lift(Vector2(cell))>.5))),"Crossings carry an arched wooden bridge whose deck lifts the walker over the channel")
-				var water_node:MeshInstance3D=e.find_child("RiverWater",true,false);var water_cells:int=e.rivers.size()+e.pond_cells.size()+e.spanned_cells.size()
+				var water_node:MeshInstance3D=e.find_child("RiverWater",true,false);var water_cells:int=e.rivers.size()+e.pond_cells.size()+e.spanned_cells.size()-e.waterfall_cells.size()
 				check(water_node.mesh.surface_get_array_len(0)==water_cells*e.TERRAIN_SUBDIV*e.TERRAIN_SUBDIV*6,"The water sheet covers every river and pond cell and runs on under every bridge")
 				var water_arrays:Array=water_node.mesh.surface_get_arrays(0);var water_colors:PackedColorArray=water_arrays[Mesh.ARRAY_COLOR];var water_uv2:PackedVector2Array=water_arrays[Mesh.ARRAY_TEX_UV2]
 				check(water_colors.size()==water_node.mesh.surface_get_array_len(0) and water_uv2.size()==water_colors.size() and Array(water_colors.slice(0,64)).all(func(color):return is_equal_approx(color.a,water_colors[0].a)),"Every water vertex carries flow, one shared phase, and shore depth for the shader")
@@ -130,11 +130,11 @@ func run()->void:
 					check(e.get_node("Bridges").get_children().all(func(deck):return deck.mesh is ArrayMesh and deck.get_child_count()==0),"Bridges are one earthen terrain deck each, with no rails or posts")
 				check(e.bridge_arches.all(func(arch):return arch.axis==Vector2(1,0) or arch.axis==Vector2(0,1)),"Bridges lie along one of the two crossing orientations")
 				if not e.waterfall_cells.is_empty():
-					check(e.get_node("Waterfalls").get_child_count()==e.waterfalls.size() and e.waterfall_cells.keys().all(func(cell):return e.raw_height_at(Vector2(cell))>.5 and not e.field_rect.has_point(cell)),"A waterfall's source channel runs high through the border hills and its sheet is built")
-					check(e.get_node("Waterfalls").get_children().all(func(fall):return fall.find_child("WaterfallSheet",true,false)!=null and fall.find_child("WaterfallSheet",true,false).material_override.shader==water_node.material_override.shader),"Waterfall sheets are the river's own water shader falling downward")
-					check(e.get_node("Waterfalls").get_children().all(func(fall):return fall.get_child_count()>=9) and e.waterfall_bubbles.size()>=10,"Each waterfall foot churns with many little foam spheres")
+					check(e.get_node("Waterfalls").get_child_count()==e.waterfalls.size() and e.waterfall_cells.keys().all(func(cell):return not e.field_rect.has_point(cell)) and e.waterfall_cells.keys().any(func(cell):return e.raw_height_at(Vector2(cell))>.8),"A waterfall's source channel slopes down out of the border hills into the field and its sheet is built")
+					check(e.get_node("Waterfalls").get_children().all(func(fall):return fall.find_child("WaterfallSheet",true,false)!=null and fall.find_child("WaterfallSheet",true,false).material_override.shader==water_node.material_override.shader and fall.find_child("WaterfallSheet",true,false).material_override.get_shader_parameter("tint")==water_node.material_override.get_shader_parameter("tint") and fall.find_child("WaterfallSheet",true,false).material_override.get_shader_parameter("surface_flow")==true),"Waterfalls share the river shader and tint, with continuous flow coordinates for their slope")
+					check(e.get_node("Waterfalls").get_children().all(func(fall):return fall.get_child_count()>=9) and e.waterfall_bubbles.size()>=10,"Each waterfall foot churns with many soft foam patches")
 					var bubble=e.waterfall_bubbles[0].node;var before:float=bubble.scale.x;e.elapsed+=1.7;e.update_waterfall_bubbles()
-					check(not is_equal_approx(bubble.scale.x,before),"Foam spheres pulse bigger and smaller over time")
+					check(not is_equal_approx(bubble.scale.x,before),"Foam patches expand as they drift and dissolve")
 				check(e.RIVER_DEPTH>=1.2,"Rivers should be sunk deep")
 				check(water_node.material_override is ShaderMaterial and water_node.material_override.shader.code.contains("TIME") and e.river_channels>=int(e.biome.rivers)+e.EXTRA_RIVERS_MIN,"River water should flow with a time-driven shader fed each river's direction, with extra rivers guaranteed")
 			check(int(e.cliff_tiers[1])>0 and int(e.cliff_tiers[2])>0 and int(e.cliff_tiers[3])>0 and e.cliff_layer_count==int(e.cliff_tiers[1])+int(e.cliff_tiers[2])+int(e.cliff_tiers[3]),"Every wall tier is present and the hill count matches the tier tallies")
@@ -170,10 +170,20 @@ func run()->void:
 	check(wood.props.size()>=8 and wood.props.all(func(prop):return prop.get_child_count()>=1 and not wood.walkable.has(prop.cell) and wood.prop_cells.has(prop.cell) and wood.field_rect.has_point(prop.cell)),"Levels should hold simple props that block their tiles")
 	var cave:=build(6,1,"level")
 	check(wood.props.any(func(prop):return prop.kind=="tree") and cave.props.any(func(prop):return prop.kind=="boulder") and cave.props.any(func(prop):return prop.kind in ["crystal","big_mushroom"]),"Meadows grow trees; caves hold boulders, crystals, and big mushrooms")
-	check(cave.props.all(func(prop):return prop.harvestable()),"Every prop, boulders included, is harvestable")
 	cave.free()
+	# Regular levels mix fruit-bearing plants with plain scenery; Berry Groves are
+	# lush gathering fields — denser and mostly harvestable.
+	var lv_h:=0;var lv_t:=0
+	for node in [0,1,2]:
+		var lv:=build(0,node,"level");lv_h+=lv.props.filter(func(prop):return prop.harvestable()).size();lv_t+=lv.props.size();lv.free()
+	var grove_sample:=build(0,3,"berry_grove");var gv_h:=grove_sample.props.filter(func(prop):return prop.harvestable()).size();var gv_t:=grove_sample.props.size()
+	check(lv_t>0 and lv_h>0 and lv_h<lv_t,"Regular levels mix fruit-bearing plants with plain scenery (%d of %d bear fruit)"%[lv_h,lv_t])
+	check(gv_t>0 and float(gv_h)/gv_t>float(lv_h)/lv_t+.3 and gv_t>lv_t/3.0,"A Berry Grove is denser and far more harvestable (%d/%d vs %d/%d over three levels)"%[gv_h,gv_t,lv_h,lv_t])
+	check(grove_sample.props.any(func(prop):return prop.kind in ["bush","tree"]),"A Berry Grove grows leafy shrubs and trees")
+	grove_sample.free()
 	# Harvesting: stand beside a tree for a while to gather big bundles; the tree then goes.
 	var orchard=wood.props.filter(func(prop):return prop.kind=="tree")[0];var orchard_cell:Vector2i=orchard.cell
+	orchard.bears_fruit=true;orchard.rich=false  # this test harvests it, so make sure it bears fruit
 	# Trees are a tapered trunk under five round leaf blobs in four greens; shrubs are three blobs.
 	var tree_balls:Array=orchard.parts.filter(func(part):return part.mesh is SphereMesh)
 	check(tree_balls.size()==5 and orchard.parts.size()==6 and orchard.parts[0].mesh is CylinderMesh and GameData.leaf_sphere().radial_segments>=16 and tree_balls.map(func(part):return part.material_override.albedo_color).reduce(func(seen,color):return seen if seen.has(color) else seen+[color],[]).size()>=4,"A tree is a tapered trunk under five smooth leaf blobs in four greens")
@@ -190,7 +200,7 @@ func run()->void:
 	wood.update_harvesting([],1.0);check(orchard.harvest_progress<1.0,"Harvest progress drains when nobody stands by the prop")
 	for i in 4:wood.update_harvesting([picker],1.0)
 	var harvested_total:int=harvest_rewards.filter(func(reward):return reward.kind=="ingredient").reduce(func(sum,reward):return sum+int(reward.amount),0)
-	check(orchard.shattered and orchard.harvested and wood.walkable.has(orchard_cell) and harvest_rewards.size()==wood.HARVEST_BUNDLES and harvested_total>=8 and harvested_total<=16,"A full harvest gives two big bundles and clears the tree's tile")
+	check(orchard.shattered and orchard.harvested and wood.walkable.has(orchard_cell) and harvest_rewards.size()==wood.HARVEST_BUNDLES and harvested_total>=2 and harvested_total<=4,"A full harvest gives a modest bundle and clears the tree's tile")
 	check(harvest_rewards.all(func(reward):return GameData.INGREDIENTS[reward.name].tags.any(func(tag):return tag in ["fruit","leaf"])),"A tree harvest gives fruit or leaf ingredients")
 	wood.team.erase(picker)
 	check(connected(wood),"Props must never cut a clearing off")
@@ -298,7 +308,7 @@ func run()->void:
 	var shapes:={}
 	for ingredient_name in GameData.INGREDIENTS:
 		var sample:=Node3D.new();grove.build_berry_patch_shape(sample,ingredient_name);var signature:Array=[]
-		for part in sample.get_children():signature.append([part.mesh.get_class(),str(part.mesh.size) if part.mesh is BoxMesh else "%.2f/%.2f"%[part.mesh.radius,part.mesh.height],str(part.position),str(part.rotation)])
+		for part in sample.get_children():signature.append([part.mesh.get_class(),str(part.mesh.size) if part.mesh is BoxMesh else "%.2f/%.2f"%[part.mesh.top_radius if part.mesh is CylinderMesh else part.mesh.radius,part.mesh.height],str(part.position),str(part.rotation)])
 		shapes[ingredient_name]=str(signature);sample.free()
 	var unique_shapes:={}
 	for signature in shapes.values():unique_shapes[signature]=true

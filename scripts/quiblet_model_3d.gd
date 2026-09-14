@@ -5,12 +5,21 @@ var species_index := 0
 var enemy := false
 var body_material: StandardMaterial3D
 var accent_material: StandardMaterial3D
+var floating_pivot:Node3D
+var floating_center:=Vector3.ZERO
+var floating_time:=0.0
 
 func setup(index: int, is_enemy := false, model_scale := 1.0) -> void:
 	species_index = index
 	enemy = is_enemy
 	scale = Vector3.ONE * model_scale
 	build_model()
+
+func animate_walking(phase:float,bounce:float,tilt:=0.0)->void:
+	# Floating species glide; their imported mesh already supplies the air gap.
+	var grounded:=float(GameData.species(species_index).get("model_hover",0.0))<=0.0
+	position.y=absf(sin(phase))*bounce if grounded else 0.0
+	rotation.z=sin(phase)*tilt if grounded else 0.0
 
 func material(color: Color, roughness := 0.82) -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
@@ -50,7 +59,7 @@ func build_model() -> void:
 	# Some species ship a real 3D model (res://models/*.glb) instead of the
 	# procedural toy body; load and auto-fit it to the same scale.
 	if s.has("model") and ResourceLoader.exists(str(s.model)):
-		build_imported_model(str(s.model));return
+		build_imported_model(str(s.model),float(s.get("model_yaw",IMPORTED_MODEL_YAW)),float(s.get("model_hover",0.0)));return
 	var dark := material(GameData.COLORS.ink, 0.55)
 	var white := material(Color.WHITE, 0.45)
 	# Chunky low-poly body.
@@ -129,13 +138,13 @@ func build_model() -> void:
 # bodies (+Z forward); rotate them so they line up with everything else.
 const IMPORTED_MODEL_YAW := PI / 2.0  # counter-clockwise 90° (viewed from above)
 
-func build_imported_model(path: String) -> void:
+func build_imported_model(path: String, yaw := IMPORTED_MODEL_YAW, hover := 0.0) -> void:
 	var scene: PackedScene = load(path)
 	if scene == null:return
 	var inst: Node3D = scene.instantiate() as Node3D
 	if inst == null:return
 	add_child(inst)
-	inst.rotation.y = IMPORTED_MODEL_YAW
+	inst.rotation.y = yaw
 	# Fit the model to roughly the toy body's height, feet on the ground, centered —
 	# accounting for the yaw so the recentre still lands it over the origin.
 	var box := combined_aabb(inst)
@@ -145,6 +154,66 @@ func build_imported_model(path: String) -> void:
 		# Where the local centre ends up in parent space after yaw + scale.
 		var placed := inst.basis * box.get_center()
 		inst.position = Vector3(-placed.x, -box.position.y * factor, -placed.z)
+	# Keep floating species above their ground anchor in camp, combat and reveals.
+	inst.position.y+=hover
+	restore_imported_colors(inst)
+	if GameData.species(species_index).get("model_corner_roll",false):
+		# Roll around the body centre rather than the feet, leaving navigation,
+		# facing and the ground anchor independent of the floating animation.
+		floating_center=inst.transform*box.get_center()
+		floating_pivot=Node3D.new();floating_pivot.name="FloatingBody";add_child(floating_pivot)
+		floating_pivot.position=floating_center
+		remove_child(inst);floating_pivot.add_child(inst);inst.position-=floating_center
+		update_floating_pose(0.0)
+
+func _process(delta:float)->void:
+	if not is_instance_valid(floating_pivot):return
+	floating_time+=delta;update_floating_pose(floating_time)
+
+func update_floating_pose(time:float)->void:
+	if not is_instance_valid(floating_pivot):return
+	# Keep the top face upward while the lowest bottom corner advances clockwise.
+	var turns:=time/3.0;var corner:=floorf(turns);var progress:=smoothstep(0.0,1.0,turns-corner)
+	var angle:=PI*.25+(corner+progress)*PI*.5
+	var tilt:=deg_to_rad(8.0)
+	floating_pivot.rotation=Vector3(tilt*sin(angle),0.0,-tilt*cos(angle))
+	floating_pivot.position=floating_center+Vector3.UP*sin(time*TAU/6.0)*.25
+
+# Models authored in Blender carry punchy, saturated albedo. The camp's soft,
+# cool blue ambient washes that colour out to muddy pastels, so imported models
+# arrive looking dull compared to the source. Re-seat each surface with a small
+# self-emission of its own albedo (and a touch more saturation) so the authored
+# colour survives the wash — scoped to imported models so procedural bodies,
+# which were tuned to this exact lighting, are left untouched.
+const IMPORTED_EMISSION := 0.32   # fraction of albedo emitted back as self-colour
+const IMPORTED_SATURATION := 1.18 # gentle saturation lift on the base albedo
+
+func restore_imported_colors(inst: Node3D) -> void:
+	# Purely a rendering tweak; the headless dummy rasterizer has no real material
+	# storage, so skip it there (and spare the test logs its null-material noise).
+	if DisplayServer.get_name() == "headless":return
+	for mi in inst.find_children("*", "MeshInstance3D", true, false):
+		var mesh: Mesh = mi.mesh
+		if mesh == null:continue
+		for s in mesh.get_surface_count():
+			var src := mesh.surface_get_material(s)
+			if not (src is StandardMaterial3D):continue
+			var m: StandardMaterial3D = (src as StandardMaterial3D).duplicate()
+			m.albedo_color = saturated(m.albedo_color, IMPORTED_SATURATION)
+			m.emission_enabled = true
+			m.emission = m.albedo_color
+			m.emission_energy_multiplier = IMPORTED_EMISSION
+			mi.set_surface_override_material(s, m)
+
+# Push a colour away from grey by `amount` (1.0 = unchanged) while keeping value,
+# so pure blacks/whites stay put and only chromatic surfaces get the lift.
+func saturated(c: Color, amount: float) -> Color:
+	var grey := (c.r + c.g + c.b) / 3.0
+	return Color(
+		clampf(grey + (c.r - grey) * amount, 0.0, 1.0),
+		clampf(grey + (c.g - grey) * amount, 0.0, 1.0),
+		clampf(grey + (c.b - grey) * amount, 0.0, 1.0),
+		c.a)
 
 func combined_aabb(node: Node) -> AABB:
 	var result := AABB();var started := false

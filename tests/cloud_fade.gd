@@ -1,0 +1,30 @@
+extends SceneTree
+var failures:=0
+func check(ok:bool,message:String)->void:
+	if not ok:failures+=1;push_error(message)
+func _initialize()->void:call_deferred("run")
+func run()->void:
+	root.size=Vector2i(1280,720)
+	var e:=Expedition3D.new();root.add_child(e);e.set_process(false);e.field_rect=Rect2i(-20,-20,40,40)
+	var camera:=Camera3D.new();root.add_child(camera);camera.position=Vector3(0,16,20);camera.look_at(Vector3.ZERO);e.camera=camera
+	var rng:=RandomNumberGenerator.new();rng.seed=17;e.build_clouds(rng)
+	var cloud:Dictionary=e.clouds[0];var node:Node3D=cloud.node;cloud.speed=0.0;node.position=Vector3(0,8,10)
+	check(e.cloud_blocks_camera(node),"A foreground cloud over the field blocks the view")
+	e.update_clouds(.11)
+	check(is_equal_approx(cloud.opacity,.6),"Fade should be gradual, reaching 60% halfway through")
+	e.update_clouds(.11)
+	check(is_equal_approx(cloud.opacity,.2) and is_equal_approx(cloud.material.albedo_color.a,.2),"Blocked cloud reaches 20% opacity in 0.22 seconds")
+	check(node.get_children().all(func(puff):return puff.material_override==cloud.material),"Every puff shares the cloud's fade")
+	node.position=Vector3(0,24,30)
+	check(not e.cloud_blocks_camera(node),"Cloud behind the camera does not block the field")
+	e.update_clouds(.11);check(is_equal_approx(cloud.opacity,.6),"Cloud fades back gradually when clear")
+	node.position=Vector3(0,8,10);e.update_clouds(.055)
+	check(is_equal_approx(cloud.opacity,.4),"Re-entering the view reverses the transition without a jump")
+	node.position=Vector3(0,24,30);e.update_clouds(1)
+	check(is_equal_approx(cloud.opacity,1.0),"A clear cloud returns to full opacity")
+	camera.projection=Camera3D.PROJECTION_ORTHOGONAL;camera.size=25;node.position=Vector3(0,8,10)
+	check(e.cloud_blocks_camera(node),"Orthographic view also detects foreground clouds")
+	node.position=Vector3(100,8,10);check(not e.cloud_blocks_camera(node),"Offscreen clouds stay opaque")
+	node.position=camera.position;check(e.cloud_blocks_camera(node),"A cloud surrounding the camera fades")
+	e.camera=null;e.update_clouds(1);check(is_equal_approx(cloud.opacity,1.0),"Removing the camera restores opacity safely")
+	e.free();camera.free();print("QUIBLETS_CLOUD_FADE failures=%d"%failures);quit(0 if failures==0 else 1)

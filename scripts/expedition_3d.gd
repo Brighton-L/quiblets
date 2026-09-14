@@ -148,7 +148,7 @@ func begin(new_team:Array,level:int,use_fortune:bool,use_challenger:bool)->void:
 	spawn_rng.randomize()
 	var sets:Vector2i=SCATTER_GROUPS.get(stage_kind,Vector2i(4,6))
 	max_waves=1 if is_grove() else spawn_rng.randi_range(sets.x,sets.y)+1
-	grove_zone=1;exploring=false;camera_pan_time=0.0;used_spawn_points.clear()
+	grove_zone=1;exploring=false;next_exploration_plan=0.0;camera_pan_time=0.0;used_spawn_points.clear()
 	loot.clear()
 	for ingredient_name in GameData.INGREDIENTS:loot[ingredient_name]=0
 	move_stones.clear();power_stones.clear()
@@ -162,7 +162,7 @@ func begin(new_team:Array,level:int,use_fortune:bool,use_challenger:bool)->void:
 	spawn_wave()
 
 func place_actor(actor:QuibletActor3D)->void:
-	actor.arena=arena_rect;actor.obstacle_rects=obstacles;actor.defeated.connect(_on_actor_defeated);actor.move_used.connect(_on_move_used);actor.stuck.connect(_on_actor_stuck);add_child(actor)
+	actor.arena=arena_rect;actor.obstacle_rects=flight_obstacles if actor.floats_over_water() else obstacles;actor.defeated.connect(_on_actor_defeated);actor.move_used.connect(_on_move_used);actor.stuck.connect(_on_actor_stuck);add_child(actor)
 
 func build_level()->void:
 	var rng:=RandomNumberGenerator.new();rng.seed=stage_area_index*1009+stage_node_index*131+73
@@ -213,7 +213,7 @@ func has_treasure_cache(_rng:RandomNumberGenerator)->bool:
 func place_treasure_cache(rng:RandomNumberGenerator)->void:
 	if not has_treasure_cache(rng):return
 	var pockets:Array[Vector2i]=[];var others:Array[Vector2i]=[]
-	for cell in walkable:
+	for cell in reachable_walkable_cells():
 		var point:=Vector2(cell.x,cell.y)
 		if zone_index_at(point)==0 or not cell_exposed(cell):continue
 		if zones.any(func(zone):return Vector2(zone.center).distance_to(point)<2.2):continue
@@ -238,7 +238,7 @@ func open_treasure_cache()->void:
 	var power_stone:=GameData.make_power_stone(["Health","Attack"].pick_random(),GameData.power_stone_tier_for_level(stage_level),GameData.roll_power_stone_bonuses(true));power_stones.append(power_stone)
 	var reward:=power_stone.duplicate(true);reward.merge({"kind":"power_stone","name":power_stone.type+" Power Stone","amount":1});reward_acquired.emit(reward,origin)
 	for i in 2:
-		var ingredient:=GameData.roll_ingredient(stage_level);var amount:=randi_range(3,6);loot[ingredient]+=amount
+		var ingredient:=GameData.roll_ingredient(stage_level);var amount:=randi_range(BERRY_PATCH_RANGE.x,BERRY_PATCH_RANGE.y);loot[ingredient]+=amount
 		reward_acquired.emit({"kind":"ingredient","name":ingredient,"amount":amount},origin)
 	var special:=GameData.roll_special_item("boss",fortune)
 	if special!="":extra_specials.append(special);reward_acquired.emit({"kind":"special","name":special,"amount":1},origin)
@@ -252,9 +252,10 @@ func open_treasure_cache()->void:
 # be crossed at land bridges, and blocky multi-tier walls stand in the open,
 # more of them the more walled-in the island's biome is.
 func field_size()->Vector2i:
-	if is_grove():return Vector2i(64,36)
-	if stage_kind=="boss":return Vector2i(60,40)
-	return Vector2i(52,36)
+	# 2.5 times the former width and depth: 6.25 times the playable area.
+	if is_grove():return Vector2i(160,90)
+	if stage_kind=="boss":return Vector2i(150,100)
+	return Vector2i(130,90)
 
 func layout_zones(rng:RandomNumberGenerator)->void:
 	var count:=zone_count();var size:=field_size()
@@ -282,55 +283,65 @@ func layout_zones(rng:RandomNumberGenerator)->void:
 func in_field(cell:Vector2i)->bool:
 	return field_rect.has_point(cell)
 
-# Rivers: the biome's own channels run top to bottom, spread across the field,
-# and zero to two extra rivers are added at random on top, some of them running
-# left to right. Channels are one or two cells wide and meander. Every river
-# gets a land bridge wherever the trail crosses it, so the route always stays
-# connected, plus an occasional extra bridge elsewhere.
-const EXTRA_RIVERS_MIN:=1
-const EXTRA_RIVERS_MAX:=3
+# A few main rivers collect shorter tributaries. Uneven source spacing and
+# broad, non-repeating bends keep the network from dividing the map into a grid.
+const EXTRA_RIVERS_MIN:=6
+const EXTRA_RIVERS_MAX:=8
 var river_channels:=0
 var cliff_layer_count:=0
 var river_flow:={}
+var bridge_approaches:={}
 func carve_rivers(rng:RandomNumberGenerator)->void:
-	var base_count:int=int(biome.rivers);var river_count:int=base_count+rng.randi_range(EXTRA_RIVERS_MIN,EXTRA_RIVERS_MAX)
-	river_channels=river_count;river_flow.clear()
+	var base_count:int=int(biome.rivers)
+	var map_scale:float=float(field_rect.size.x+field_rect.size.y)/220.0
+	var river_count:int=ceili(float(base_count*2+rng.randi_range(EXTRA_RIVERS_MIN,EXTRA_RIVERS_MAX))*map_scale)
+	river_channels=river_count;river_flow.clear();bridge_approaches.clear()
 	if river_count<=0:return
 	var usable_left:=field_rect.position.x+7;var usable_right:=field_rect.end.x-8
 	var usable_top:=field_rect.position.y+5;var usable_bottom:=field_rect.end.y-6
 	if usable_right<=usable_left or usable_bottom<=usable_top:return
+	var source_positions:Array[Vector2]=[]
 	for river_index in river_count:
-		var horizontal:bool=river_index>=base_count and rng.randf()<.5
-		# Three or four cells wide so the water reads as a proper river from the gameplay camera.
-		var width:=3 if rng.randf()<.6 else 4;var drift:=rng.randf_range(-.35,.35)
-		var cells:Array[Vector2i]=[]
-		# Some rivers start as a waterfall: the channel runs back into the border
-		# hills at its source and drops into the field over the edge.
-		var falls:bool=rng.randf()<WATERFALL_CHANCE;var source_cells:Array[Vector2i]=[]
-		if horizontal:
-			var z:=float(usable_top)+rng.randf()*float(usable_bottom-usable_top)
-			for x in range((field_rect.position.x-WATERFALL_REACH) if falls else (field_rect.position.x-1),field_rect.end.x+1):
-				var wobble:=roundi(sin(float(x)*.22+float(river_index)*1.7)*1.3)+drift*float(x-field_rect.position.x)*.25
-				var cz:=roundi(z+wobble)
-				for w in width:
-					cells.append(Vector2i(x,cz+w))
-					if falls and x<field_rect.position.x:source_cells.append(Vector2i(x,cz+w))
-		else:
-			var x:float
-			if river_index<base_count:x=float(usable_left)+(float(river_index)+.5)/float(base_count)*float(usable_right-usable_left)+rng.randf_range(-1.5,1.5)
-			else:x=float(usable_left)+rng.randf()*float(usable_right-usable_left)
-			for z in range((field_rect.position.y-WATERFALL_REACH) if falls else (field_rect.position.y-1),field_rect.end.y+1):
-				var wobble:=roundi(sin(float(z)*.24+float(river_index)*1.7)*1.3)+drift*float(z-field_rect.position.y)*.5
-				var cx:=roundi(x+wobble)
-				for w in width:
-					cells.append(Vector2i(cx+w,z))
-					if falls and z<field_rect.position.y:source_cells.append(Vector2i(cx+w,z))
+		var horizontal:bool=river_index==0 or (river_index>1 and rng.randf()<.5)
+		var width:=4 if rng.randf()<.6 else 5
+		var falls:bool=rng.randf()<WATERFALL_CHANCE
+		var reverse:bool=not falls and rng.randf()<.5
 		var flow:=Vector2(1,0) if horizontal else Vector2(0,1)
+		if reverse:flow=-flow
+		var cells:Array[Vector2i]=[];var source_cells:Array[Vector2i]=[]
+		var low:float=usable_top if horizontal else usable_left
+		var high:float=usable_bottom if horizontal else usable_right
+		var source:=rng.randf_range(low,high)
+		# Keep sources distinct without arranging them into evenly spaced lanes.
+		for attempt in 20:
+			var candidate:=rng.randf_range(low,high)
+			source=candidate
+			if not source_positions.any(func(other):return other.x==float(horizontal) and absf(other.y-candidate)<8.0):break
+		source_positions.append(Vector2(float(horizontal),source))
+		var bends:=FastNoiseLite.new();bends.seed=rng.randi();bends.frequency=rng.randf_range(.018,.035)
+		bends.fractal_octaves=2
+		var bend_size:=rng.randf_range(5.0,10.0)
+		var start:int=field_rect.position.x if horizontal else field_rect.position.y
+		var finish:int=field_rect.end.x if horizontal else field_rect.end.y
+		var positions:Array[int]=[]
+		for along in range(start-(WATERFALL_REACH if falls else 1),finish+1):positions.append(along)
+		if reverse:positions.reverse()
+		var join_remaining:=-1
+		for along in positions:
+			var cross:=roundi(clampf(source+bends.get_noise_1d(float(along))*bend_size,low,high))
+			var row:Array[Vector2i]=[];var touches_river:=false
+			for w in width:
+				var cell:=Vector2i(along,cross+w) if horizontal else Vector2i(cross+w,along)
+				row.append(cell)
+				if rivers.has(cell):touches_river=true
+				if falls and along<start:source_cells.append(cell)
+			cells.append_array(row)
+			# Tributaries merge into existing water instead of crossing the whole
+			# island. Extend through the confluence to avoid a pinched dry seam.
+			if river_index>=2 and touches_river and along>=start and along<finish and join_remaining<0:join_remaining=2
+			if join_remaining==0:break
+			if join_remaining>0:join_remaining-=1
 		for cell in cells:
-			if bridges.has(cell):continue
-			# A clearing is left as dry, walkable ground: the river simply fords it
-			# rather than flooding an arena, and no blob bridge is placed there.
-			if zones.any(func(zone):return Vector2(zone.center).distance_to(Vector2(cell))<2.0):continue
 			rivers[cell]=true;river_flow[cell]=flow;walkable.erase(cell)
 		if falls and not source_cells.is_empty():
 			for cell in source_cells:
@@ -341,47 +352,98 @@ func carve_rivers(rng:RandomNumberGenerator)->void:
 				var edge_cell:Vector2i=Vector2i(field_rect.position.x-1,cell.y) if horizontal else Vector2i(cell.x,field_rect.position.y-1)
 				if cell==edge_cell:lip+=Vector2(cell);count+=1
 			if count>0:waterfalls.append({"lip":lip/float(count)+flow*.5,"flow":flow,"half_width":float(width)*.5})
-		# Bridges where the trail crosses this river, then maybe one more.
-		var bridge_keys:Array[int]=[]
-		for i in range(1,zones.size()):
-			var crossing=trail_crossing_cell(zones[i-1].center,zones[i].center,cells)
-			if crossing!=null:
-				var key:int=int((crossing as Vector2i).x if horizontal else (crossing as Vector2i).y)
-				if not bridge_keys.has(key):bridge_keys.append(key)
-		if rng.randf()<.5:bridge_keys.append(rng.randi_range(field_rect.position.x+2,field_rect.end.x-3) if horizontal else rng.randi_range(field_rect.position.y+2,field_rect.end.y-3))
-		for key in bridge_keys:
-			var band:Array[Vector2i]=[]
-			for cell in cells:
-				var along:int=cell.x if horizontal else cell.y
-				if absi(along-key)<=1 and rivers.has(cell):rivers.erase(cell);bridges[cell]=true;walkable[cell]=true;band.append(cell)
-			if not band.is_empty():river_crossings.append({"cells":band,"flow":flow})
-	# Safety net: if two rivers or an odd meander still cut a clearing off, bridge
-	# every river cell along the straight line from the start to that clearing.
-	var guard:=0
-	while not zones_connected() and guard<8:
-		guard+=1
-		for zone in zones:
-			var goal:Vector2=zone.center
-			# Find where the straight line from the start to this clearing meets a
-			# river, then bridge straight across that river (perpendicular to its
-			# flow, bank to bank) rather than planking along it.
-			var on_line:Array=rivers.keys().filter(func(cell):return Geometry2D.get_closest_point_to_segment(Vector2(cell),zones[0].center,goal).distance_to(Vector2(cell))<1.2)
-			on_line.sort_custom(func(a,b):return Vector2(a).distance_to(goal)<Vector2(b).distance_to(goal))
-			if on_line.is_empty():continue
-			var here:Vector2i=on_line[0];var flow:Vector2=river_flow.get(here,Vector2(0,1))
-			var flow_dir:Vector2i=Vector2i(0,1) if absf(flow.y)>=absf(flow.x) else Vector2i(1,0)
-			var width_dir:Vector2i=Vector2i(flow_dir.y,flow_dir.x)
-			var band:Array[Vector2i]=[]
-			for thick in [-1,0,1]:
-				var base:Vector2i=here+flow_dir*thick
-				for dir in [-1,1]:
-					var step:=0
-					while step<8:
-						var span:Vector2i=base+width_dir*dir*step
-						if not rivers.has(span):break
-						rivers.erase(span);bridges[span]=true;walkable[span]=true;band.append(span);step+=1
-				if rivers.has(base):rivers.erase(base);bridges[base]=true;walkable[base]=true;band.append(base)
-			if not band.is_empty():river_crossings.append({"cells":band,"flow":flow})
+	move_clearings_off_rivers()
+	spawn_river_bridges()
+
+func move_clearings_off_rivers()->void:
+	# Move encounter centres onto a nearby bank instead of punching dry holes
+	# into the channel. Keep enough ground around each centre for the team.
+	var safe_cells:Array[Vector2i]=[]
+	for cell in walkable:
+		var safe:=true
+		for x in range(-2,3):
+			for y in range(-2,3):
+				if not walkable.has(cell+Vector2i(x,y)):safe=false;break
+			if not safe:break
+		if safe:safe_cells.append(cell)
+	for zone in zones:
+		var best:Vector2=zone.center;var distance:=INF
+		for cell in safe_cells:
+			var candidate_distance:=Vector2(cell).distance_squared_to(zone.center)
+			if candidate_distance<distance:distance=candidate_distance;best=Vector2(cell)
+		zone.center=best
+	route_points.clear()
+	for i in range(1,zones.size()):
+		var a:Vector2=zones[i-1].center;var b:Vector2=zones[i].center
+		for step in ROUTE_SAMPLES:route_points.append(a.lerp(b,float(step)/(ROUTE_SAMPLES-1)))
+
+
+# Validate the complete crossing after every river is carved. This prevents a
+# later tributary from flooding a bridge's landing or slicing through its deck.
+func river_bridge_candidate(cell:Vector2i)->Dictionary:
+	var flow:Vector2i=Vector2i(river_flow.get(cell,Vector2.DOWN))
+	var axis:=Vector2i(flow.y,flow.x)
+	var low:=0;var high:=0
+	while low>-12 and rivers.has(cell+axis*(low-1)):low-=1
+	while high<12 and rivers.has(cell+axis*(high+1)):high+=1
+	for across in [-1,1]:
+		var row_low:=0;var row_high:=0
+		while row_low>-12 and rivers.has(cell+flow*across+axis*(row_low-1)):row_low-=1
+		while row_high<12 and rivers.has(cell+flow*across+axis*(row_high+1)):row_high+=1
+		low=mini(low,row_low);high=maxi(high,row_high)
+	if high-low>10:return {}
+	var band:Array[Vector2i]=[]
+	# All three deck lanes must share solid, roomy landings on both banks.
+	for across in range(-2,3):
+		for along in range(low-2,high+3):
+			var point:=cell+axis*along+flow*across
+			if not in_field(point):return {}
+			if along<low or along>high:
+				if not walkable.has(point):return {}
+			elif abs(across)<=1:
+				if rivers.has(point):
+					if Vector2i(river_flow.get(point,Vector2.ZERO))!=flow:return {}
+					band.append(point)
+				elif not walkable.has(point):return {}
+	var center:=Vector2(cell)+Vector2(axis)*float(low+high)*.5
+	return {"cells":band,"flow":Vector2(flow),"center":center,
+		"half_span":float(high-low)*.5+1.25,"half_width":1.5,
+		"bank_a":cell+axis*(low-1),"bank_b":cell+axis*(high+1),
+		"score":route_distance(center)+float(high-low)*.3}
+
+func spawn_river_bridges()->void:
+	var candidates:Array=[];var centers:={}
+	for cell in rivers:
+		var candidate:=river_bridge_candidate(cell)
+		if candidate.is_empty() or centers.has(candidate.center):continue
+		centers[candidate.center]=true;candidates.append(candidate)
+	candidates.sort_custom(func(a,b):return a.score<b.score)
+	# Label land regions once, then join them as crossings are placed.
+	var regions:={};var parents:Array[int]=[]
+	for start in walkable:
+		if regions.has(start):continue
+		var region:=parents.size();parents.append(region)
+		var queue:Array[Vector2i]=[start];regions[start]=region;var head:=0
+		while head<queue.size():
+			var here:=queue[head];head+=1
+			for step in [Vector2i.LEFT,Vector2i.RIGHT,Vector2i.UP,Vector2i.DOWN]:
+				var next:Vector2i=here+step
+				if walkable.has(next) and not regions.has(next):regions[next]=region;queue.append(next)
+	for candidate in candidates:
+		var a:int=regions[candidate.bank_a];var b:int=regions[candidate.bank_b]
+		while parents[a]!=a:a=parents[a]
+		while parents[b]!=b:b=parents[b]
+		var nearby:bool=river_crossings.any(func(other):return Vector2(other.center).distance_to(candidate.center)<9.0)
+		# Useful shortcuts near trails supplement the crossings joining islands.
+		if a==b and (nearby or float(candidate.score)>5.0):continue
+		if candidate.cells.any(func(point):return bridges.has(point)):continue
+		parents[b]=a
+		for point in candidate.cells:rivers.erase(point);bridges[point]=true;walkable[point]=true
+		var axis:=Vector2i(Vector2(candidate.bank_b-candidate.bank_a).normalized())
+		var side:=Vector2i(candidate.flow)
+		for along in range(-1,roundi(Vector2(candidate.bank_b-candidate.bank_a).length())+2):
+			for across in range(-2,3):bridge_approaches[candidate.bank_a+axis*along+side*across]=true
+		river_crossings.append(candidate)
 
 # The river cell where the straight trail segment a→b meets the river, or null.
 func trail_crossing_cell(a:Vector2,b:Vector2,cells:Array[Vector2i]):
@@ -409,7 +471,7 @@ func raise_walls(rng:RandomNumberGenerator)->void:
 		var cluster:Array[Vector2i]=[]
 		for dx in w:
 			for dz in d:cluster.append(origin+Vector2i(dx,dz))
-		if cluster.any(func(cell):return not walkable.has(cell) or rivers.has(cell) or bridges.has(cell) or wall_tiers.has(cell)):continue
+		if cluster.any(func(cell):return not walkable.has(cell) or rivers.has(cell) or bridge_approaches.has(cell) or wall_tiers.has(cell)):continue
 		if cluster.any(func(cell):return zones.any(func(zone):return Vector2(zone.center).distance_to(Vector2(cell))<3.2)):continue
 		if cluster.any(func(cell):return route_distance(Vector2(cell))<1.2):continue
 		var core:=cluster[rng.randi_range(0,cluster.size()-1)]
@@ -428,19 +490,36 @@ func prop_kinds()->Array[String]:
 	if kinds.is_empty():kinds.append("boulder")
 	return kinds
 
-const HARVEST_BUNDLES:=2
-const HARVEST_BUNDLE_RANGE:=Vector2i(4,8)
-const BREAK_BUNDLE_RANGE:=Vector2i(2,4)
+const HARVEST_BUNDLES:=1
+const HARVEST_BUNDLE_RANGE:=Vector2i(2,4)
+const BREAK_BUNDLE_RANGE:=Vector2i(1,2)
+const BERRY_PATCH_RANGE:=Vector2i(2,3)
+# A rare "rich" patch/tree/shrub gives a bigger bundle of rarer ingredients.
+const RICH_YIELD:=Vector2i(5,8)
+# What share of props bear fruit (the rest are plain scenery), and the small chance
+# a harvestable one is rich. Berry Groves are the lush gathering levels.
+const REGULAR_HARVEST_CHANCE:=.32
+const GROVE_HARVEST_CHANCE:=.9
+const REGULAR_RICH_CHANCE:=.06
+const GROVE_RICH_CHANCE:=.16
+# Groves (and rich spots) roll ingredients as if the stage were this much deeper,
+# so their loot leans toward the rarer, higher-tier resources.
+const GROVE_INGREDIENT_LEVEL_BONUS:=8
+# Groves grow leafy, harvestable plants regardless of the island's own decor.
+const GROVE_PROP_KINDS:Array[String]=["bush","tree","bush","big_mushroom"]
 
-# Ingredients a prop grows: the stage-level roll restricted to its tags.
+# Ingredients a prop grows: the roll restricted to its tags. Groves and rich plants
+# roll at a deeper effective level so they lean toward rarer resources.
 func prop_ingredient(prop)->String:
+	var level:=stage_level+(GROVE_INGREDIENT_LEVEL_BONUS if (is_grove() or prop.rich) else 0)
 	var candidates:Array=[]
 	for ingredient_name in GameData.INGREDIENTS:
 		if GameData.INGREDIENTS[ingredient_name].tags.any(func(tag):return prop.harvest_tags().has(tag)):candidates.append(ingredient_name)
-	return GameData.roll_ingredient(stage_level,candidates) if not candidates.is_empty() else GameData.roll_ingredient(stage_level)
+	return GameData.roll_ingredient(level,candidates) if not candidates.is_empty() else GameData.roll_ingredient(level)
 
 func grant_prop_bundle(prop,bundle_range:Vector2i)->void:
-	var ingredient:=prop_ingredient(prop);var amount:=randi_range(bundle_range.x,bundle_range.y);loot[ingredient]+=amount
+	var use_range:Vector2i=RICH_YIELD if prop.rich else bundle_range
+	var ingredient:=prop_ingredient(prop);var amount:=randi_range(use_range.x,use_range.y);loot[ingredient]+=amount
 	reward_acquired.emit({"kind":"ingredient","name":ingredient,"amount":amount},prop.global_position)
 
 # Harvesting: a living team member within HARVEST_RADIUS of a harvestable prop
@@ -458,13 +537,23 @@ func update_harvesting(living:Array,delta:float)->void:
 				prop.harvest()
 		elif prop.harvest_progress>0.0:prop.harvest_progress=maxf(0.0,prop.harvest_progress-delta*.6)
 
+# Whether a prop bears fruit, and rarely whether it is a rich plant, by level type.
+func assign_prop_harvest(prop,rng:RandomNumberGenerator)->void:
+	var grove:=is_grove()
+	prop.bears_fruit=rng.randf()<(GROVE_HARVEST_CHANCE if grove else REGULAR_HARVEST_CHANCE)
+	if prop.bears_fruit and rng.randf()<(GROVE_RICH_CHANCE if grove else REGULAR_RICH_CHANCE):
+		prop.rich=true;prop.scale*=1.35
+
 func place_props(rng:RandomNumberGenerator)->void:
 	var area_scale:=float(field_rect.size.x*field_rect.size.y)/(30.0*22.0)
-	var target:=roundi((6.0+14.0*float(biome.density))*area_scale);var kinds:=prop_kinds()
+	var grove:=is_grove()
+	# Groves are lush: denser, leafy plantings; regular levels keep the island's decor.
+	var density:=maxf(float(biome.density),.65) if grove else float(biome.density)
+	var target:=roundi((6.0+14.0*density)*area_scale)*(2 if grove else 1);var kinds:Array=GROVE_PROP_KINDS if grove else prop_kinds()
 	var candidates:Array[Vector2i]=[]
 	for cell in walkable:
 		var point:=Vector2(cell)
-		if not cell_open(cell) or route_distance(point)<1.6 or wall_tiers.has(cell):continue
+		if bridge_approaches.has(cell) or not cell_open(cell) or route_distance(point)<1.6 or wall_tiers.has(cell):continue
 		if zones.any(func(zone):return Vector2(zone.center).distance_to(point)<3.5):continue
 		if bridges.keys().any(func(bridge):return Vector2(bridge).distance_to(point)<2.0):continue
 		candidates.append(cell)
@@ -473,17 +562,35 @@ func place_props(rng:RandomNumberGenerator)->void:
 		if props.size()>=target:break
 		if prop_cells.keys().any(func(other):return Vector2(other).distance_to(Vector2(cell))<PROP_SPACING):continue
 		walkable.erase(cell)
-		if not zones_connected():walkable[cell]=true;continue
+		if not neighbours_connected_locally(cell) and not zones_connected():walkable[cell]=true;continue
 		var prop=PROP_SCRIPT.new();prop.setup(kinds[rng.randi_range(0,kinds.size()-1)],cell,biome,stage_level,rng)
+		assign_prop_harvest(prop,rng)
 		prop.destroyed.connect(_on_prop_destroyed);props_root.add_child(prop);props.append(prop);prop_cells[cell]=prop
+
+# If all remaining neighbours connect around the removed cell, removing it
+# cannot split its land region. Only tight bottlenecks need a full-map search.
+func neighbours_connected_locally(cell:Vector2i)->bool:
+	var neighbours:Array[Vector2i]=[]
+	for offset in [Vector2i.LEFT,Vector2i.RIGHT,Vector2i.UP,Vector2i.DOWN]:
+		if walkable.has(cell+offset):neighbours.append(cell+offset)
+	if neighbours.size()<2:return true
+	var seen:={neighbours[0]:true};var queue:Array[Vector2i]=[neighbours[0]];var head:=0
+	while head<queue.size():
+		var here:=queue[head];head+=1
+		for offset in [Vector2i.LEFT,Vector2i.RIGHT,Vector2i.UP,Vector2i.DOWN]:
+			var next:Vector2i=here+offset;var relative:=next-cell
+			if next==cell or absi(relative.x)>1 or absi(relative.y)>1 or seen.has(next) or not walkable.has(next):continue
+			seen[next]=true;queue.append(next)
+	return neighbours.all(func(neighbour):return seen.has(neighbour))
 
 func _on_prop_destroyed(prop)->void:
 	prop_cells.erase(prop.cell);props.erase(prop);walkable[prop.cell]=true
 	# Rebuild the obstacle runs in place so every actor's reference stays valid.
 	obstacles.clear();build_obstacles()
 	if prop.harvested:return
-	# Broken by a move: a harvestable prop still drops a small bundle.
-	if prop.HARVEST_TAGS.has(prop.kind) and not ended:grant_prop_bundle(prop,BREAK_BUNDLE_RANGE)
+	# Broken by a move: a fruit-bearing prop still drops a small bundle; plain
+	# scenery gives nothing.
+	if prop.bears_fruit and prop.HARVEST_TAGS.has(prop.kind) and not ended:grant_prop_bundle(prop,BREAK_BUNDLE_RANGE)
 	event_message.emit("The %s breaks apart!"%prop.kind.replace("_"," "))
 
 func props_in(center:Vector3,size:float)->Array:
@@ -492,13 +599,17 @@ func props_in(center:Vector3,size:float)->Array:
 		if not prop.shattered and Vector2(prop.position.x,prop.position.z).distance_to(Vector2(center.x,center.z))<=size+.6:result.append(prop)
 	return result
 
-func zones_connected()->bool:
+func reachable_walkable_cells()->Dictionary:
 	var start:=cell_of(zones[0].center);var seen:={start:true};var frontier:Array[Vector2i]=[start];var head:=0
 	while head<frontier.size():
 		var cell:Vector2i=frontier[head];head+=1
 		for offset in [Vector2i(1,0),Vector2i(-1,0),Vector2i(0,1),Vector2i(0,-1)]:
 			var next:Vector2i=cell+offset
 			if walkable.has(next) and not seen.has(next):seen[next]=true;frontier.append(next)
+	return seen
+
+func zones_connected()->bool:
+	var seen:=reachable_walkable_cells()
 	return zones.all(func(zone):return seen.has(cell_of(zone.center)))
 
 func zone_index_at(point:Vector2)->int:
@@ -510,21 +621,27 @@ func zone_index_at(point:Vector2)->int:
 
 func route_distance(point:Vector2)->float:
 	var best:=INF
-	for i in route_points.size()-1:
-		best=minf(best,point.distance_to(Geometry2D.get_closest_point_to_segment(point,route_points[i],route_points[i+1])))
+	# Each group samples one straight segment; its endpoints give exactly the
+	# same distance without testing all twelve collinear pieces per vertex.
+	for i in range(0,route_points.size(),ROUTE_SAMPLES):
+		var end:=mini(i+ROUTE_SAMPLES-1,route_points.size()-1)
+		best=minf(best,point.distance_to(Geometry2D.get_closest_point_to_segment(point,route_points[i],route_points[end])))
 	return best
 
 func carve_walkable()->void:
 	# The whole field is open ground; only the cliff ring outside it is solid.
-	var grid_min:=Vector2i(field_rect.position.x-4,field_rect.position.y-4);var grid_max:=Vector2i(field_rect.end.x-1+4,field_rect.end.y-1+4)
+	var grid_min:=Vector2i(field_rect.position.x-16,field_rect.position.y-16);var grid_max:=Vector2i(field_rect.end.x-1+16,field_rect.end.y-1+16)
 	for x in range(field_rect.position.x,field_rect.end.x):
 		for z in range(field_rect.position.y,field_rect.end.y):walkable[Vector2i(x,z)]=true
 	set_meta("grid_min",grid_min);set_meta("grid_max",grid_max)
+
+var flight_obstacles:Array[Rect2]=[]
 
 func build_obstacles()->void:
 	var min_cell:=Vector2i(1<<30,1<<30);var max_cell:=Vector2i(-(1<<30),-(1<<30))
 	for cell in walkable:min_cell=Vector2i(mini(min_cell.x,cell.x),mini(min_cell.y,cell.y));max_cell=Vector2i(maxi(max_cell.x,cell.x),maxi(max_cell.y,cell.y))
 	arena_rect=Rect2(min_cell.x-.5,min_cell.y-.5,max_cell.x-min_cell.x+1.0,max_cell.y-min_cell.y+1.0)
+	flight_obstacles.clear()
 	# Blocked cells become row runs so the actors' obstacle checks stay cheap.
 	for z in range(min_cell.y-1,max_cell.y+2):
 		var run_start:=min_cell.x-1
@@ -532,6 +649,13 @@ func build_obstacles()->void:
 			var blocked:=x<=max_cell.x+1 and not walkable.has(Vector2i(x,z))
 			if blocked:continue
 			if x>run_start:obstacles.append(Rect2(run_start-.5,z-.5,x-run_start,1.0))
+			run_start=x+1
+	for z in range(min_cell.y-1,max_cell.y+2):
+		var run_start:=min_cell.x-1
+		for x in range(min_cell.x-1,max_cell.x+3):
+			var cell:=Vector2i(x,z)
+			if x<=max_cell.x+1 and not navigation_cell_open(cell,true):continue
+			if x>run_start:flight_obstacles.append(Rect2(run_start-.5,z-.5,x-run_start,1.0))
 			run_start=x+1
 
 # --- Smooth terrain ------------------------------------------------------------
@@ -611,19 +735,6 @@ func build_terrain(rng:RandomNumberGenerator)->void:
 				if peaks.has(cell+offset):total+=float(peaks[cell+offset]);count+=1
 			blended[cell]=total/float(count)
 		peaks=blended
-	# Open an amphitheatre around each waterfall's mouth so it is not walled into a
-	# slot canyon: cut the flanking hills back down toward the plain, strongest at
-	# the foot (a little downstream of the lip) and fading out with distance.
-	if not waterfalls.is_empty():
-		for cell in peaks.keys():
-			var reduce:=0.0
-			for fall in waterfalls:
-				var flow:Vector2=fall.flow;if flow.length()>.001:flow=flow.normalized()
-				var center:Vector2=Vector2(fall.lip)+flow*WATERFALL_CLEARING_OFFSET
-				var radius:float=float(fall.half_width)+WATERFALL_CLEARING
-				var d:float=Vector2(cell).distance_to(center)
-				if d<radius:reduce=maxf(reduce,1.0-smoothstep(radius*.4,radius,d))
-			if reduce>0.0:peaks[cell]=lerpf(float(peaks[cell]),0.0,reduce*WATERFALL_CLEARING_DEPTH)
 	for cell in peaks:terrain_heights[cell]=float(peaks[cell])
 	# The fine sample grid: TERRAIN_SUBDIV samples per cell edge, from the grid's outer edge.
 	var subdiv:=TERRAIN_SUBDIV
@@ -671,8 +782,10 @@ func build_terrain(rng:RandomNumberGenerator)->void:
 			var skirt_top:float=float(nearby_peak[index])*HILL_SKIRT_SHARE
 			if kind!=2:h+=skirt_top*(1.0-smoothstep(0.0,HILL_SKIRT_RADIUS,float(to_hill[index])))
 			if kind==1 and waterfall_cells.has(cell):
-				# The source channel runs high through the border hills, then drops over the lip.
-				h=WATERFALL_TOP-.6*smoothstep(0.0,RIVER_RAMP,float(water_edge[index]))
+				# The source channel is an open chute that slopes down from the border
+				# hilltop into the field, so the water runs down the hillside rather
+				# than dropping over a lip into a pit.
+				h=waterfall_source_height(point)
 			elif kind==1:
 				var depth:float=-float(terrain_heights.get(cell,-RIVER_DEPTH))
 				h-=depth*smoothstep(0.0,RIVER_RAMP,float(water_edge[index]))
@@ -681,6 +794,9 @@ func build_terrain(rng:RandomNumberGenerator)->void:
 				var rise:=smoothstep(0.0,minf(HILL_RAMP,half),float(hill_edge[index]))
 				var peak:float=peak_field[index];var base:float=peak*HILL_SKIRT_SHARE
 				h+=base+(peak-base+HILL_ROLL*sin(point.x*.9+.3)*sin(point.y*.8+1.1)*minf(1.0,peak*.5))*rise
+			if kind==2:
+				var outside:=maxf(maxf(float(field_rect.position.x)-point.x,point.x-float(field_rect.end.x-1)),maxf(float(field_rect.position.y)-point.y,point.y-float(field_rect.end.y-1)))
+				h+=smoothstep(1.0,14.0,outside)*5.5
 			height_field[index]=h
 	build_terrain_mesh(classes,water_edge,hill_edge,rng)
 	# Details on the open grass, decor on the hills nearest the open ground.
@@ -832,6 +948,31 @@ func build_terrain_mesh(classes:PackedByteArray,water_edge:PackedFloat32Array,_h
 	terrain_fade_material=ShaderMaterial.new();terrain_fade_material.shader=terrain_fade_shader();terrain_material.next_pass=terrain_fade_material
 	for material in terrain_materials():material.set_shader_parameter("fade_count",0)
 	terrain_mesh=MeshInstance3D.new();terrain_mesh.name="TerrainMesh";terrain_mesh.mesh=mesh;terrain_mesh.material_override=terrain_material;add_child(terrain_mesh)
+	build_distant_terrain()
+
+# A coarse outer apron continues the detailed field into distant higher land.
+# It shares the detailed mesh edge and palette and renders from either side.
+func build_distant_terrain()->void:
+	var rim:Array[Vector2]=[];var step:=1.0/float(TERRAIN_SUBDIV)
+	for c in height_cols:rim.append(height_origin+Vector2(c,0)*step)
+	for r in range(1,height_rows):rim.append(height_origin+Vector2(height_cols-1,r)*step)
+	for c in range(height_cols-2,-1,-1):rim.append(height_origin+Vector2(c,height_rows-1)*step)
+	for r in range(height_rows-2,0,-1):rim.append(height_origin+Vector2(0,r)*step)
+	var center:=height_origin+Vector2(height_cols-1,height_rows-1)*step*.5
+	var half:=Vector2(height_cols-1,height_rows-1)*step*.5
+	var st:=SurfaceTool.new();st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in rim.size():
+		for ring in 4:
+			var vertices:Array[Vector3]=[]
+			for corner in [Vector2i(i,ring),Vector2i((i+1)%rim.size(),ring),Vector2i(i,ring+1),Vector2i((i+1)%rim.size(),ring+1)]:
+				var edge:Vector2=rim[corner.x];var amount:=float(corner.y)/4.0
+				var point:=center+(edge-center)*(Vector2.ONE+Vector2(80.0,80.0)/half*amount)
+				var h:=raw_height_at(edge)+amount*10.0+sin(point.x*.15)*cos(point.y*.12)*amount*2.0
+				vertices.append(Vector3(point.x,h,point.y))
+			for index in [0,1,2,1,3,2]:
+				var v:Vector3=vertices[index];st.set_color(terrain_surface_color(Vector2(v.x,v.z),v.y));st.add_vertex(v)
+	st.index();st.generate_normals()
+	var distant:=MeshInstance3D.new();distant.name="DistantTerrain";distant.mesh=st.commit();var distant_material:=ShaderMaterial.new();var distant_shader:=Shader.new();distant_shader.code=TERRAIN_SHADER.replace("cull_back","cull_disabled");distant_material.shader=distant_shader;distant.material_override=distant_material;add_child(distant)
 
 # --- Terrain shader and occlusion fading ----------------------------------------
 # Vertex colours carry the biome palette (authored in sRGB) modulated by a tiny
@@ -843,6 +984,10 @@ func build_terrain_mesh(classes:PackedByteArray,water_edge:PackedFloat32Array,_h
 # ground lies on a faded line, and a transparent next pass fills that hole at
 # the faded alpha, easing back to solid at the hole's soft edge.
 const WALL_FADE_ALPHA:=.2
+# Fade the ground in front of a waterfall whenever it is within view range of the
+# camera (it sits at the field edge, well beyond the team's centre, so this gates
+# on the camera's own position, not the focus).
+const WATERFALL_FADE_RANGE:=42.0
 const WALL_FADE_SPEED:=5.0
 const WALL_FADE_RADIUS:=1.4
 const WALL_RAY_STEP:=.4
@@ -904,8 +1049,12 @@ func terrain_materials()->Array:
 
 # True when the ground rises through the line from the fighter up to the camera.
 func occluded_by_terrain(actor:QuibletActor3D)->bool:
+	return point_occluded_by_terrain(actor.global_position+Vector3(0,.5,0))
+
+# True when the ground rises through the line from a world point up to the camera.
+func point_occluded_by_terrain(from:Vector3)->bool:
 	if not is_instance_valid(camera) or height_field.is_empty():return false
-	var from:Vector3=actor.global_position+Vector3(0,.5,0);var eye:Vector3=camera.global_position
+	var eye:Vector3=camera.global_position
 	var steps:=maxi(1,ceili(from.distance_to(eye)/WALL_RAY_STEP))
 	for i in range(1,steps+1):
 		var p:Vector3=from.lerp(eye,float(i)/float(steps))
@@ -924,6 +1073,20 @@ func update_wall_fades(delta:float)->void:
 		if weight<=0.0:fade_weights.erase(id);continue
 		fade_weights[id]=weight
 		if points.size()<MAX_FADE_POINTS:points.append(actor.global_position+Vector3(0,.5,0));weights.append(weight)
+	# Keep a nearby waterfall's foot (and mid-sheet) visible: while the camera is
+	# looking near it, fade any hill that stands between it and the camera, the same
+	# way fighters behind walls are revealed. Far-off waterfalls are left alone.
+	for i in waterfalls.size():
+		var foot:Vector3=waterfalls[i].get("foot",Vector3.ZERO)
+		var near:bool=Vector2(foot.x,foot.z).distance_to(Vector2(camera.global_position.x,camera.global_position.z))<=WATERFALL_FADE_RANGE
+		for j in 2:
+			var pt:Vector3=foot+Vector3.UP*(float(j)*(WATERFALL_TOP-WATER_LEVEL)*.5)
+			var id:int=-(i*2+j+1);seen[id]=true
+			var target:float=1.0 if (near and point_occluded_by_terrain(pt)) else 0.0
+			var weight:float=move_toward(float(fade_weights.get(id,0.0)),target,WALL_FADE_SPEED*delta)
+			if weight<=0.0:fade_weights.erase(id);continue
+			fade_weights[id]=weight
+			if points.size()<MAX_FADE_POINTS:points.append(pt);weights.append(weight)
 	for id in fade_weights.keys():
 		if not seen.has(id):fade_weights.erase(id)
 	var count:=points.size()
@@ -969,6 +1132,7 @@ uniform vec4 tint:source_color=vec4(.5,.84,.97,.82);
 uniform float flow_speed=1.2;
 uniform float crest_scale=1.3;
 uniform float shore_foam=.55;
+uniform bool surface_flow=false;
 varying vec3 world_pos;
 varying vec3 flow_dir;
 varying float phase;
@@ -981,7 +1145,10 @@ void vertex(){
 }
 void fragment(){
 	vec3 side=normalize(cross(flow_dir,abs(flow_dir.y)>.5?vec3(1.0,0.0,0.0):vec3(0.0,1.0,0.0)));
-	float along=dot(world_pos,flow_dir);float across=dot(world_pos,side);float t=TIME*flow_speed;
+	// Curved cascades use continuous surface coordinates, so changing slope
+	// cannot stretch the river wave pattern into abrupt bands.
+	float along=surface_flow?UV.y:dot(world_pos,flow_dir);
+	float across=surface_flow?UV.x:dot(world_pos,side);float t=TIME*flow_speed;
 	float wave=sin(along*crest_scale*3.14159-t*3.0+phase*6.283+sin(across*1.7)*.8);
 	float second=sin(along*crest_scale*7.1+across*2.3-t*4.7+phase*3.0);
 	float crest=smoothstep(.6,.95,wave)*.6+smoothstep(.75,1.0,second)*.4;
@@ -1030,18 +1197,13 @@ const RIVER_DEPTH:=1.3
 # Waterfalls: a river may begin in the border hills and drop over the field's edge.
 const WATERFALL_CHANCE:=.5
 const WATERFALL_REACH:=4
-const WATERFALL_TOP:=1.5
-# The hills flanking a waterfall are cut back into an open amphitheatre so the
-# fall and its foot are not boxed into a slot canyon.
-const WATERFALL_CLEARING:=5.0
-const WATERFALL_CLEARING_OFFSET:=2.5
-const WATERFALL_CLEARING_DEPTH:=.9
+const WATERFALL_TOP:=3.1
 var waterfall_cells:={}
 var waterfalls:Array=[]
 # Recorded crossings: each is {cells:Array[Vector2i], flow:Vector2}. One arch is
 # built per crossing so its deck spans that river with the right orientation.
 var river_crossings:Array=[]
-# Little white spheres at each waterfall foot that pulse bigger and smaller.
+# Soft foam patches drift downstream from the foot and dissolve.
 var waterfall_bubbles:Array=[]
 func build_rivers(rng:RandomNumberGenerator)->void:
 	if rivers.is_empty() and pond_cells.is_empty() and spanned_cells.is_empty():return
@@ -1049,7 +1211,8 @@ func build_rivers(rng:RandomNumberGenerator)->void:
 	# ponds shallower, and the water running on under every bridge.
 	var st:=SurfaceTool.new();st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	for cell in rivers.keys()+pond_cells.keys()+spanned_cells.keys():
-		var level:float=(WATERFALL_TOP-.25) if waterfall_cells.has(cell) else (WATER_LEVEL if (rivers.has(cell) or spanned_cells.has(cell)) else (-POND_DEPTH+.22))
+		if waterfall_cells.has(cell):continue
+		var level:float=WATER_LEVEL if (rivers.has(cell) or spanned_cells.has(cell)) else (-POND_DEPTH+.22)
 		add_water_cell(st,cell,level,river_flow.get(cell,Vector2(0,1)),0.0)
 	var water_node:=MeshInstance3D.new();water_node.name="RiverWater";water_node.mesh=st.commit();water_node.material_override=water_material();add_child(water_node)
 
@@ -1070,17 +1233,28 @@ var spanned_cells:={}
 # it meets each bank at that bank's ground height and arches to the higher bank
 # plus BRIDGE_RISE at the middle, so it always clears the channel.
 func bridge_deck_y(t:float,start_h:float,end_h:float)->float:
-	var line:float=lerpf(start_h,end_h,t)
-	return line+(maxf(start_h,end_h)-line+BRIDGE_RISE)*sin(PI*t)
+	var line:float=lerpf(start_h,end_h,smoothstep(0.0,1.0,t))
+	return line+(maxf(start_h,end_h)-line+BRIDGE_RISE)*pow(sin(PI*t),2.0)
+
+func bridge_half_width(arch:Dictionary,t:float)->float:
+	# Broad shoulders blend into the banks, with a narrower centre over water.
+	return float(arch.half_width)+.35*pow(absf(2.0*t-1.0),2.0)
+
+func bridge_surface_y(arch:Dictionary,t:float,across:float)->float:
+	var axis:Vector2=arch.axis;var side:=Vector2(-axis.y,axis.x);var center:Vector2=arch.center
+	var start_h:=raw_height_at(center-axis*float(arch.half_span)+side*across)
+	var end_h:=raw_height_at(center+axis*float(arch.half_span)+side*across)
+	var crown:=.10*pow(sin(PI*t),2.0)*(1.0-pow(clampf(across/bridge_half_width(arch,t),-1.0,1.0),2.0))
+	return bridge_deck_y(t,start_h,end_h)+crown
 
 func deck_height_at(point:Vector2)->float:
 	var best:=-INF
 	for arch in bridge_arches:
-		var local:Vector2=point-arch.center;var along:float=local.dot(arch.axis);var across:float=absf(local.dot(Vector2(-arch.axis.y,arch.axis.x)))
-		if across>float(arch.half_width)+.2 or absf(along)>float(arch.half_span):continue
-		var t:float=along/float(arch.half_span)*.5+.5
-		var sh:float=float(arch.get("start_h",arch.get("base",0.0)));var eh:float=float(arch.get("end_h",arch.get("base",0.0)))
-		best=maxf(best,bridge_deck_y(t,sh,eh))
+		var local:Vector2=point-arch.center;var along:float=local.dot(arch.axis);var across:float=local.dot(Vector2(-arch.axis.y,arch.axis.x))
+		if absf(along)>float(arch.half_span)+.001:continue
+		var t:float=clampf(along/float(arch.half_span)*.5+.5,0.0,1.0)
+		if absf(across)>bridge_half_width(arch,t)+.001:continue
+		best=maxf(best,bridge_surface_y(arch,t,across))
 	return best
 
 func bridge_lift(point:Vector2)->float:
@@ -1098,10 +1272,11 @@ func plan_bridges()->void:
 		var center:=Vector2.ZERO
 		for cell in cells:center+=Vector2(cell)
 		center/=cells.size()
+		center=crossing.get("center",center)
 		var axis:Vector2=Vector2(1,0) if absf(flow.y)>=absf(flow.x) else Vector2(0,1);var side:=Vector2(axis.y,axis.x)
 		var half_span:=0.0;var half_width:=0.0
 		for cell in cells:half_span=maxf(half_span,absf((Vector2(cell)-center).dot(axis)));half_width=maxf(half_width,absf((Vector2(cell)-center).dot(side)))
-		half_span+=.5;half_width=maxf(half_width+.5,.9)
+		half_span=float(crossing.get("half_span",half_span+1.25));half_width=float(crossing.get("half_width",maxf(half_width+.5,.9)))
 		# Reach a little further so each end settles on the bank, capped short.
 		for reach in 3:
 			var grew:=false
@@ -1130,89 +1305,148 @@ func terrain_surface_color(point:Vector2,h:float)->Color:
 func build_bridges()->void:
 	if bridge_arches.is_empty():return
 	var bridge_root:=Node3D.new();bridge_root.name="Bridges";add_child(bridge_root)
-	# A crossing is a smooth earthen arch made of the ground itself: it takes the
-	# terrain's own surface colour along its length and meets each bank exactly at
-	# that bank's ground height, so the deck reads as a raised piece of the terrain
-	# with no seam and no planks or rails.
-	for arch_data in bridge_arches:
-		var center:Vector2=arch_data.center;var axis:Vector2=arch_data.axis;var half_span:float=arch_data.half_span;var half_width:float=arch_data.half_width
-		var perp:=Vector2(-axis.y,axis.x)
-		var start_h:float=raw_height_at(center-axis*half_span);var end_h:float=raw_height_at(center+axis*half_span)
-		arch_data.base=maxf(start_h,end_h);arch_data.start_h=start_h;arch_data.end_h=end_h
-		var base:float=arch_data.base
-		var deck:=MeshInstance3D.new();deck.name="BridgeDeck";deck.position=Vector3(center.x,base,center.y);deck.rotation.y=atan2(axis.x,axis.y);bridge_root.add_child(deck)
-		var st:=SurfaceTool.new();st.begin(Mesh.PRIMITIVE_TRIANGLES);var segments:=maxi(12,int(half_span*8.0));var thickness:=.5
-		# Top surface, then the two banked sides, as one flat-shaded earthen ribbon.
+	# Closed earthen arches: gently crowned tops, rounded shoulders and a solid
+	# underside. Every top sample also drives the height used by walking actors.
+	var section:Array[Vector2]=[Vector2(-1,0),Vector2(-.9,0),Vector2(-.65,0),Vector2(0,0),Vector2(.65,0),Vector2(.9,0),Vector2(1,0),Vector2(1,.22),Vector2(.94,.75),Vector2(.8,1),Vector2(-.8,1),Vector2(-.94,.75),Vector2(-1,.22)]
+	for arch in bridge_arches:
+		var center:Vector2=arch.center;var axis:Vector2=arch.axis;var half_span:float=arch.half_span;var side:=Vector2(-axis.y,axis.x)
+		arch.start_h=raw_height_at(center-axis*half_span);arch.end_h=raw_height_at(center+axis*half_span);arch.base=maxf(arch.start_h,arch.end_h)
+		var st:=SurfaceTool.new();st.begin(Mesh.PRIMITIVE_TRIANGLES);var segments:=maxi(20,ceili(half_span*12.0));var rings:Array=[]
+		for i in range(segments+1):
+			var t:=float(i)/segments;var half_width:=bridge_half_width(arch,t)
+			var thickness:=lerpf(.85,.38,pow(sin(PI*t),2.0));var ring:Array[Vector3]=[]
+			for profile in section:
+				var across:=profile.x*half_width;var point:=center+axis*((t-.5)*2.0*half_span)+side*across
+				var top:=bridge_surface_y(arch,t,across);var height:=top-profile.y*thickness
+				ring.append(Vector3(point.x,height,point.y))
+				var color:=terrain_surface_color(point,top).lerp(Color(biome.cliff).darkened(.12),profile.y*.55)
+				st.set_color(color);st.add_vertex(ring[-1])
+			rings.append(ring)
 		for i in segments:
-			var t0:=float(i)/float(segments);var t1:=float(i+1)/float(segments)
-			var a0:=(t0-.5)*2.0*half_span;var a1:=(t1-.5)*2.0*half_span
-			# Meet the bank height at each end (t=0/1) and arch up in between.
-			var y0:=bridge_deck_y(t0,start_h,end_h)-base;var y1:=bridge_deck_y(t1,start_h,end_h)-base
-			# Colour each segment from the terrain's own surface colour at its midpoint.
-			var mid:=(t0+t1)*.5;var mid_pt:=center+axis*((a0+a1)*.5);var mid_y:=bridge_deck_y(mid,start_h,end_h)
-			var top_color:=terrain_surface_color(mid_pt,mid_y);var side_color:=top_color.darkened(.22)
-			# Top quad.
-			_deck_quad(st,Vector3(-half_width,y0,a0),Vector3(half_width,y0,a0),Vector3(-half_width,y1,a1),Vector3(half_width,y1,a1),top_color)
-			# Sides drop to a thickness below the deck so it reads as solid earth.
-			_deck_quad(st,Vector3(-half_width,y0-thickness,a0),Vector3(-half_width,y0,a0),Vector3(-half_width,y1-thickness,a1),Vector3(-half_width,y1,a1),side_color)
-			_deck_quad(st,Vector3(half_width,y0,a0),Vector3(half_width,y0-thickness,a0),Vector3(half_width,y1,a1),Vector3(half_width,y1-thickness,a1),side_color)
+			for j in section.size():
+				var a:=i*section.size()+j;var b:=i*section.size()+(j+1)%section.size();var c:=a+section.size();var d:=b+section.size()
+				for index in [a,c,b,b,c,d]:st.add_index(index)
+		# Close both bank ends; these sit below the ground surface.
+		for end_index in [0,segments]:
+			var ring:Array=rings[end_index];var middle:=Vector3.ZERO
+			for point in ring:middle+=point
+			middle/=ring.size();var cap_index:=(segments+1)*section.size()+(0 if end_index==0 else 1)
+			st.set_color(Color(biome.cliff).darkened(.12));st.add_vertex(middle)
+			for j in section.size():
+				var a:int=end_index*section.size()+j;var b:int=end_index*section.size()+(j+1)%section.size()
+				for index in ([cap_index,b,a] if end_index==0 else [cap_index,a,b]):st.add_index(index)
 		st.generate_normals()
-		deck.mesh=st.commit();deck.material_override=plain_material(Color.WHITE);deck.material_override.vertex_color_use_as_albedo=true
+		var deck:=MeshInstance3D.new();deck.name="BridgeDeck";deck.mesh=st.commit();deck.material_override=terrain_material;bridge_root.add_child(deck)
 
-# One flat-shaded quad (two triangles) into the deck surface tool.
-func _deck_quad(st:SurfaceTool,a:Vector3,b:Vector3,c:Vector3,d:Vector3,color:Color)->void:
-	for vert in [a,b,c,b,d,c]:st.set_color(color);st.add_vertex(vert)
+# The chute floor height at a point on a waterfall's source channel: it slopes
+# from the border hilltop (WATERFALL_TOP, at the far source) down to water level
+# where it enters the field, so the water runs down the hillside.
+func waterfall_source_height(point:Vector2)->float:
+	var best_h:=WATERFALL_TOP;var best_perp:=INF
+	for fall in waterfalls:
+		var flow:Vector2=fall.flow;if flow.length()>.001:flow=flow.normalized()
+		var rel:Vector2=point-Vector2(fall.lip)
+		var along:float=rel.dot(flow);var perp:float=absf(rel.dot(Vector2(-flow.y,flow.x)))
+		if perp>float(fall.half_width)+1.2:continue
+		if perp<best_perp:
+			best_perp=perp
+			best_h=lerpf(WATER_LEVEL,WATERFALL_TOP,smoothstep(0.0,.78,clampf(-along/float(WATERFALL_REACH),0.0,1.0)))
+	return best_h
 
 # --- Waterfalls ----------------------------------------------------------------
-# Where a source channel meets the field's edge, a sheet of falling water drops
-# from the high channel into the trough, with foam at its foot.
+# A waterfall's source channel slopes down out of the border hills into the
+# field; the water sheet rides that slope so it flows downhill, with foam where
+# it meets the field.
+func waterfall_material()->ShaderMaterial:
+	var material:=water_material();material.set_shader_parameter("surface_flow",true);return material
+
 func build_waterfalls()->void:
 	if waterfalls.is_empty():return
 	var root:=Node3D.new();root.name="Waterfalls";add_child(root)
 	for fall in waterfalls:
 		var lip:Vector2=fall.lip;var flow:Vector2=fall.flow;var half_width:float=fall.half_width
 		var node:=Node3D.new();node.position=Vector3(lip.x,0,lip.y);node.rotation.y=atan2(flow.x,flow.y);root.add_child(node)
-		var top:=WATERFALL_TOP-.25;var bottom:=WATER_LEVEL+.05
-		# The falling sheet is the river's own water shader flowing straight down; it
-		# bulges out near the top but tucks back in at the bottom so the foot of the
-		# fall stays open rather than overhanging the pool.
-		var st:=SurfaceTool.new();st.begin(Mesh.PRIMITIVE_TRIANGLES);var columns:=maxi(3,int(half_width*4.0));var rows:=8
+		var flow_dir:Vector2=flow;if flow_dir.length()>.001:flow_dir=flow_dir.normalized()
+		var perp:=Vector2(-flow_dir.y,flow_dir.x)
+		# The sheet rides the chute from up the source slope down to where it meets the
+		# field, sitting just above the sloping ground so the water visibly runs downhill.
+		var along_top:=-float(WATERFALL_REACH)*.9;var along_bottom:=1.6
+		# Remember the foot (where the water reaches the field) so the terrain fade can
+		# keep whatever hill sits between it and the camera see-through.
+		fall.foot=Vector3(lip.x,WATER_LEVEL,lip.y)+Vector3(flow_dir.x,0,flow_dir.y)*1.2
+		var st:=SurfaceTool.new();st.begin(Mesh.PRIMITIVE_TRIANGLES);var columns:=maxi(8,int(half_width*8.0));var rows:=32
 		for i in columns:
 			for j in rows:
 				var corners:Array=[]
 				for corner in [Vector2(i,j),Vector2(i+1,j),Vector2(i,j+1),Vector2(i+1,j+1)]:
 					var u:float=corner.x/float(columns);var v:float=corner.y/float(rows)
-					var y:float=lerpf(top,bottom,v);var bulge:float=.34*sin(v*PI*.5)*(1.0-v)
-					corners.append({"pos":Vector3(-half_width+u*half_width*2.0,y,.12+bulge),"depth":clampf(.35+.55*sin(v*PI),0.0,1.0),"uv":Vector2(u*half_width*2.0,y)})
-				for tri in [[0,2,1],[1,2,3]]:
+					var along:float=lerpf(along_top,along_bottom,v);var localx:float=-half_width+u*half_width*2.0
+					var world:Vector2=Vector2(lip.x,lip.y)+flow_dir*along+perp*localx
+					var y:float=waterfall_source_height(world)+.055+sin(u*PI*8.0)*.018*sin(v*PI)
+					corners.append({"pos":Vector3(localx,y,along),"depth":clampf(.3+.5*sin(v*PI),0.0,1.0),"uv":Vector2(-localx+lip.dot(perp),along+lip.dot(flow)-(y-WATER_LEVEL)*.5)})
+				for tri in [[0,1,2],[1,3,2]]:
 					for k in tri:
 						var vert:Dictionary=corners[k]
-						st.set_normal(Vector3(0,0,1));st.set_color(water_vertex_color(Vector3(0,-1,0),0.0));st.set_uv(vert.uv);st.set_uv2(Vector2(float(vert.depth),0));st.add_vertex(vert.pos)
-		var sheet:=MeshInstance3D.new();sheet.name="WaterfallSheet";sheet.mesh=st.commit();sheet.material_override=water_material();node.add_child(sheet)
-		# Lots of little white spheres churn at the foot, growing and shrinking over
-		# time. They spread in front of the sheet so the base reads as froth, not a wall.
+						var slope:float=(waterfall_source_height(Vector2(lip)+flow_dir*(float(vert.pos.z)+.05))-waterfall_source_height(Vector2(lip)+flow_dir*(float(vert.pos.z)-.05)))/.1
+						st.set_normal(Vector3(0,1,-slope).normalized());st.set_color(water_vertex_color(Vector3(flow_dir.x,slope,flow_dir.y),0.0));st.set_uv(vert.uv);st.set_uv2(Vector2(float(vert.depth),0));st.add_vertex(vert.pos)
+		var sheet:=MeshInstance3D.new();sheet.name="WaterfallSheet";sheet.mesh=st.commit();sheet.material_override=waterfall_material();node.add_child(sheet)
 		var foam_rng:=RandomNumberGenerator.new();foam_rng.seed=int(absf(lip.x*337.0+lip.y*911.0))
-		var count:int=maxi(10,int(half_width*2.0*7.0))
-		for i in count:
-			var base_r:float=foam_rng.randf_range(.08,.2)
-			var bubble:=MeshInstance3D.new();bubble.mesh=GameData.leaf_sphere()
-			bubble.position=Vector3(foam_rng.randf_range(-half_width-.2,half_width+.2),bottom+foam_rng.randf_range(-.05,.22),foam_rng.randf_range(.25,.95))
-			bubble.scale=Vector3.ONE*base_r*2.0;bubble.material_override=plain_material(Color("#f6fcff"));node.add_child(bubble)
-			waterfall_bubbles.append({"node":bubble,"base":base_r,"phase":foam_rng.randf()*TAU,"freq":foam_rng.randf_range(3.5,6.5),"amp":foam_rng.randf_range(.35,.7)})
+		var foam_shader:=Shader.new();foam_shader.code=WATERFALL_FOAM_SHADER
+		var foam_mesh:=PlaneMesh.new();foam_mesh.size=Vector2.ONE
+		for i in maxi(24,int(half_width*24.0)):
+			var bubble:=MeshInstance3D.new();bubble.name="WaterfallFoam";bubble.mesh=foam_mesh
+			bubble.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			var material:=ShaderMaterial.new();material.shader=foam_shader
+			material.set_shader_parameter("foam_color",Color(biome.water_color).lerp(Color.WHITE,.96))
+			bubble.material_override=material;node.add_child(bubble)
+			waterfall_bubbles.append({"node":bubble,"material":material,
+				"origin":Vector3(foam_rng.randf_range(-half_width+.4,half_width-.4),WATER_LEVEL+.085,foam_rng.randf_range(.05,.55)),
+				"base":foam_rng.randf_range(.3,.55),"phase":foam_rng.randf(),
+				"lifetime":foam_rng.randf_range(1.0,2.0),"drift":foam_rng.randf_range(.6,1.3),
+				"sideways":foam_rng.randf_range(-.12,.12)})
+	update_waterfall_bubbles()
 
-# Each foam bubble quickly swells and shrinks on its own rhythm.
+const WATERFALL_FOAM_SHADER:="""
+shader_type spatial;
+render_mode unshaded, cull_disabled, depth_draw_never;
+uniform vec4 foam_color : source_color = vec4(0.92, 0.98, 1.0, 1.0);
+uniform float opacity = 1.0;
+void fragment() {
+	vec2 p = UV * 2.0 - 1.0;
+	float radius = length(p);
+	float rim = smoothstep(0.35, 0.65, radius) * (1.0 - smoothstep(0.7, 0.98, radius));
+	float body = (1.0 - smoothstep(0.35, 0.95, radius)) * 0.8;
+	ALBEDO = foam_color.rgb;
+	ALPHA = max(rim, body) * opacity;
+}
+"""
+
 func update_waterfall_bubbles()->void:
 	for bubble in waterfall_bubbles:
 		var node:MeshInstance3D=bubble.node
 		if not is_instance_valid(node):continue
-		var pulse:float=1.0+float(bubble.amp)*sin(elapsed*float(bubble.freq)+float(bubble.phase))
-		node.scale=Vector3.ONE*float(bubble.base)*2.0*maxf(.15,pulse)
+		var age:=fposmod(elapsed/float(bubble.lifetime)+float(bubble.phase),1.0)
+		node.position=Vector3(bubble.origin)+Vector3(float(bubble.sideways)*age,0,float(bubble.drift)*age)
+		var size:float=float(bubble.base)*lerpf(.65,1.6,age)
+		node.scale=Vector3(size,1,size*1.2)
+		bubble.material.set_shader_parameter("opacity",smoothstep(0.0,.12,age)*(1.0-smoothstep(.65,1.0,age)))
+		# Check the actual world footprint, including the rotated waterfall parent.
+		# Foam must sit on the river, never on a bank or on top of a bridge.
+		var local_point:=to_local(node.global_position)
+		var point:=Vector2(local_point.x,local_point.z)
+		var wet:=true
+		for offset in [Vector2.ZERO,Vector2.LEFT*size*.6,Vector2.RIGHT*size*.6,Vector2.UP*size*.6,Vector2.DOWN*size*.6]:
+			var cell:=cell_of(point+offset)
+			if not rivers.has(cell) or bridges.has(cell):wet=false;break
+		node.visible=wet
 
 func plain_material(color:Color)->StandardMaterial3D:
 	var mat:=StandardMaterial3D.new();mat.albedo_color=color;mat.roughness=1.0;mat.specular_mode=BaseMaterial3D.SPECULAR_DISABLED;return mat
 
 # --- Clouds ----------------------------------------------------------------------
 # A few puffy sphere clouds drift slowly high over the field.
+const CLOUD_BLOCKED_OPACITY:=.2
+const CLOUD_FADE_SECONDS:=.22
 var clouds:Array=[]
 func build_clouds(rng:RandomNumberGenerator)->void:
 	clouds.clear()
@@ -1220,10 +1454,40 @@ func build_clouds(rng:RandomNumberGenerator)->void:
 	for i in 4:
 		var cloud:=Node3D.new();cloud.position=Vector3(rng.randf_range(field_rect.position.x,field_rect.end.x),rng.randf_range(9.0,12.0),rng.randf_range(field_rect.position.y,field_rect.end.y));cloud_root.add_child(cloud)
 		# The reference's proportions: puffs overlap into one cloud rather than a row of balls.
+		var material:=plain_material(Color.WHITE);material.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA
 		var puff_scale:float=rng.randf_range(.32,.46)
 		for puff in [[0,0,0,5.0],[-4.5,-.6,.5,3.4],[4.5,-.6,-.4,3.6],[1.5,1.8,0,3.0]]:
-			var ball:=MeshInstance3D.new();ball.mesh=GameData.leaf_sphere();ball.scale=Vector3.ONE*float(puff[3])*2.0*puff_scale;ball.position=Vector3(puff[0],puff[1],puff[2])*puff_scale;ball.material_override=plain_material(Color.WHITE);cloud.add_child(ball)
-		clouds.append({"node":cloud,"speed":rng.randf_range(.12,.2)*(1.0 if i%2==0 else -1.0)})
+			var ball:=MeshInstance3D.new();ball.mesh=GameData.leaf_sphere();ball.scale=Vector3.ONE*float(puff[3])*2.0*puff_scale;ball.position=Vector3(puff[0],puff[1],puff[2])*puff_scale;ball.material_override=material;ball.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF;cloud.add_child(ball)
+		clouds.append({"node":cloud,"material":material,"opacity":1.0,"speed":rng.randf_range(.12,.2)*(1.0 if i%2==0 else -1.0)})
+
+# Fade the whole cloud when a visible puff lies between the camera and the
+# playable ground. Projecting rays also handles orthographic cameras and pans.
+func cloud_blocks_camera(node:Node3D)->bool:
+	if not is_instance_valid(camera):return false
+	var view:=camera.get_viewport().get_visible_rect()
+	for puff in node.get_children():
+		if not puff is MeshInstance3D:continue
+		var center:Vector3=puff.global_position
+		var radius:float=puff.mesh.get_aabb().size.x*.5*puff.global_basis.get_scale().x
+		if camera.global_position.distance_to(center)<radius:return true
+		if camera.is_position_behind(center):continue
+		var projected:=camera.unproject_position(center)
+		var screen_radius:=projected.distance_to(camera.unproject_position(center+camera.global_basis.x*radius))
+		if not view.intersects(Rect2(projected-Vector2.ONE*screen_radius,Vector2.ONE*screen_radius*2.0)):continue
+		# Sample the puff's centre and edges so the fade starts before its centre
+		# crosses the field edge, instead of popping as the cloud drifts past it.
+		for offset in [Vector2.ZERO,Vector2.LEFT,Vector2.RIGHT,Vector2.UP,Vector2.DOWN]:
+			var screen_point:Vector2=projected+offset*screen_radius*.75
+			if not view.has_point(screen_point):continue
+			var origin:=camera.project_ray_origin(screen_point);var direction:=camera.project_ray_normal(screen_point)
+			if direction.y>=-.001:continue
+			var distance:float=-origin.y/direction.y
+			var ground:=origin+direction*distance
+			for pass_index in 2:
+				distance=(terrain_height_at(Vector2(ground.x,ground.z))-origin.y)/direction.y
+				ground=origin+direction*distance
+			if distance>origin.distance_to(center)-radius and Rect2(field_rect).has_point(Vector2(ground.x,ground.z)):return true
+	return false
 
 func update_clouds(delta:float)->void:
 	for cloud in clouds:
@@ -1232,6 +1496,9 @@ func update_clouds(delta:float)->void:
 		node.position.x+=float(cloud.speed)*delta
 		if node.position.x>field_rect.end.x+6:node.position.x=field_rect.position.x-6
 		if node.position.x<field_rect.position.x-6:node.position.x=field_rect.end.x+6
+		var target:=CLOUD_BLOCKED_OPACITY if cloud_blocks_camera(node) else 1.0
+		cloud.opacity=move_toward(float(cloud.opacity),target,(1.0-CLOUD_BLOCKED_OPACITY)*delta/CLOUD_FADE_SECONDS)
+		var material:StandardMaterial3D=cloud.material;material.albedo_color=Color(1,1,1,float(cloud.opacity))
 
 func build_multimesh(node_name:String,mesh:Mesh,entries:Array[Dictionary])->MultiMeshInstance3D:
 	var multimesh:=MultiMesh.new();multimesh.transform_format=MultiMesh.TRANSFORM_3D;multimesh.use_colors=true;multimesh.use_custom_data=entries.any(func(entry):return entry.has("custom"));multimesh.mesh=mesh;multimesh.instance_count=entries.size()
@@ -1251,11 +1518,11 @@ const LEAF_GREENS:=["#5cb15c","#6fbf6a","#8ccf80","#9fd98f"]
 func leaf_green(index:int)->Color:
 	return Color(LEAF_GREENS[index%LEAF_GREENS.size()]).lerp(biome.get("accent",Color("#6fbf6a")),.3)
 
-# A hill-top prop: the same harvestable ExpeditionProp3D used on open ground, so
-# every prop the player sees (on flat land or on a hill) can be gathered. It
-# blocks its own cell like any prop; hills stay walkable around it.
+# A hill-top prop: the same ExpeditionProp3D used on open ground, so hills carry
+# the island's plants too. Most are plain scenery; only some bear fruit (assigned
+# like any prop). It blocks its own cell; hills stay walkable around it.
 func add_hill_prop(cell:Vector2i,rng:RandomNumberGenerator)->void:
-	if prop_cells.has(cell) or not field_rect.has_point(cell):return
+	if bridge_approaches.has(cell) or prop_cells.has(cell) or not field_rect.has_point(cell):return
 	if prop_cells.keys().any(func(other):return Vector2(other).distance_to(Vector2(cell))<PROP_SPACING):return
 	var had:bool=walkable.has(cell)
 	walkable.erase(cell)
@@ -1265,6 +1532,7 @@ func add_hill_prop(cell:Vector2i,rng:RandomNumberGenerator)->void:
 	decor_count+=1
 	var kinds:=prop_kinds()
 	var prop=PROP_SCRIPT.new();prop.setup(kinds[rng.randi_range(0,kinds.size()-1)],cell,biome,stage_level,rng)
+	assign_prop_harvest(prop,rng)
 	prop.destroyed.connect(_on_prop_destroyed);props_root.add_child(prop);props.append(prop);prop_cells[cell]=prop
 
 func add_decor(pos:Vector3,rng:RandomNumberGenerator)->void:
@@ -1349,10 +1617,15 @@ func add_bush(pos:Vector3)->void:
 const BERRY_INGREDIENTS:=["Bumbleberry","Dewmelon","Frostberry","Sunplum"]
 const GROVE_BERRY_SHARE:=.6
 func add_berry_patch(pos:Vector3)->void:
-	var berry_only:bool=is_grove() and randf()<GROVE_BERRY_SHARE
-	var patch:=Node3D.new();patch.position=pos;patch.set_meta("ingredient",GameData.roll_ingredient(stage_level,BERRY_INGREDIENTS if berry_only else []))
-	patch.set_meta("zone",patch_zone(Vector2(pos.x,pos.z)))
+	var grove:=is_grove()
+	var rich:bool=randf()<(GROVE_RICH_CHANCE if grove else REGULAR_RICH_CHANCE)
+	# Groves (and rich patches) roll deeper, so they lean to rarer resources.
+	var level:=stage_level+(GROVE_INGREDIENT_LEVEL_BONUS if (grove or rich) else 0)
+	var berry_only:bool=grove and randf()<GROVE_BERRY_SHARE
+	var patch:=Node3D.new();patch.position=Vector3(pos.x,terrain_height_at(Vector2(pos.x,pos.z)),pos.z);patch.set_meta("ingredient",GameData.roll_ingredient(level,BERRY_INGREDIENTS if berry_only else []))
+	patch.set_meta("zone",patch_zone(Vector2(pos.x,pos.z)));patch.set_meta("rich",rich)
 	build_berry_patch_shape(patch,str(patch.get_meta("ingredient")))
+	if rich:patch.scale*=1.4
 	add_child(patch);berry_nodes.append(patch)
 
 func berry_orb(patch:Node3D,offset:Vector3,radius:float,color:Color,glow:=0.0,squash:=1.0)->MeshInstance3D:
@@ -1366,12 +1639,50 @@ func plant_box(patch:Node3D,offset:Vector3,size:Vector3,color:Color,rotation:=Ve
 	var mesh:=BoxMesh.new();mesh.size=size;var part:=MeshInstance3D.new();part.mesh=mesh;part.position=offset;part.rotation=rotation
 	var mat:=StandardMaterial3D.new();mat.albedo_color=color;mat.roughness=.85;part.material_override=mat;patch.add_child(part);return part
 
+func plant_stem(patch:Node3D,from:Vector3,to:Vector3,radius:float,color:Color)->void:
+	var mesh:=CylinderMesh.new();mesh.top_radius=radius*.7;mesh.bottom_radius=radius;mesh.height=from.distance_to(to);mesh.radial_segments=7
+	var part:=MeshInstance3D.new();part.mesh=mesh;part.position=(from+to)*.5;part.quaternion=Quaternion(Vector3.UP,(to-from).normalized());part.material_override=plain_material(color);patch.add_child(part)
+
+func plant_leaf(patch:Node3D,pos:Vector3,angle:float,length:=.35)->void:
+	var leaf:=berry_orb(patch,pos,.12,GameData.COLORS.leaf,0.0,.22);leaf.scale=Vector3(length/.12,1,.65);leaf.rotation.y=angle;leaf.rotation.z=.25
+
+func build_resource_plant_base(patch:Node3D,ingredient:String)->void:
+	var green:Color=GameData.COLORS.leaf_dark
+	match ingredient:
+		"Bumbleberry":
+			for side in [-1.0,1.0]:
+				plant_stem(patch,Vector3(0,0,0),Vector3(side*.3,.62,.06),.035,green)
+				for i in 3:
+					var p:=Vector3(side*(.12+i*.06),.18+i*.14,.04);plant_leaf(patch,p,side*.7,.23)
+					berry_orb(patch,p+Vector3(side*.09,.04,.09),.085,GameData.INGREDIENTS[ingredient].color)
+		"Dewmelon","Brinepod","Stonebean":
+			for i in 7:
+				var a:=float(i)*.65;var p:=Vector3(sin(a)*.65,.035,cos(a)*.45)
+				plant_stem(patch,Vector3.ZERO,p,.023,green);plant_leaf(patch,p,a,.22)
+		"Frostberry":
+			for i in 7:
+				var a:=i*TAU/7.0;plant_leaf(patch,Vector3(cos(a)*.25,.04,sin(a)*.25),a,.24)
+		"Sunplum","Sparkfruit":
+			plant_stem(patch,Vector3.ZERO,Vector3(0,.85,0),.05,Color("#755238"))
+			for i in 5:
+				var a:=i*TAU/5.0;var tip:=Vector3(cos(a)*.4,.65+float(i%2)*.2,sin(a)*.4)
+				plant_stem(patch,Vector3(0,.5,0),tip,.025,green);plant_leaf(patch,tip,a,.28)
+				berry_orb(patch,tip-Vector3(0,.10,0),.13,GameData.INGREDIENTS[ingredient].color)
+		"Curlcap","Puffshroom","Glowcap":
+			for i in 3:
+				var pos:=Vector3(-.32+i*.29,.01,.25);plant_stem(patch,pos,pos+Vector3(0,.18,0),.028,GameData.COLORS.cream);berry_orb(patch,pos+Vector3(0,.2,0),.13,GameData.INGREDIENTS[ingredient].color,0.0,.45)
+		_:
+			for i in 4:
+				var a:=i*TAU/4.0;plant_leaf(patch,Vector3(cos(a)*.12,.04,sin(a)*.12),a,.28)
+
 # One recognisable plant per resource. Every ingredient in GameData.INGREDIENTS
 # has its own branch; the fallback only guards against unknown names.
 func build_berry_patch_shape(patch:Node3D,ingredient:String)->void:
 	var color:Color=GameData.INGREDIENTS.get(ingredient,{}).get("color",GameData.COLORS.berry)
 	var leaf:Color=GameData.COLORS.leaf;var dark_leaf:Color=GameData.COLORS.leaf_dark;var soil:=Color("#6b4b30")
 	patch.set_meta("shape",ingredient)
+	# Roots, vines, canes, and mushroom beds define different silhouettes.
+	build_resource_plant_base(patch,ingredient)
 	match ingredient:
 		"Bumbleberry":  # a pair of plump purple berries
 			berry_orb(patch,Vector3(-.2,.22,0),.22,color);berry_orb(patch,Vector3(.2,.26,.12),.22,color)
@@ -1462,7 +1773,7 @@ func place_berry_patches(rng:RandomNumberGenerator)->void:
 	# Side pockets away from the trail first, then anywhere along the route; only
 	# exposed cells qualify so no patch ends up wedged in a one-tile nook.
 	var pockets:Array[Vector2i]=[];var others:Array[Vector2i]=[]
-	for cell in walkable:
+	for cell in reachable_walkable_cells():
 		var point:=Vector2(cell.x,cell.y)
 		if zone_index_at(point)==0 or not cell_exposed(cell):continue
 		if route_distance(point)>=1.6:pockets.append(cell)
@@ -1488,7 +1799,7 @@ func _process(delta:float)->void:
 	update_waterfall_bubbles()
 	# Fighters ride the rolling ground (and the bridge arches).
 	for actor in team+enemies:
-		if is_instance_valid(actor):actor.position.y=terrain_height_at(Vector2(actor.position.x,actor.position.z))
+		if is_instance_valid(actor):actor.position.y=flight_height_at(Vector2(actor.position.x,actor.position.z)) if actor.floats_over_water() else terrain_height_at(Vector2(actor.position.x,actor.position.z))
 	if intermission>0:
 		intermission-=delta
 		if intermission<=0:
@@ -1498,9 +1809,6 @@ func _process(delta:float)->void:
 	# The team only engages enemies that have noticed it, so a distant idle group
 	# never drags the team straight across rivers and walls; exploration routes
 	# the team to the next group along walkable ground instead.
-	var targets:Array[QuibletActor3D]=alerted_enemies()
-	for actor in team:
-		if actor.current_hp>0:actor.target=nearest(actor,targets)
 	for actor in enemies:
 		if actor.current_hp<=0:continue
 		if not actor.get_meta("alerted",true):
@@ -1516,11 +1824,12 @@ func _process(delta:float)->void:
 					for member in living:member.has_command=false
 			else:actor.target=null;continue
 		actor.target=nearest(actor,team)
+	update_team_targets()
 	update_advance(living)
 	for patch in berry_nodes.duplicate():
 		for actor in team:
 			if actor.current_hp>0 and actor.horizontal_distance(actor.position,patch.position)<1.1:
-				var amount:=randi_range(3,6);var ingredient:String=patch.get_meta("ingredient");loot[ingredient]+=amount;gathered+=1
+				var patch_range:Vector2i=RICH_YIELD if patch.get_meta("rich",false) else BERRY_PATCH_RANGE;var amount:=randi_range(patch_range.x,patch_range.y);var ingredient:String=patch.get_meta("ingredient");loot[ingredient]+=amount;gathered+=1
 				reward_acquired.emit({"kind":"ingredient","name":ingredient,"amount":amount},patch.global_position)
 				berry_nodes.erase(patch);patch.queue_free();event_message.emit("Berry patch gathered: +%d %s"%[amount,ingredient]);break
 	update_harvesting(living,delta)
@@ -1539,7 +1848,7 @@ func _process(delta:float)->void:
 func alerted_enemies()->Array[QuibletActor3D]:
 	var result:Array[QuibletActor3D]=[]
 	for enemy in enemies:
-		if enemy.get_meta("alerted",false):result.append(enemy)
+		if enemy.current_hp>0 and enemy.get_meta("alerted",false):result.append(enemy)
 	return result
 
 func update_grove()->void:
@@ -1572,10 +1881,11 @@ func update_advance(living:Array)->void:
 		issue_route_command(advance_waypoints[advance_index],living)
 	elif not living.any(func(member):return member.has_command):issue_route_command(waypoint,living)
 
-func issue_route_command(point:Vector3,living:Array)->void:
+func issue_route_command(point:Vector3,living:Array,automatic:=true)->void:
 	for i in living.size():
 		var spacing:=(float(i)-float(living.size()-1)*.5)*.9;var goal:=point+Vector3(spacing,0,0)
-		living[i].follow_path(find_path(Vector2(living[i].position.x,living[i].position.z),Vector2(goal.x,goal.z)))
+		living[i].follow_path(find_path(Vector2(living[i].position.x,living[i].position.z),Vector2(goal.x,goal.z),living[i].floats_over_water()))
+		living[i].set_meta("auto_route",automatic)
 
 # --- Path-finding over the walkable tile grid -------------------------------
 # Commanded runs (berry patches tucked into side pockets especially) are routed
@@ -1594,34 +1904,41 @@ func nearest_walkable_cell(point:Vector2)->Vector2i:
 	return best
 
 # True when the straight segment stays on walkable tiles with a little clearance from cliffs.
-func line_walkable(a:Vector2,b:Vector2)->bool:
+func flight_height_at(point:Vector2)->float:
+	# Follow the land's broad elevation, ignoring river troughs and bridge arches.
+	return maxf(plain_roll(point),raw_height_at(point))
+
+func navigation_cell_open(cell:Vector2i,flying:bool)->bool:
+	return walkable.has(cell) or (flying and rivers.has(cell) and in_field(cell))
+
+func line_walkable(a:Vector2,b:Vector2,flying:=false)->bool:
 	var steps:=maxi(1,ceili(a.distance_to(b)/.25))
 	for i in steps+1:
 		var p:=a.lerp(b,float(i)/steps)
 		for offset in [Vector2.ZERO,Vector2(.4,0),Vector2(-.4,0),Vector2(0,.4),Vector2(0,-.4)]:
-			if not walkable.has(cell_of(p+offset)):return false
+			if not navigation_cell_open(cell_of(p+offset),flying):return false
 	return true
 
-func find_path(from:Vector2,to:Vector2)->Array[Vector3]:
+func find_path(from:Vector2,to:Vector2,flying:=false)->Array[Vector3]:
 	# Targets on cliffs or in one-tile nooks are moved to the nearest open cell.
-	var goal_cell:=nearest_open_cell(to);var goal:=to if cell_open(cell_of(to)) else Vector2(goal_cell)
+	var goal_cell:=cell_of(to) if flying and navigation_cell_open(cell_of(to),true) else nearest_open_cell(to);var goal:=to if (flying and navigation_cell_open(cell_of(to),true)) or cell_open(cell_of(to)) else Vector2(goal_cell)
 	var direct:Array[Vector3]=[Vector3(goal.x,0,goal.y)]
-	if walkable.is_empty() or line_walkable(from,goal):return direct
-	var start_cell:=nearest_walkable_cell(from)
+	if walkable.is_empty() or line_walkable(from,goal,flying):return direct
+	var start_cell:=cell_of(from) if flying and navigation_cell_open(cell_of(from),true) else nearest_walkable_cell(from)
 	var parents:={start_cell:start_cell};var frontier:Array[Vector2i]=[start_cell];var head:=0
 	while head<frontier.size() and not parents.has(goal_cell):
 		var cell:Vector2i=frontier[head];head+=1
 		for offset in [Vector2i(1,0),Vector2i(-1,0),Vector2i(0,1),Vector2i(0,-1)]:
 			var next:Vector2i=cell+offset
-			if walkable.has(next) and not parents.has(next):parents[next]=cell;frontier.append(next)
-	if not parents.has(goal_cell):return direct
+			if navigation_cell_open(next,flying) and not parents.has(next):parents[next]=cell;frontier.append(next)
+	if not parents.has(goal_cell):return []
 	var cells:Array[Vector2]=[];var cursor:=goal_cell
 	while cursor!=start_cell:cells.push_front(Vector2(cursor));cursor=parents[cursor]
 	cells.append(goal)
 	var path:Array[Vector3]=[];var anchor:=from;var index:=0
 	while index<cells.size():
 		var furthest:=cells.size()-1
-		while furthest>index and not line_walkable(anchor,cells[furthest]):furthest-=1
+		while furthest>index and not line_walkable(anchor,cells[furthest],flying):furthest-=1
 		anchor=cells[furthest];path.append(Vector3(anchor.x,0,anchor.y));index=furthest+1
 	return path
 
@@ -1768,7 +2085,7 @@ func update_chase_routing(delta:float)->void:
 			if actor.get_meta("chase_routed",false):actor.set_meta("chase_routed",false);actor.command_path.clear();actor.has_command=false
 			continue
 		var from:=Vector2(actor.position.x,actor.position.z);var to:=Vector2(actor.target.position.x,actor.target.position.z)
-		if line_walkable(from,to):
+		if line_walkable(from,to,actor.floats_over_water()):
 			if actor.get_meta("chase_routed",false):actor.set_meta("chase_routed",false);actor.command_path.clear();actor.has_command=false
 			continue
 		if actor.has_command and not actor.get_meta("chase_routed",false):continue
@@ -1783,9 +2100,10 @@ func _on_actor_stuck(actor:QuibletActor3D)->void:
 	var from:=Vector2(actor.position.x,actor.position.z)
 	if actor.has_command:
 		var goal:Vector3=actor.command_path.back() if not actor.command_path.is_empty() else actor.desired_point
-		var routed:bool=actor.get_meta("chase_routed",false)
-		actor.follow_path(find_path(from,Vector2(goal.x,goal.z)))
+		var routed:bool=actor.get_meta("chase_routed",false);var automatic:bool=actor.get_meta("auto_route",false)
+		actor.follow_path(find_path(from,Vector2(goal.x,goal.z),actor.floats_over_water()))
 		if routed:actor.set_meta("chase_routed",true)
+		actor.set_meta("auto_route",automatic)
 	elif is_instance_valid(actor.target) and actor.target.current_hp>0:
 		actor.retreating=false
 		actor.follow_path(chase_path(actor,from,Vector2(actor.target.position.x,actor.target.position.z)));actor.set_meta("chase_routed",true)
@@ -1793,26 +2111,54 @@ func _on_actor_stuck(actor:QuibletActor3D)->void:
 # The routed path toward a target, cut short at the first point that has a
 # clear line to the target within the chaser's attack reach.
 func chase_path(actor:QuibletActor3D,from:Vector2,to:Vector2)->Array[Vector3]:
-	var path:=find_path(from,to);var reach:float=minf(actor.attack_range*.78,4.5)
+	var path:=find_path(from,to,actor.floats_over_water());var reach:float=minf(actor.attack_range*.78,4.5)
 	for i in path.size():
 		var point:=Vector2(path[i].x,path[i].z)
-		if point.distance_to(to)<=reach and line_walkable(point,to):return path.slice(0,i+1)
+		if point.distance_to(to)<=reach and line_walkable(point,to,actor.floats_over_water()):return path.slice(0,i+1)
 	return path
 
+# Keep pursuing the current opponent; only choose a new one when it is gone.
+# Actual route length accounts for rivers and bridges when selecting a target.
+func reachable_enemy(actor:QuibletActor3D,candidates:Array[QuibletActor3D])->QuibletActor3D:
+	var from:=Vector2(actor.position.x,actor.position.z);var best:=INF;var chosen:QuibletActor3D=null
+	var ordered:=candidates.duplicate()
+	ordered.sort_custom(func(a,b):return actor.horizontal_distance(actor.position,a.position)<actor.horizontal_distance(actor.position,b.position))
+	for enemy in ordered:
+		var to:=Vector2(enemy.position.x,enemy.position.z)
+		if from.distance_to(to)>=best:continue
+		var path:=find_path(from,to,actor.floats_over_water())
+		if path.is_empty():continue
+		var distance:=0.0;var previous:=from
+		for point in path:
+			var next:=Vector2(point.x,point.z);distance+=previous.distance_to(next);previous=next
+		if distance<best:best=distance;chosen=enemy
+	return chosen
+
+func update_team_targets()->void:
+	var targets:=alerted_enemies()
+	for actor in team:
+		if actor.current_hp<=0:continue
+		if not is_instance_valid(actor.target) or actor.target.current_hp<=0 or not targets.has(actor.target):
+			actor.target=reachable_enemy(actor,targets)
+		if is_instance_valid(actor.target) and actor.get_meta("auto_route",false):
+			actor.command_path.clear();actor.has_command=false;actor.set_meta("auto_route",false)
+
+var next_exploration_plan:=0.0
 func update_exploration(living:Array)->void:
 	if not exploring or ended or living.is_empty() or advance_index>=0:return
-	if enemies.any(func(enemy):return enemy.current_hp>0 and enemy.get_meta("alerted",false)):return
-	if living.any(func(member):return member.has_command):return
-	var centroid:=Vector3.ZERO
-	for member in living:centroid+=member.position
-	centroid/=living.size()
-	var goal:QuibletActor3D=null;var best:=INF
-	for enemy in idle_enemies():
-		var distance:=centroid.distance_to(enemy.position)
-		if distance<best:best=distance;goal=enemy
-	if goal==null:return
-	var center:Vector2=goal.get_meta("alert_center",Vector2(goal.position.x,goal.position.z))
-	issue_route_command(Vector3(center.x,0,center.y),living)
+	if not alerted_enemies().is_empty():return
+	# Explicit destinations take priority until reached. Automatic exploration
+	# does not make idle teammates wait for a straggler's old route to finish.
+	if living.any(func(member):return member.has_command and not member.get_meta("auto_route",false) and not member.get_meta("chase_routed",false)):return
+	if elapsed<next_exploration_plan:return
+	next_exploration_plan=elapsed+.75
+	var idle:=idle_enemies()
+	for member in living:
+		if member.has_command:continue
+		var goal:=reachable_enemy(member,idle)
+		if goal==null:continue
+		member.follow_path(find_path(Vector2(member.position.x,member.position.z),Vector2(goal.position.x,goal.position.z),member.floats_over_water()))
+		member.set_meta("auto_route",true)
 
 # --- The boss ---------------------------------------------------------------
 # Once the field is clear the boss and its escorts appear in whichever arena is
@@ -1911,7 +2257,7 @@ func manual_move(actor:QuibletActor3D,index:int)->void:
 func command_team(point:Vector3,from_player:=true)->void:
 	if from_player:advance_index=-1
 	var active:Array[QuibletActor3D]=team.filter(func(actor):return actor.current_hp>0)
-	issue_route_command(point,active)
+	issue_route_command(point,active,not from_player)
 
 func retreat()->void:
 	var start:Vector2=zones[0].center if not zones.is_empty() else Vector2(-11,-4)

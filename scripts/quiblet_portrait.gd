@@ -24,6 +24,12 @@ func _draw() -> void:
 		draw_arc(center, r * 1.34, 0, TAU, 40, GameData.COLORS.gold, 3.0)
 	# Soft shadow.
 	draw_ellipse(center + Vector2(0, r * 0.78), r * 0.82, r * 0.27, Color(0.15,0.2,0.22,0.16))
+	# A hand-drawn species icon replaces the procedural body when one is available.
+	var icon: Texture2D = GameData.quiblet_icon_texture(species_index)
+	if icon != null:
+		var box: float = r * 2.7
+		draw_texture_rect(icon, Rect2(center - Vector2(box, box) * 0.5 + Vector2(0, -r * 0.12), Vector2(box, box)), false)
+		return
 	# Species silhouettes.
 	match s.shape:
 		"ears":

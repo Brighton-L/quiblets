@@ -359,7 +359,7 @@ const TREASURE_CACHE_LEVEL_CHANCE:=.45
 const SPECIAL_ITEM_DROP_WEIGHTS:={
 	"Memory Fruit":4,"Move Crystal":4,"Echo Crystal":3,"Growth Fruit":4,
 	"Bountiful Berry":3,"Empty Leftover Jar":4,"Fortune Charm":2,"Challenger's Charm":2,
-	"Health Charm":1,"Attack Charm":1,"Prodigy Fruit":1
+	"Health Charm":1,"Attack Charm":1,"Prodigy Fruit":1,"Combiner Charm":4
 }
 
 static func special_item_drop_chance(stage_kind:String,fortune:bool)->float:
@@ -472,13 +472,14 @@ const COMBINE_MIN_STONES:=2
 const COMBINE_MAX_STONES:=4
 
 # Stone Workshop: Revitalizer. The stone's power becomes 90% of the average drop
-# at the given loot tier, unless it is already stronger than that.
+# at the given loot tier, plus a random 0–5 bonus on a successful upgrade.
+# Stones already at the baseline or above cannot be upgraded again at that tier.
 static func revitalized_power(stone:Dictionary,loot_tier:int)->int:
 	return maxi(int(stone.power),roundi(power_stone_drop_average(loot_tier)*REVITALIZE_SHARE))
 
 static func revitalize_power_stone(stone:Dictionary,loot_tier:int)->Dictionary:
 	var result:=normalize_power_stone(stone);var power:=revitalized_power(result,loot_tier)
-	if power>int(result.power):result.power=power;result.tier=maxi(int(result.tier),clampi(loot_tier,1,POWER_STONE_RANGES.size()))
+	if power>int(result.power):result.power=power+randi_range(0,5);result.tier=maxi(int(result.tier),clampi(loot_tier,1,POWER_STONE_RANGES.size()))
 	return normalize_power_stone(result)
 
 # Stone Workshop: Converter. Everything stays except the stat type.
@@ -608,13 +609,13 @@ const COLORS := {
 }
 
 const SPECIES := [
-	{"name":"Plip", "element":"Water", "color":Color("#69c8e5"), "accent":Color("#d8f6ff"), "shape":"fins", "base_hp":150, "base_atk":30, "range":165.0, "family":"plip"},
+	{"name":"Plip", "element":"Water", "color":Color("#69c8e5"), "accent":Color("#d8f6ff"), "shape":"fins", "base_hp":150, "base_atk":30, "range":165.0, "family":"plip", "evolves_to":1, "evolve_level":18, "model":"res://models/Plip.glb", "model_yaw":0.0},
 	{"name":"Swellit", "element":"Water", "color":Color("#3f91c7"), "accent":Color("#bfe9ff"), "shape":"fins", "base_hp":198, "base_atk":35, "range":180.0, "family":"plip"},
-	{"name":"Spriggle", "element":"Green", "color":Color("#78bd64"), "accent":Color("#daf09b"), "shape":"ears", "base_hp":152, "base_atk":30, "range":155.0, "family":"spriggle"},
+	{"name":"Spriggle", "element":"Green", "color":Color("#78bd64"), "accent":Color("#daf09b"), "shape":"ears", "base_hp":152, "base_atk":30, "range":155.0, "family":"spriggle", "evolves_to":3, "evolve_level":18},
 	{"name":"Frondle", "element":"Green", "color":Color("#4f9f68"), "accent":Color("#c9e785"), "shape":"crest", "base_hp":196, "base_atk":34, "range":125.0, "family":"spriggle"},
 	{"name":"Vinee", "element":"Green", "color":Color("#65ad65"), "accent":Color("#e1ef8b"), "shape":"tail", "base_hp":174, "base_atk":37, "range":100.0, "family":"vinee"},
-	{"name":"Bloomie", "element":"Green", "color":Color("#8dcf75"), "accent":Color("#f2b7d2"), "shape":"tuft", "base_hp":185, "base_atk":24, "range":145.0, "family":"bloomie"},
-	{"name":"Sparko", "element":"Fire", "color":Color("#f07a4d"), "accent":Color("#ffd25f"), "shape":"tail", "base_hp":140, "base_atk":39, "range":145.0, "family":"sparko"},
+	{"name":"Bloomie", "element":"Green", "color":Color("#8dcf75"), "accent":Color("#f2b7d2"), "shape":"tuft", "base_hp":185, "base_atk":24, "range":145.0, "family":"bloomie", "model":"res://models/Blomie.glb", "model_yaw":PI*1.5},
+	{"name":"Sparko", "element":"Fire", "color":Color("#f07a4d"), "accent":Color("#ffd25f"), "shape":"tail", "base_hp":140, "base_atk":39, "range":145.0, "family":"sparko", "evolves_to":7, "evolve_level":18},
 	{"name":"Scorchit", "element":"Fire", "color":Color("#d94b3f"), "accent":Color("#ffad48"), "shape":"horn", "base_hp":192, "base_atk":43, "range":105.0, "family":"sparko"},
 	{"name":"Fistor", "element":"Psychic", "color":Color("#a06fd6"), "accent":Color("#e7d3ff"), "shape":"fists", "base_hp":174, "base_atk":34, "range":150.0, "family":"fistor"},
 	{"name":"Carapuff", "element":"Psychic", "color":Color("#c39be8"), "accent":Color("#f0e4ff"), "shape":"puff", "base_hp":178, "base_atk":35, "range":160.0, "family":"carapuff"},
@@ -624,9 +625,9 @@ const SPECIES := [
 	{"name":"Mimbit", "element":"Normal", "color":Color("#e3c98f"), "accent":Color("#fff0c8"), "shape":"ears", "base_hp":120, "base_atk":22, "range":150.0, "family":"mimbit"},
 	{"name":"Pidler", "element":"Normal", "color":Color("#9a8fb0"), "accent":Color("#e6dcf2"), "shape":"web", "base_hp":150, "base_atk":33, "range":165.0, "family":"pidler"},
 	{"name":"Gloopit", "element":"Poison", "color":Color("#7cae57"), "accent":Color("#d7f0a8"), "shape":"gloop", "base_hp":170, "base_atk":36, "range":175.0, "family":"gloopit"},
-	{"name":"Blubber", "element":"Air", "color":Color("#8fc7dd"), "accent":Color("#dff2fa"), "shape":"balloon", "base_hp":175, "base_atk":37, "range":170.0, "family":"blubber"},
+	{"name":"Blubber", "element":"Air", "color":Color("#8fc7dd"), "accent":Color("#dff2fa"), "shape":"balloon", "base_hp":175, "base_atk":37, "range":170.0, "family":"blubber", "model":"res://models/Blubber.glb", "model_yaw":PI, "model_hover":3.5, "model_corner_roll":true},
 	{"name":"Cysicle", "element":"Ice", "color":Color("#8fd0e6"), "accent":Color("#e2f7ff"), "shape":"spikes", "base_hp":168, "base_atk":40, "range":180.0, "family":"cysicle"},
-	{"name":"Gagglet", "element":"Air", "color":Color("#dcd2c4"), "accent":Color("#f0a24d"), "shape":"beak", "base_hp":165, "base_atk":30, "range":140.0, "family":"gaggle", "model":"res://models/Gagglet.glb"},
+	{"name":"Gagglet", "element":"Air", "color":Color("#dcd2c4"), "accent":Color("#f0a24d"), "shape":"beak", "base_hp":165, "base_atk":30, "range":140.0, "family":"gaggle", "model":"res://models/Gagglet.glb", "evolves_to":19, "evolve_level":22},
 	{"name":"Gaggle", "element":"Air", "color":Color("#cfc4b4"), "accent":Color("#e8944a"), "shape":"twinbeak", "base_hp":210, "base_atk":34, "range":130.0, "family":"gaggle", "model":"res://models/Gaggle.glb"}
 ]
 
@@ -784,7 +785,7 @@ const MOVES := {
 	"Honk":{"power":18.0,"cooldown":4.0,"range":120.0,"color":Color("#e8b45a"),"kind":"burst","desc":"Lets out a loud honk that briefly lowers nearby enemies' attack and interrupts what they're doing."},
 	"Wingbeat":{"power":38.0,"cooldown":3.0,"range":110.0,"color":Color("#e8b45a"),"kind":"burst","desc":"Flaps hard and pushes nearby enemies away."},
 	"Feather Guard":{"power":0.0,"cooldown":6.5,"range":0.0,"color":Color("#e8b45a"),"kind":"recover","desc":"Fluffs up its feathers and takes reduced damage for a short time."},
-	"Scare":{"power":16.0,"cooldown":6.0,"range":175.0,"color":Color("#e8b45a"),"kind":"burst","desc":"Jumps in front of an enemy, spreads its wings and feathers, and causes it to flee and stop targeting an ally for a few seconds."},
+	"Scare":{"power":0.0,"cooldown":6.0,"range":175.0,"color":Color("#e8b45a"),"kind":"burst","desc":"Jumps in front of an enemy, spreads its wings and feathers, and causes it to flee and stop targeting an ally for a few seconds. Deals no damage."},
 	"Escort":{"power":0.0,"cooldown":7.0,"range":0.0,"color":Color("#e8b45a"),"kind":"recover","desc":"Flies beside a chosen ally for a short time, shielding it and helping intercept nearby attackers."},
 	"Alarm Honk":{"power":0.0,"cooldown":7.0,"range":0.0,"color":Color("#e8b45a"),"kind":"recover","desc":"Warns the team, briefly raising allies' evasion so fewer incoming attacks connect."},
 	"Peck":{"power":40.0,"cooldown":5.0,"range":220.0,"color":Color("#e8b45a"),"kind":"burst","desc":"Rapidly dashes to one enemy and pecks it hard, then immediately dashes to the next living enemy, until every currently alive enemy has been hit exactly once."},
@@ -1039,11 +1040,13 @@ static func spice_stat_text(spice_name:String,quality:String)->String:
 		parts.append("%s%.1f%% %s"%["−" if negative else "+",amount*100.0,names.get(stat,stat)])
 	return ", ".join(parts)
 
+# Requirements alone determine bowl size: complementary tags cannot be supplied
+# by the same ingredient, so every recipe naturally takes four or five resources.
 const SPICE_RECIPES := [
-	{"name":"Hot Flakes","need":{"spicy":2}}, {"name":"Iron Flakes","need":{"hard":2}},
-	{"name":"Swift Spice","need":{"juicy":2}}, {"name":"Punch Pepper","need":{"root":1,"hard":1}},
-	{"name":"Brain Salt","need":{"bitter":2,"soft":1}}, {"name":"Sharp Salt","need":{"dry":2,"seed":1}},
-	{"name":"Gentle Herb","need":{"soft":2}}, {"name":"Rare Spice","need":{"sweet":1,"sour":1,"salty":1}}
+	{"name":"Hot Flakes","need":{"spicy":3,"savory":1}}, {"name":"Iron Flakes","need":{"hard":3,"salty":1}},
+	{"name":"Swift Spice","need":{"juicy":3,"dry":1}}, {"name":"Punch Pepper","need":{"root":2,"spicy":2}},
+	{"name":"Brain Salt","need":{"bitter":3,"sweet":2}}, {"name":"Sharp Salt","need":{"dry":2,"seed":2,"sour":2}},
+	{"name":"Gentle Herb","need":{"soft":3,"leaf":1}}, {"name":"Rare Spice","need":{"sweet":2,"sour":2,"salty":1}}
 ]
 
 const SPICE_QUALITIES := ["basic","good","great","special"]
@@ -1071,6 +1074,30 @@ const RECIPES := [
 
 static func species(index: int) -> Dictionary:
 	return SPECIES[posmod(index, SPECIES.size())]
+
+# A hand-drawn icon for a species, if one has been supplied under
+# res://textures/QuibletIcons/ (as "<Name>.png" or "<Name>Icon.png"); null when the
+# species has no icon yet and the portrait should draw its procedural body instead.
+static var _quiblet_icon_cache:Dictionary={}
+static func quiblet_icon_texture(species_index:int)->Texture2D:
+	var name:=str(species(species_index).name)
+	if _quiblet_icon_cache.has(name):return _quiblet_icon_cache[name]
+	var result:Texture2D=null
+	for path in ["res://textures/QuibletIcons/%s.png"%name,"res://textures/QuibletIcons/%sIcon.png"%name]:
+		if ResourceLoader.exists(path):result=load(path);break
+	_quiblet_icon_cache[name]=result
+	return result
+
+# The species this one evolves into once it reaches the given level, or -1 if it
+# does not evolve (or is not high enough yet).
+static func evolution_target(species_index:int,level:int)->int:
+	var s:=species(species_index)
+	if s.has("evolves_to") and level>=int(s.get("evolve_level",999)):return int(s.evolves_to)
+	return -1
+
+# Whether this species has an evolved form to grow into at all (regardless of level).
+static func can_evolve(species_index:int)->bool:
+	return species(species_index).has("evolves_to")
 
 static func default_moves(species_index: int) -> Array:
 	var result:Array=[]
@@ -1104,7 +1131,7 @@ static func make_quiblet(species_index: int, level: int, nickname: String = "",r
 		"species":species_index, "nickname":nickname, "level":level, "exp":0,
 		"hp_bonus":0, "atk_bonus":0, "moves":move_list, "memory":initial_moves.duplicate(),
 		"health_charms":0, "attack_charms":0, "flex_health":0, "flex_attack":0,
-		"prodigy":false, "power_stones":[],
+		"prodigy":false, "evolution_paused":false, "power_stones":[],
 		"power_slot_types":board.types,"power_slot_unlocks":board.unlocks,
 		"power_slot_stones":[{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}]
 	}
@@ -1221,6 +1248,7 @@ static func choose_recipe(items: Dictionary) -> Dictionary:
 	return best
 
 static func choose_spice(items:Array[String])->Dictionary:
+	if items.size()>5:return {}
 	var counts:={}
 	for ingredient_name in items:
 		for tag in INGREDIENTS[ingredient_name].tags:counts[tag]=int(counts.get(tag,0))+1

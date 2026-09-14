@@ -116,22 +116,25 @@ func run()->void:
 	# Recipe browser: one stew at a time, numbered, with "???" until discovered.
 	game.pending_stew={};game.completed_stew_result={};game.known_recipes.clear();game.cooking_recipe_index=0;game.show_cooking();await process_frame
 	var browser:Control=game.content.find_child("RecipeBrowser",true,false)
-	check(browser!=null and browser.find_child("RecipeNumber",true,false).text=="#1" and browser.find_child("RecipeName",true,false).text=="Plain Stew" and browser.find_child("RecipeRequires",true,false).text=="any five ingredients" and browser.find_child("RecipeAttracts",true,false).text=="Attracts any Quiblet","The browser opens on stew #1 with its name, requirements, and what it attracts")
+	check(browser!=null and browser.find_child("RecipeNumber",true,false).text=="#1" and browser.find_child("RecipeName",true,false).text=="Plain Stew" and browser.find_child("RecipeRequires",true,false).text=="any five ingredients" and browser.find_child("RecipeAttracts",true,false).text==game.recipe_attracts_text(GameData.RECIPES[0]),"The browser opens on stew #1 with its name, requirements, and what it attracts")
 	check(browser.find_child("RecipeNumber",true,false).position.x<20 and browser.find_child("RecipeNumber",true,false).position.y<20 and browser.find_child("RecipeAttracts",true,false).position.x>browser.find_child("RecipeRequires",true,false).position.x,"The stew number sits top-left and what it attracts sits right of the requirements")
 	check(browser.find_child("RecipePrevious",true,false).text=="▲" and browser.find_child("RecipeNext",true,false).text=="▼","Up and down arrows step through recipes")
 	browser.find_child("RecipeNext",true,false).pressed.emit();await process_frame;browser=game.content.find_child("RecipeBrowser",true,false)
 	check(game.cooking_recipe_index==1 and browser.find_child("RecipeNumber",true,false).text=="#2" and browser.find_child("RecipeName",true,false).text=="???" and browser.find_child("RecipeRequires",true,false).text=="???" and browser.find_child("RecipeAttracts",true,false).text=="???","An undiscovered stew shows ??? for its name, requirements, and attraction")
 	game.known_recipes.append("Rock Bottom Broth");game.show_cooking();await process_frame;browser=game.content.find_child("RecipeBrowser",true,false)
-	check(browser.find_child("RecipeName",true,false).text=="Rock Bottom Broth" and browser.find_child("RecipeRequires",true,false).text==game.requirement_text(GameData.RECIPES[1].need) and browser.find_child("RecipeAttracts",true,false).text=="Attracts sturdy, rocky Quiblets","A discovered stew reveals its details")
+	check(browser.find_child("RecipeName",true,false).text=="Rock Bottom Broth" and browser.find_child("RecipeRequires",true,false).text==game.requirement_text(GameData.RECIPES[1].need) and browser.find_child("RecipeAttracts",true,false).text==game.recipe_attracts_text(GameData.RECIPES[1]),"A discovered stew reveals its details")
 	browser.find_child("RecipePrevious",true,false).pressed.emit();await process_frame
 	game.step_cooking_recipe(-1);await process_frame
 	check(game.cooking_recipe_index==GameData.RECIPES.size()-1 and game.content.find_child("RecipeNumber",true,false).text=="#%d"%GameData.RECIPES.size(),"Stepping up from the first stew wraps to the last")
 	check(game.content.find_children("*","Panel",true,false).filter(func(node):return node.get_parent()==game.content.find_child("RecipeBrowser",true,false)).is_empty(),"Only one recipe is shown at a time")
+	check(game.recipe_attracts_text(GameData.RECIPES[3])=="Attracts Water type Quiblets","Water stew uses the simple type description")
+	check(game.recipe_attracts_text(GameData.RECIPES[1])=="Attracts Green and Earth type Quiblets","Mixed pools list each eligible type once")
+	check(game.recipe_attracts_text(GameData.RECIPES[0])=="Attracts all types of Quiblets","Plain stew describes all types compactly")
 	var species_names:Array=[]
 	for entry in GameData.SPECIES:species_names.append(str(entry.name))
 	for stew in GameData.RECIPES:
 		var hint:String=game.recipe_attracts_text(stew)
-		check(hint.begins_with("Attracts ") and not species_names.any(func(name):return hint.contains(name)),"Every recipe's attraction hint is generic and names no species: "+stew.name)
+		check(hint.begins_with("Attracts ") and not species_names.any(func(name):return hint.contains(name)) and (hint=="Attracts all types of Quiblets" or stew.pool.all(func(index):return hint.contains(str(GameData.species(int(index)).element)))),"Every recipe describes its eligible types without species names: "+stew.name)
 	# Spices season arrivals with small permanent stat bonuses scaled by quality.
 	var hot_great:Dictionary=GameData.spice_stat_bonuses("Hot Flakes","great");var hot_basic:Dictionary=GameData.spice_stat_bonuses("Hot Flakes","basic");var hot_special:Dictionary=GameData.spice_stat_bonuses("Hot Flakes","special")
 	check(is_equal_approx(float(hot_great.get("attack",0.0)),.04) and is_equal_approx(float(hot_basic.get("attack",0.0)),.014) and is_equal_approx(float(hot_special.get("attack",0.0)),.06),"Hot Flakes stat bonus should scale with spice quality")
@@ -159,16 +162,36 @@ func run()->void:
 	game.pending_stew.clear()
 	# Filled leftover jars are visible under Resources and can be recycled there.
 	game.leftovers["Plain Stew"]=2;game.show_resources();await process_frame
-	var jar_rows:Array=game.content.find_children("LeftoverRow","",true,false);var recycle_buttons:Array=game.content.find_children("RecycleLeftovers","",true,false)
-	check(jar_rows.size()==1 and recycle_buttons.size()==1 and jar_rows[0].find_children("*","Label",true,false).any(func(entry):return entry.text=="× 2"),"Resources should list stored leftovers with their count and a recycle button")
+	var jar_cards:Array=game.content.find_children("ResourceLeftoverCard_*","",true,false)
+	check(jar_cards.size()==1 and jar_cards[0].find_children("*","Label",true,false).any(func(entry):return entry.text=="2"),"Resources should list a stored leftover as its own card showing the count")
+	# Clicking it shows its info and a recycle button in the shared info panel.
+	game.select_resource_item("Leftover:Plain Stew");await process_frame
+	var recycle_buttons:Array=game.content.find_children("RecycleLeftovers","",true,false)
+	check(recycle_buttons.size()==1,"Selecting a leftover offers a recycle button")
 	var ingredient_total_before:int=0
 	for name in game.ingredients:ingredient_total_before+=int(game.ingredients[name])
 	recycle_buttons[0].pressed.emit();await process_frame
 	var ingredient_total_after:int=0
 	for name in game.ingredients:ingredient_total_after+=int(game.ingredients[name])
 	var recovered:int=ingredient_total_after-ingredient_total_before
-	check(game.leftovers["Plain Stew"]==1 and recovered>=2 and recovered<=4 and game.screen=="inventory" and game.content.find_children("LeftoverRow","",true,false).size()==1,"Recycling from Resources should spend one jar, return two to four ingredients, and stay on Resources")
+	check(game.leftovers["Plain Stew"]==1 and recovered>=2 and recovered<=4 and game.screen=="inventory" and game.content.find_children("ResourceLeftoverCard_*","",true,false).size()==1,"Recycling from Resources should spend one jar, return two to four ingredients, and stay on Resources")
 	game.leftovers["Plain Stew"]=0;game.show_resources();await process_frame
-	check(game.content.find_children("LeftoverRow","",true,false).is_empty(),"Empty leftover stock should not list a jar")
+	check(game.content.find_children("ResourceLeftoverCard_*","",true,false).is_empty(),"Empty leftover stock should not list a jar card")
+	# Quick pot actions: Auto Set fills empty ingredient slots, Remove All clears the pot.
+	for ingredient_name in ["Bumbleberry","Emberpepper","Dewmelon","Knobroot","Curlcap","Stonebean"]:game.ingredients[ingredient_name]=9;game.unlocked_ingredients.append(ingredient_name)
+	game.clear_all_cooking_slots(false);game.auto_fill_pot();await process_frame
+	check(game.pot_total()==5 and game.pot_slots.all(func(slot):return not slot.is_empty()),"Auto Set fills every empty pot ingredient slot")
+	game.clear_all_cooking_slots(true);check(game.pot_total()==0 and game.pot_slots.all(func(slot):return slot.is_empty()),"Remove All clears the cooking pot")
+	game.spice_mix.clear();game.spice_mix.append("Bumbleberry");game.spice_mix.append("Emberpepper");var spice_stock:int=int(game.ingredients["Bumbleberry"]);game.clear_spice_mix(true)
+	check(game.spice_mix.is_empty() and game.ingredients["Bumbleberry"]==spice_stock+1,"Remove All empties the spice bowl and refunds its resources")
+	# Power Stones: Auto Set fits the strongest loose stones, Remove All takes them all off.
+	var q:Dictionary=game.roster[0];game.ensure_quiblet_equipment(q);q.level=100;game.selected_roster=0
+	game.power_stone_inventory.clear()
+	for power in [120,640,300,90]:var st:=GameData.make_power_stone(["Health","Attack"].pick_random(),3,[]);st.power=power;game.power_stone_inventory.append(st)
+	game.auto_set_power_stones()
+	var fitted:Array=q.power_slot_stones.filter(func(s):return s is Dictionary and not s.is_empty())
+	check(fitted.size()==4 and game.power_stone_inventory.is_empty() and fitted.any(func(s):return int(s.power)==640),"Auto Set fits loose Power Stones, strongest included, into open slots")
+	game.remove_all_power_stones()
+	check(q.power_slot_stones.all(func(s):return not (s is Dictionary and not s.is_empty())) and game.power_stone_inventory.size()==4,"Remove All strips every fitted Power Stone back to inventory")
 	print("QUIBLETS_COOKING_QUALITY_OK checks=",checks," failures=",failures)
 	quit(0 if failures==0 else 1)

@@ -19,8 +19,12 @@ func run()->void:
 	# Every special item is either usable from the USE screen or used in place.
 	for item in game.special_items:check(game.item_use_screen_supported(item) or game.SPECIAL_ITEM_USAGE.has(item),"Special item has no way to be used: "+str(item))
 	game.show_resources();await process_frame
-	var use_buttons:Array=game.content.find_children("UseSpecialItem","",true,false)
-	check(use_buttons.size()==game.QUIBLET_ITEMS.size() and use_buttons.all(func(button):return not button.disabled),"Resources should offer a USE button for every screen-usable item that is owned")
+	check(game.content.find_children("ResourceItemCard_*","",true,false).size()==game.special_items.size(),"Resources lists every special item as a compact card")
+	# Selecting a screen-usable owned item shows an enabled USE button in the info panel.
+	for item in game.QUIBLET_ITEMS:
+		game.select_resource_item(item);await process_frame
+		var use_button=game.content.find_child("UseSpecialItem",true,false)
+		check(use_button!=null and not use_button.disabled,"Selecting owned %s offers an enabled USE button"%item)
 	# Fixture Quiblet: three moves, one remembered move, a fitted stone.
 	var q:Dictionary=game.roster[0];q.level=10;q.exp=0;q.prodigy=false;q.health_charms=0;q.attack_charms=0;q.flex_health=0;q.flex_attack=0
 	q.moves=[{"name":"Water Jet","slots":2,"stones":["echo"]},{"name":"Water Shot","slots":1,"stones":[]},{"name":"Bubble Shot","slots":1,"stones":[]}];q.memory=["Water Jet","Water Shot","Bubble Shot","Bubble Trap"]

@@ -172,11 +172,11 @@ func _initialize() -> void:
 		game.show_quiblet_edit();await process_frame
 		var layout_icons:Array=game.content.find_children("EditableMoveIcon*","",true,false);var layout_rows:={}
 		for icon in layout_icons:layout_rows[icon.position.y]=true
-		assert(layout_rows.size()==[1,2,4][layout_index],"Move groups should wrap into one, two, or four rows according to their unlocked slots")
+		assert(layout_rows.size()==[1,3,4][layout_index],"Move groups should wrap into one, three, or four rows according to their unlocked slots")
 		var layout_controls:Array=layout_icons+game.content.find_children("MoveStoneSlot*","",true,false)
 		for control_index in layout_controls.size():
 			var control_rect:Rect2=layout_controls[control_index].get_rect()
-			assert(control_rect.position.x>=20 and control_rect.end.x<=800,"Move groups should stay inside the equipment menu")
+			assert(control_rect.position.x>=20 and control_rect.end.x<=600,"Move groups should stay inside the equipment menu")
 			for next_control in range(control_index+1,layout_controls.size()):assert(not control_rect.intersects(layout_controls[next_control].get_rect()),"Packed move icons and slots must not overlap")
 		var fitted_power_grid:Control=game.content.find_child("PowerStoneGrid",true,false)
 		assert(fitted_power_grid.position.x==20 and fitted_power_grid.position.y+fitted_power_grid.size.y*fitted_power_grid.scale.y<=452.1,"The left-aligned Power Stone grid should stay below all move rows and inside the menu")
@@ -203,7 +203,7 @@ func _initialize() -> void:
 	assert(game.move_stone_display_texture("link_from:Water Burst").resource_path=="res://textures/MoveStones/LinkStoneOcupied.png" and game.move_stone_display_texture("link:Bubble Shot").resource_path==GameData.stone_info("link").texture,"Only the destination side of a linked move should use the occupied Link Stone texture")
 	assert(game.roster[game.selected_roster].power_slot_types.all(func(value):return value in ["Health","Attack","Flex"]),"Every power slot has a fixed Health, Attack, or Flex type")
 	var inventory_cards:Array=game.content.find_children("StoneInventoryCard*","",true,false)
-	assert(inventory_cards.size()==4,"The equipment list should include owned power and Move Stones")
+	assert(inventory_cards.size()==2,"The Health tab should list owned Health stones")
 	for inventory_card in inventory_cards:
 		var stone_preview:Control=inventory_card.create_stone_drag_preview()
 		assert(not stone_preview is Panel and stone_preview.find_children("*","Panel",true,false).is_empty() and stone_preview.modulate.a==1.0,"Both Power and Move Stone inventory drags must show only opaque stone art without a white card behind it")
@@ -214,8 +214,8 @@ func _initialize() -> void:
 			var power_drag_icon:Control=stone_preview.get_child(0)
 			assert(power_drag_icon.position+power_drag_icon.size*.5==Vector2.ZERO and power_drag_icon.stone.power==inventory_card.item_data.power,"Inventory Power Stone drag previews must center the assembled stone on the cursor")
 		stone_preview.free()
-	assert(inventory_cards.all(func(card):return card.size==game.stone_card_size() and card.size.y==74 and card.size.x>74 and card.find_children("*","Label",true,false).is_empty()) and game.content.find_child("StoneIconGrid",true,false).size.x==game.STONE_GRID_WIDTH and game.stone_card_size().x*4+30<=game.STONE_GRID_WIDTH and game.content.find_child("StoneInventory",true,false).find_children("*","ScrollContainer",true,false).is_empty(),"The stone inventory should contain only fixed icon squares and no scrolling list")
-	assert(inventory_cards[0].item_data.stone_type=="Health" and inventory_cards[0].item_data.power==50 and inventory_cards[1].item_data.power==20 and inventory_cards[2].item_data.stone_type=="Attack","Power Stones should sort Health first, Attack second, and highest value first within each type")
+	assert(inventory_cards.all(func(card):return card.size.y==74 and card.size.x>74 and card.find_children("*","Label",true,false).is_empty()) and game.content.find_child("StoneIconGrid",true,false).columns==6,"The expanded stone inventory should fit six columns of icons")
+	assert(inventory_cards.all(func(card):return card.item_data.stone_type=="Health") and inventory_cards[0].item_data.power==50 and inventory_cards[1].item_data.power==20,"Health stones sort highest power first within their tab")
 	var health_slot:int=GameData.first_power_slot_accepting(game.roster[game.selected_roster],"Health");var health_slot_type:String=game.roster[game.selected_roster].power_slot_types[health_slot]
 	var power_count_before:int=game.power_stone_inventory.size();game.equip_stone_from_inventory("power",health_slot,-1,inventory_cards[0].item_data);await process_frame
 	assert(game.roster[game.selected_roster].power_slot_types[health_slot]==health_slot_type and game.roster[game.selected_roster].power_slot_stones[health_slot].power==50 and game.power_stone_inventory.size()==power_count_before-1,"Dropping into an unlocked compatible power slot should equip the stone without changing the slot's fixed type")
@@ -236,14 +236,14 @@ func _initialize() -> void:
 	assert(equipped_drag_icon.position+equipped_drag_icon.size*.5==Vector2.ZERO,"Equipped Move Stone drag previews must also center the stone on the cursor")
 	move_stone_drag_preview.free()
 	game.finish_equipment_drag();await process_frame
-	game.move_stone_inventory["echo"]=20;game.stone_inventory_page=0;game.show_quiblet_edit();await process_frame
+	game.move_stone_inventory["echo"]=20;game.stone_inventory_tab="Moves";game.stone_inventory_page=0;game.show_quiblet_edit();await process_frame
 	var stone_panel:Panel=game.content.find_child("StoneInventory",true,false);var stone_dots:Label=stone_panel.find_child("PageDots",true,false);var stone_next:Button=stone_panel.find_child("NextPage",true,false)
-	assert(game.content.find_children("StoneInventoryCard*","",true,false).size()==16 and stone_dots.text.contains("○") and not stone_next.disabled,"A full stone page should show sixteen icon squares and multiple page dots")
-	stone_next.pressed.emit();await process_frame;assert(game.stone_inventory_page==1 and game.content.find_children("StoneInventoryCard*","",true,false).size()==7,"The stone next-page arrow should open the remaining icon squares")
+	assert(game.content.find_children("StoneInventoryCard*","",true,false).size()==18 and stone_dots.text.contains("○") and not stone_next.disabled,"A full stone page should show eighteen icon squares and multiple page dots")
+	stone_next.pressed.emit();await process_frame;assert(game.stone_inventory_page==1 and game.content.find_children("StoneInventoryCard*","",true,false).size()==2,"The stone next-page arrow should open the remaining icon squares")
 	game.move_stone_inventory["echo"]=1;game.stone_inventory_page=0;game.show_quiblet_edit();await process_frame
 	var sharing_info:Dictionary=GameData.stone_info("sharing");game.select_inventory_stone({"kind":"move_stone","effect":"sharing","display_name":sharing_info.name});await process_frame
 	var stone_detail_title:Label=game.content.find_child("StoneDetailTitle",true,false);var stone_detail_description:RichTextLabel=game.content.find_child("StoneDetailDescription",true,false)
-	assert(stone_detail_title.text=="Sharing Stone" and stone_detail_description.autowrap_mode!=TextServer.AUTOWRAP_OFF and stone_detail_description.size.x==270 and not stone_detail_description.scroll_active,"Move Stone details should use the full Stone name and wrap descriptions inside the menu")
+	assert(stone_detail_title.text=="Sharing Stone" and stone_detail_description.autowrap_mode!=TextServer.AUTOWRAP_OFF and stone_detail_description.size.x==482 and not stone_detail_description.scroll_active,"Move Stone details should use the full Stone name and wrap descriptions inside the menu")
 	game.selected_inventory_item.clear();game.show_quiblet_edit();await process_frame
 	var source_counts:=image_color_counts(load("res://textures/UI/MoveStoneSlot.png").get_image())
 	var projectile_entry:Dictionary=game.roster[game.selected_roster].moves[0]
@@ -256,9 +256,10 @@ func _initialize() -> void:
 		else:assert(int(projectile_counts.get(rgb_key,0))==0,"Incompatible marker retained its color: "+effect)
 	game.show_resources()
 	await process_frame
-	var resource_icons:Array=game.content.find_children("ResourceIngredientIcon","Control",true,false)
-	assert(resource_icons.size()==GameData.INGREDIENTS.size(),"Every resource card should have one bounded icon")
-	for resource_icon in resource_icons:assert(resource_icon.size==Vector2(40,54),"Textured resources must stay inside the resource-card icon area")
+	var resource_cards:Array=game.content.find_children("*","IngredientDragCard",true,false)
+	assert(resource_cards.size()==GameData.INGREDIENTS.size(),"Resources should list every ingredient as a drag card, like Cooking")
+	game.select_cooking_ingredient("Bumbleberry");await process_frame
+	assert(game.content.find_child("SelectedIngredientIcon",true,false)!=null,"Clicking a resource shows its info in the shared panel")
 	game.show_cooking()
 	await process_frame
 	var cooking_back:TextureButton=game.content.find_child("BackButton",true,false)
@@ -342,25 +343,24 @@ func _initialize() -> void:
 	# The spice workshop: five drag slots, an info panel, and spices hidden until made.
 	game.clear_spice_mix(false);game.spice_mix.clear();game.unlocked_spices.erase("Rare Spice");game.show_spice_workshop();await process_frame
 	assert(game.content.find_children("SpiceMixSlot*","",true,false).size()==5,"The mixing bowl should have five drag slots")
-	var rare_row:int=GameData.SPICES.keys().find("Rare Spice");var locked_row:Panel=game.content.find_child("SpiceGuideRow%d"%rare_row,true,false)
-	assert(locked_row.find_children("*","Label",true,false).any(func(l):return l.text=="???"),"An unmade spice hides its details behind ???")
+	assert(game.content.find_child("SpiceRecipeBrowser",true,false)!=null and game.content.find_child("OwnedSpices",true,false)!=null,"The workshop has a recipe viewer and an owned tier list")
 	var rare_before:int=game.spice_inventory["Rare Spice"]["special"]
 	var plum_before:int=game.ingredients["Sunplum"];var spark_before:int=game.ingredients["Sparkfruit"];var brine_before:int=game.ingredients["Brinepod"]
 	# Dragging a resource in consumes it immediately, like the cooking pot.
 	game.place_spice_ingredient(0,"Sunplum");game.place_spice_ingredient(1,"Sparkfruit");game.place_spice_ingredient(2,"Brinepod");await process_frame
 	assert(game.spice_mix.size()==3 and game.ingredients["Sunplum"]==plum_before-1 and game.ingredients["Sparkfruit"]==spark_before-1 and game.ingredients["Brinepod"]==brine_before-1,"Placing resources should consume one of each on the spot")
-	assert(GameData.choose_spice(game.spice_mix).name=="Rare Spice" and GameData.spice_quality(game.spice_mix)=="special","High-tier rare mixture should preview Special Rare Spice")
+	assert(GameData.choose_spice(game.spice_mix).is_empty(),"Three ingredients cannot produce a spice")
 	game.select_cooking_ingredient("Sunplum");await process_frame
 	assert(game.content.find_child("SelectedIngredientIcon",true,false)!=null,"Clicking a resource shows its info panel")
 	# Detaching a bowl slot refunds the resource.
 	game.detach_spice_ingredient_for_drag(2);await process_frame
 	assert(game.spice_mix.size()==2 and game.ingredients["Brinepod"]==brine_before,"Dragging a resource out of the bowl refunds it")
-	game.place_spice_ingredient(2,"Brinepod")
+	game.place_spice_ingredient(2,"Brinepod");game.place_spice_ingredient(3,"Sunplum");game.place_spice_ingredient(4,"Sparkfruit")
+	assert(GameData.choose_spice(game.spice_mix).name=="Rare Spice","Five matching ingredients produce Rare Spice")
 	game.craft_spice();await process_frame
 	assert(game.spice_inventory["Rare Spice"]["special"]==rare_before+1 and game.unlocked_spices.has("Rare Spice"),"Crafting should bank the seasoning by quality and unlock it")
-	assert(game.ingredients["Sunplum"]==plum_before-1 and game.ingredients["Sparkfruit"]==spark_before-1 and game.ingredients["Brinepod"]==brine_before-1 and game.spice_mix.is_empty(),"Crafting consumes only what was placed and empties the bowl")
-	var known_row:Panel=game.content.find_child("SpiceGuideRow%d"%rare_row,true,false)
-	assert(known_row.find_children("*","Label",true,false).any(func(l):return l.text=="Rare Spice"),"A crafted spice reveals its name and requirements")
+	assert(game.ingredients["Sunplum"]==plum_before-2 and game.ingredients["Sparkfruit"]==spark_before-2 and game.ingredients["Brinepod"]==brine_before-1 and game.spice_mix.is_empty(),"Crafting consumes only what was placed and empties the bowl")
+	assert(game.content.find_child("OwnedSpices",true,false).find_children("*","Panel",true,false).any(func(card):return card is CookingItemCard and card.drag_payload.name=="Rare Spice"),"The crafted spice appears in the owned tier list")
 	var plain_ingredients:=["Bumbleberry","Emberpepper","Dewmelon","Knobroot","Curlcap"]
 	game.leftovers.erase("Plain Stew");game.show_cooking()
 	for i in plain_ingredients.size():game.assign_pot_slot(i,plain_ingredients[i])

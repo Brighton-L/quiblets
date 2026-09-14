@@ -357,7 +357,11 @@ signal stuck(actor:QuibletActor3D)
 var stuck_timer:=0.0
 var progress_anchor:=Vector3.ZERO
 
+func floats_over_water()->bool:
+	return float(GameData.species(int(data.species)).get("model_hover",0.0))>0.0
+
 func command(point:Vector3)->void:
+	set_meta("auto_route",false)
 	# Any fresh command (a player click, exploration, or a new chase route) ends a
 	# previous chase route; the expedition re-marks its own routes after this.
 	if has_meta("chase_routed"):set_meta("chase_routed",false)

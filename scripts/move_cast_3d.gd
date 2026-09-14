@@ -345,7 +345,8 @@ func hit(victim,amount:float,center:Vector3=Vector3.INF,chain_depth:int=0,visite
 	var actor=source()
 	if not is_instance_valid(actor) or done or not is_instance_valid(victim) or victim.current_hp<=0:return
 	if not victim.accepts_hit_from(actor):return
-	var actual:float=victim.take_damage(amount,actor)
+	# A no-damage move (Scare) only applies its status/effect; it never hurts.
+	var actual:float=victim.take_damage(0.0 if profile.get("no_damage",false) else amount,actor)
 	if actor.current_hp>0:
 		actor.receive_shared_heal(actual*(.15*count("drain")+float(profile.get("leech",0))))
 	if victim.current_hp>0:

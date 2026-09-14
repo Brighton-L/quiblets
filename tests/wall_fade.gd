@@ -12,6 +12,9 @@ func _initialize()->void:call_deferred("run")
 
 func run()->void:
 	var e:=Expedition3D.new();e.stage_area_index=0;e.stage_node_index=1;e.stage_kind="level";e.stage_level=2;root.add_child(e);e.set_process(false);e.build_level()
+	# This test isolates the fighter line-of-sight fade; a level's own waterfalls add
+	# their own fade points, which are exercised separately.
+	e.waterfalls.clear()
 	var camera:=Camera3D.new();root.add_child(camera);e.camera=camera
 	var actor:=QuibletActor3D.new();actor.setup(GameData.make_quiblet(0,10),false,0,2);e.place_actor(actor);actor.set_physics_process(false);e.team.append(actor)
 	# The meadow's own hills are gentle, so raise an artificial ridge in the heightfield on the

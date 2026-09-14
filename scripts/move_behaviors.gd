@@ -158,7 +158,7 @@ const PROFILES:={
 	"Honk":{"mode":"area","anchor":"self","radius":3.0,"status":"weaken","status_duration":4.0,"amount":.3,"interrupt":true},
 	"Wingbeat":{"mode":"area","anchor":"self","radius":2.8,"knockback":1.8},
 	"Feather Guard":{"mode":"buff","status":"shield","duration":6.0,"amount":.4},
-	"Scare":{"mode":"area","anchor":"target","radius":1.2,"status":"confuse","status_duration":3.0,"amount":.8,"flee":true},
+	"Scare":{"mode":"area","anchor":"target","radius":1.2,"status":"confuse","status_duration":3.0,"amount":.8,"flee":true,"no_damage":true},
 	"Escort":{"mode":"buff","status":"shield","duration":6.0,"amount":.4,"ally":true},
 	"Alarm Honk":{"mode":"buff","status":"evade","duration":5.0,"amount":.35,"team":true},
 	"Peck":{"mode":"peck","radius":.9},

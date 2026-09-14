@@ -31,6 +31,11 @@ var cell:Vector2i=Vector2i.ZERO
 var max_hp:=100.0
 var hp:=100.0
 var shattered:=false
+# Whether this prop yields ingredients when harvested (plain scenery does not), and
+# whether it is a rare "rich" plant that gives a bigger, rarer bundle. Set by the
+# expedition when the prop is placed.
+var bears_fruit:=true
+var rich:=false
 var parts:Array[MeshInstance3D]=[]
 var shards:Array[Dictionary]=[]
 var colors:Array[Color]=[]
@@ -41,7 +46,7 @@ static func prop_hp(prop_kind:String,stage_level:int)->float:
 	return base*(1.8 if prop_kind=="boulder" else (1.3 if prop_kind in ["pillar","block","crystal"] else 1.0))
 
 func harvestable()->bool:
-	return HARVEST_TAGS.has(kind) and not shattered
+	return bears_fruit and HARVEST_TAGS.has(kind) and not shattered
 
 func harvest_tags()->Array:
 	return HARVEST_TAGS.get(kind,[])
@@ -71,17 +76,44 @@ func leaf_green(biome:Dictionary,index:int)->Color:
 func plain_material(color:Color)->StandardMaterial3D:
 	var mat:=StandardMaterial3D.new();mat.albedo_color=color;mat.roughness=1.0;mat.specular_mode=BaseMaterial3D.SPECULAR_DISABLED;return mat
 
-func build_big_mushroom(biome:Dictionary,rng:RandomNumberGenerator)->void:
-	var cap:Color=biome.get("accent",Color("#8bd06a"));var height:=rng.randf_range(1.3,1.9)
-	cylinder(Vector3(0,height*.5,0),.2,.26,height,Color("#f4ecd8"));ball(Vector3(0,height+.1,0),Vector3(.75,.28,.75),cap);shadow(.8)
+# A slight per-piece shift on a base colour so a cluster reads with the same
+# multi-tone shading the trees' leaves have.
+func prop_tone(base:Color,index:int)->Color:
+	var shifts:=[0.0,.12,-.10,.07,-.05]
+	var f:float=shifts[index%shifts.size()]
+	return base.lightened(f) if f>=0.0 else base.darkened(-f)
 
+# A big mushroom in the trees' style: a tapered pale stem under a rounded cap
+# built from a cluster of blobs in a few tones of the cap colour, over a shadow.
+func build_big_mushroom(biome:Dictionary,rng:RandomNumberGenerator)->void:
+	var cap:Color=biome.get("accent",Color("#8bd06a"));var height:=rng.randf_range(1.3,1.8)
+	cylinder(Vector3(0,height*.5,0),.18,.26,height,Color("#f4ecd8"))
+	var y:=height+.02
+	var blobs:Array=[[0,y+.16,0,.82,.44],[-.46,y+.02,.05,.5,.32],[.46,y+.02,-.05,.5,.32],[.05,y+.02,.44,.46,.30],[-.05,y+.02,-.44,.46,.30]]
+	for i in blobs.size():
+		var b:Array=blobs[i];ball(Vector3(b[0],b[1],b[2]),Vector3(float(b[3]),float(b[4]),float(b[3])),prop_tone(cap,i))
+	shadow(.82)
+
+# The small mushroom is the same clustered cap at a smaller scale.
 func build_mushroom(biome:Dictionary,_rng:RandomNumberGenerator)->void:
 	var cap:Color=biome.get("accent",Color("#8bd06a"))
-	cylinder(Vector3(0,.3,0),.1,.13,.6,Color("#f4ecd8"));ball(Vector3(0,.7,0),Vector3(.36,.16,.36),cap)
+	cylinder(Vector3(0,.3,0),.1,.13,.6,Color("#f4ecd8"))
+	var y:=.64
+	var blobs:Array=[[0,y+.09,0,.42,.24],[-.25,y,.03,.27,.18],[.25,y,-.03,.27,.18],[.03,y,.23,.23,.16]]
+	for i in blobs.size():
+		var b:Array=blobs[i];ball(Vector3(b[0],b[1],b[2]),Vector3(float(b[3]),float(b[4]),float(b[3])),prop_tone(cap,i))
+	shadow(.42)
 
+# A crystal in the trees' style: a cluster of angular shards of a few tones rising
+# from the ground, matte with a soft inner glow, over a shadow.
 func build_crystal(biome:Dictionary,rng:RandomNumberGenerator)->void:
 	var shine:Color=biome.get("accent",Color("#7fe0ff"))
-	var main:=cube(Vector3(0,.8,0),Vector3(.4,1.7,.4),shine,Vector3(.15,rng.randf()*TAU,.1));main.material_override.emission_enabled=true;main.material_override.emission=shine;main.material_override.emission_energy_multiplier=.5
+	var shards:Array=[[0,.85,0,.42,1.7,.14,0.0],[.30,.62,.10,.26,1.15,.35,.5],[-.28,.55,-.12,.24,1.0,-.3,-.4],[.06,.42,.30,.20,.8,.5,.9]]
+	for i in shards.size():
+		var sh:Array=shards[i]
+		var crystal:=cube(Vector3(sh[0],sh[1],sh[2]),Vector3(float(sh[3]),float(sh[4]),float(sh[3])),prop_tone(shine,i),Vector3(float(sh[5]),float(sh[6])*TAU,float(sh[5])*.6))
+		crystal.material_override.emission_enabled=true;crystal.material_override.emission=shine;crystal.material_override.emission_energy_multiplier=.45
+	shadow(.6)
 
 func build_pillar(biome:Dictionary,_rng:RandomNumberGenerator)->void:
 	cylinder(Vector3(0,1.1,0),.3,.36,2.2,biome.get("cliff",Color("#7b7f72")).lightened(.1))

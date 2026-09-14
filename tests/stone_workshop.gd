@@ -62,7 +62,7 @@ func run()->void:
 	# Revitalizer formula: max(current, round(drop average × 0.9)).
 	check(GameData.power_stone_drop_average(5)==590 and GameData.revitalized_power(stone("Health",100,[]),5)==531 and GameData.revitalized_power(stone("Health",600,[]),5)==600,"Revitalized power is the larger of the current power and 90% of the drop average")
 	var revived:=GameData.revitalize_power_stone(stone("Health",100,["Health"]),3)
-	check(int(revived.power)==248 and int(revived.tier)==3 and revived.bonuses==["Health"] and revived.type=="Health","Revitalizing keeps the stone and lifts its power and tier")
+	check(int(revived.power)>=248 and int(revived.power)<=253 and int(revived.tier)==3 and revived.bonuses==["Health"] and revived.type=="Health","Revitalizing keeps the stone and lifts its power and tier")
 	# Converter keeps everything but the type.
 	var converted:=GameData.convert_power_stone(a)
 	check(converted.type=="Health" and int(converted.power)==410 and converted.bonuses==a.bonuses and converted.quality==a.quality,"Converting swaps the stat type only")
@@ -87,10 +87,15 @@ func run()->void:
 	game.workshop_pick_stone(0);game.workshop_pick_stone(1);game.workshop_pick_stone(4);await process_frame
 	check(game.workshop_problem()!="" and game.content.find_child("WorkshopApply",true,false).disabled,"Mixed types must leave the Combiner disabled")
 	game.workshop_pick_stone(4);game.workshop_pick_stone(2);game.workshop_pick_stone(3);await process_frame
+	check(game.workshop_problem()!="" and game.content.find_child("WorkshopApply",true,false).disabled,"Valid inputs still require an inserted charm")
+	game.special_items["Combiner Charm"]=2;game.show_stone_workshop();await process_frame
+	game.content.find_child("CombinerCharmSlot",true,false).pressed.emit();await process_frame
+	check(game.special_items["Combiner Charm"]==2,"Inserting reserves the charm without spending it")
 	check(game.workshop_problem()=="" and not game.content.find_child("WorkshopApply",true,false).disabled and game.content.find_child("WorkshopResult",true,false)!=null,"Four valid inputs enable the Combiner and preview the result")
 	game.workshop_pick_stone(5)
 	check(game.stone_workshop.selected.size()==4,"A fifth input is refused")
 	game.apply_stone_workshop();await process_frame
+	check(game.special_items["Combiner Charm"]==1 and not game.stone_workshop.charm_inserted,"A combination consumes exactly one charm and empties its slot")
 	check(game.power_stone_inventory.size()==3 and game.power_stone_inventory[2].quality=="Obsidian" and int(game.power_stone_inventory[2].power)==118 and game.stone_workshop.selected.is_empty(),"Combining consumes the inputs and adds the Obsidian result")
 	# Revitalizer uses the highest reached node's loot tier.
 	game.area_progress.fill(0);game.area_progress[0]=7
@@ -105,7 +110,7 @@ func run()->void:
 	check(game.workshop_problem()=="" if expected>90 else game.workshop_problem()!="","Revitalizer availability follows the formula")
 	if expected>90:
 		game.apply_stone_workshop();await process_frame
-		check(int(game.power_stone_inventory[1].power)==expected and game.power_stone_inventory[1].bonuses.is_empty() and game.stone_workshop.selected.is_empty(),"Revitalizing sets the formula power")
+		check(int(game.power_stone_inventory[1].power)>=expected and int(game.power_stone_inventory[1].power)<=expected+5 and game.power_stone_inventory[1].bonuses.is_empty() and game.stone_workshop.selected.is_empty(),"Revitalizing sets the formula power")
 		game.workshop_pick_stone(1);check(game.workshop_problem()!="","A revitalized stone cannot be revitalized again at the same tier")
 	# Converter.
 	game.set_stone_workshop_mode("convert");game.workshop_pick_stone(0);await process_frame
