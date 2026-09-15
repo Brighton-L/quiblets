@@ -1,5 +1,7 @@
 extends Node3D
 
+const MODEL_SCALE:=1.3
+
 var terrain:Node3D
 var residents:Array[Dictionary]=[]
 var grid:=AStarGrid2D.new()
@@ -33,15 +35,15 @@ func sync_roster(roster:Array)->void:
 		if not existing.is_empty():
 			var resident:Dictionary=existing[0]
 			if int(resident.species)!=int(q.species):
-				resident.model.queue_free();var model:=QuibletModel3D.new();model.setup(int(q.species),false,.65);resident.body.add_child(model);resident.model=model;resident.species=int(q.species)
+				resident.model.queue_free();var model:=QuibletModel3D.new();model.setup(int(q.species),false,MODEL_SCALE);resident.body.add_child(model);resident.model=model;resident.species=int(q.species)
 			continue
 		var cell:=spots[rng.randi_range(0,spots.size()-1)]
 		for attempt in 80:
 			cell=spots[rng.randi_range(0,spots.size()-1)]
-			if residents.all(func(resident):return Vector2(resident.body.position.x,resident.body.position.z).distance_to(Vector2(cell)*.75)>1.3):break
+			if residents.all(func(resident):return Vector2(resident.body.position.x,resident.body.position.z).distance_to(Vector2(cell)*.75)>2.6):break
 		var point:=Vector2(cell)*.75
 		var body:=Node3D.new();add_child(body);body.position=Vector3(point.x,resident_height(point,int(q.species)),point.y)
-		var model:=QuibletModel3D.new();model.setup(int(q.species),false,.65);body.add_child(model)
+		var model:=QuibletModel3D.new();model.setup(int(q.species),false,MODEL_SCALE);body.add_child(model)
 		adopt_resident(q,body,model)
 
 func adopt_resident(q:Dictionary,body:Node3D,model:QuibletModel3D)->void:

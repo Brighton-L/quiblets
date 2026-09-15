@@ -52,6 +52,7 @@ var cache_node:Node3D
 var treasure_keys:=0
 var extra_specials:Array[String]=[]
 var ended:=false
+var command_ring_arrivals:Array[Dictionary]=[]
 
 # Route map. A stage is a chain of clearings ("zones") joined by winding
 # corridors, carved from a one-unit tile grid. Everything off the route rises
@@ -976,8 +977,8 @@ func build_distant_terrain()->void:
 
 # --- Terrain shader and occlusion fading ----------------------------------------
 # Vertex colours carry the biome palette (authored in sRGB) modulated by a tiny
-# tiling detail texture. Any ground standing between the camera and a Quiblet
-# or enemy fades to WALL_FADE_ALPHA around the line of sight: the CPU marches
+# tiling detail texture. Ground standing between the camera and an enemy
+# fades to WALL_FADE_ALPHA around the line of sight: the CPU marches
 # each fighter's line to the camera through the heightfield and ramps a
 # per-fighter weight smoothly. The terrain draws in two passes so the water in
 # the troughs is never overdrawn: the opaque pass cuts a hole wherever the
@@ -1065,7 +1066,8 @@ func point_occluded_by_terrain(from:Vector3)->bool:
 func update_wall_fades(delta:float)->void:
 	if terrain_material==null or not is_instance_valid(camera):return
 	var points:=PackedVector3Array();var weights:=PackedFloat32Array();var seen:={}
-	for actor in team+enemies:
+	# Player Quiblets never make the terrain transparent.
+	for actor in enemies:
 		if not is_instance_valid(actor):continue
 		var id:int=actor.get_instance_id();seen[id]=true
 		var target:float=1.0 if actor.current_hp>0 and occluded_by_terrain(actor) else 0.0
@@ -1460,43 +1462,69 @@ func build_clouds(rng:RandomNumberGenerator)->void:
 			var ball:=MeshInstance3D.new();ball.mesh=GameData.leaf_sphere();ball.scale=Vector3.ONE*float(puff[3])*2.0*puff_scale;ball.position=Vector3(puff[0],puff[1],puff[2])*puff_scale;ball.material_override=material;ball.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF;cloud.add_child(ball)
 		clouds.append({"node":cloud,"material":material,"opacity":1.0,"speed":rng.randf_range(.12,.2)*(1.0 if i%2==0 else -1.0)})
 
-# Fade the whole cloud when a visible puff lies between the camera and the
-# playable ground. Projecting rays also handles orthographic cameras and pans.
-func cloud_blocks_camera(node:Node3D)->bool:
-	if not is_instance_valid(camera):return false
+# Only gameplay objects trigger fading; empty terrain and decorative scenery
+# remain covered. Bounds are cached on each model, while transforms stay live.
+func cloud_important_points()->PackedVector3Array:
+	var points:=PackedVector3Array()
+	if not is_instance_valid(camera):return points
+	var targets:Array=[]
+	for actor in team+enemies:
+		if is_instance_valid(actor) and is_instance_valid(actor.model):targets.append(actor.model)
+	for patch in berry_nodes:
+		if is_instance_valid(patch):targets.append(patch)
+	for prop in props:
+		if is_instance_valid(prop) and prop.harvestable():targets.append(prop)
+	if is_instance_valid(cache_node):targets.append(cache_node)
+	var ring:=get_node_or_null("CommandRing")
+	if ring!=null:targets.append(ring)
 	var view:=camera.get_viewport().get_visible_rect()
+	for target in targets:
+		if not target.is_visible_in_tree() or target.is_queued_for_deletion():continue
+		if not target.has_meta("cloud_target_bounds"):
+			var meshes:Array=target.find_children("*","MeshInstance3D",true,false)
+			if target is MeshInstance3D:meshes.append(target)
+			var bounds:=AABB();var started:=false
+			for mesh in meshes:
+				if mesh.mesh==null:continue
+				var local_box:AABB=(target.global_transform.affine_inverse()*mesh.global_transform)*mesh.get_aabb()
+				bounds=local_box if not started else bounds.merge(local_box);started=true
+			target.set_meta("cloud_target_bounds",bounds)
+		var bounds:AABB=target.global_transform*target.get_meta("cloud_target_bounds")
+		var center:=bounds.get_center()
+		# Test centre and visible edges so a puff covering part of a model counts.
+		var horizontal:float=maxf(bounds.size.x,bounds.size.z)*.35
+		var vertical:float=bounds.size.y*.35
+		for offset in [Vector3.ZERO,camera.global_basis.x*horizontal,-camera.global_basis.x*horizontal,camera.global_basis.y*vertical,-camera.global_basis.y*vertical]:
+			var point:Vector3=center+offset
+			if not camera.is_position_behind(point) and view.has_point(camera.unproject_position(point)):points.append(point)
+	return points
+
+func cloud_blocks_camera(node:Node3D,important_points:Variant=null)->bool:
+	if not is_instance_valid(camera):return false
+	if important_points==null:important_points=cloud_important_points()
 	for puff in node.get_children():
-		if not puff is MeshInstance3D:continue
+		if not puff is MeshInstance3D or puff.mesh==null:continue
 		var center:Vector3=puff.global_position
-		var radius:float=puff.mesh.get_aabb().size.x*.5*puff.global_basis.get_scale().x
-		if camera.global_position.distance_to(center)<radius:return true
-		if camera.is_position_behind(center):continue
-		var projected:=camera.unproject_position(center)
-		var screen_radius:=projected.distance_to(camera.unproject_position(center+camera.global_basis.x*radius))
-		if not view.intersects(Rect2(projected-Vector2.ONE*screen_radius,Vector2.ONE*screen_radius*2.0)):continue
-		# Sample the puff's centre and edges so the fade starts before its centre
-		# crosses the field edge, instead of popping as the cloud drifts past it.
-		for offset in [Vector2.ZERO,Vector2.LEFT,Vector2.RIGHT,Vector2.UP,Vector2.DOWN]:
-			var screen_point:Vector2=projected+offset*screen_radius*.75
-			if not view.has_point(screen_point):continue
+		var radius:float=puff.mesh.get_aabb().size.x*.5*absf(puff.global_basis.get_scale().x)
+		for point in important_points:
+			var screen_point:=camera.unproject_position(point)
 			var origin:=camera.project_ray_origin(screen_point);var direction:=camera.project_ray_normal(screen_point)
-			if direction.y>=-.001:continue
-			var distance:float=-origin.y/direction.y
-			var ground:=origin+direction*distance
-			for pass_index in 2:
-				distance=(terrain_height_at(Vector2(ground.x,ground.z))-origin.y)/direction.y
-				ground=origin+direction*distance
-			if distance>origin.distance_to(center)-radius and Rect2(field_rect).has_point(Vector2(ground.x,ground.z)):return true
+			var distance:float=(point-origin).dot(direction)
+			if distance<=0.0:continue
+			var along:float=clampf((center-origin).dot(direction),0.0,distance)
+			if (origin+direction*along).distance_squared_to(center)<radius*radius:return true
 	return false
 
 func update_clouds(delta:float)->void:
+	if clouds.is_empty():return
+	var important_points:=cloud_important_points()
 	for cloud in clouds:
 		var node:Node3D=cloud.node
 		if not is_instance_valid(node):continue
 		node.position.x+=float(cloud.speed)*delta
 		if node.position.x>field_rect.end.x+6:node.position.x=field_rect.position.x-6
 		if node.position.x<field_rect.position.x-6:node.position.x=field_rect.end.x+6
-		var target:=CLOUD_BLOCKED_OPACITY if cloud_blocks_camera(node) else 1.0
+		var target:=CLOUD_BLOCKED_OPACITY if cloud_blocks_camera(node,important_points) else 1.0
 		cloud.opacity=move_toward(float(cloud.opacity),target,(1.0-CLOUD_BLOCKED_OPACITY)*delta/CLOUD_FADE_SECONDS)
 		var material:StandardMaterial3D=cloud.material;material.albedo_color=Color(1,1,1,float(cloud.opacity))
 
@@ -1792,6 +1820,7 @@ func shuffle_cells(cells:Array[Vector2i],rng:RandomNumberGenerator)->void:
 		var j:=rng.randi_range(0,i);var swap:Vector2i=cells[i];cells[i]=cells[j];cells[j]=swap
 
 func _process(delta:float)->void:
+	update_command_ring_arrivals()
 	elapsed+=delta
 	update_group_camera(delta)
 	update_wall_fades(delta)
@@ -2306,14 +2335,82 @@ func _on_move_used(_actor:QuibletActor3D,_move_name:String,_new_target:QuibletAc
 	# cosmetic projectile launched after instant damage.
 	pass
 
+# Sample the same ground surface used by movement, so raised terrain and
+# bridge clicks land beneath the cursor rather than on an invisible flat plane.
+func command_surface_height(point:Vector2)->float:
+	return maxf(terrain_height_at(point),WATER_LEVEL)
+
+func ground_command_hit(origin:Vector3,direction:Vector3)->Variant:
+	var previous:=0.0
+	for step in range(1,801):
+		var distance:=float(step)*.5
+		var point:=origin+direction*distance
+		if point.y<=command_surface_height(Vector2(point.x,point.z)):
+			var low:=previous;var high:=distance
+			for refinement in 12:
+				var mid:=(low+high)*.5
+				var sample:=origin+direction*mid
+				if sample.y>command_surface_height(Vector2(sample.x,sample.z)):low=mid
+				else:high=mid
+			return origin+direction*((low+high)*.5)
+		previous=distance
+	return null
+
+func update_command_ring_arrivals()->void:
+	var ring:=get_node_or_null("CommandRing")
+	if ring==null:return
+	for index in range(command_ring_arrivals.size()-1,-1,-1):
+		var arrival:Dictionary=command_ring_arrivals[index]
+		var actor=arrival.actor
+		if not is_instance_valid(actor) or actor.current_hp<=0:
+			command_ring_arrivals.remove_at(index);continue
+		var distance:float=actor.horizontal_distance(actor.position,arrival.goal)
+		# Match the movement controller's final-point tolerance, including
+		# teammates stopping slightly short when they crowd the destination.
+		if distance<.35 or (not actor.has_command and distance<1.6):
+			command_ring_arrivals.remove_at(index)
+	if command_ring_arrivals.is_empty():
+		remove_child(ring);ring.queue_free()
+
+func show_command_ring(point:Vector3)->void:
+	command_ring_arrivals.clear()
+	var active:Array=team.filter(func(actor):return is_instance_valid(actor) and actor.current_hp>0)
+	for index in active.size():
+		var actor:QuibletActor3D=active[index]
+		var goal:=point+Vector3((float(index)-float(active.size()-1)*.5)*.9,0,0)
+		if actor.has_command:goal=actor.command_path.back() if not actor.command_path.is_empty() else actor.desired_point
+		command_ring_arrivals.append({"actor":actor,"goal":goal})
+	var old:=get_node_or_null("CommandRing")
+	if old!=null:
+		remove_child(old);old.queue_free()
+	var ring:=MeshInstance3D.new();ring.name="CommandRing"
+	var mesh:=ImmediateMesh.new()
+	mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	# Each vertex rests on the surface, including on slopes and bridge arches.
+	for segment in 64:
+		var a:=TAU*float(segment)/64.0;var b:=TAU*float(segment+1)/64.0
+		for corner in [Vector2(a,.67),Vector2(b,.67),Vector2(b,.82),Vector2(a,.67),Vector2(b,.82),Vector2(a,.82)]:
+			var x:float=point.x+cos(corner.x)*corner.y
+			var z:float=point.z+sin(corner.x)*corner.y
+			mesh.surface_add_vertex(Vector3(x,command_surface_height(Vector2(x,z))+.045,z))
+	mesh.surface_end();ring.mesh=mesh
+	var material:=StandardMaterial3D.new()
+	material.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.cull_mode=BaseMaterial3D.CULL_DISABLED
+	material.albedo_color=Color.WHITE
+	ring.material_override=material
+	ring.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(ring)
+
 func _unhandled_input(event:InputEvent)->void:
 	if ended:return
 	if not is_instance_valid(camera):return
 	if event is InputEventMouseButton and event.button_index==MOUSE_BUTTON_LEFT and event.pressed:
-		var origin:=camera.project_ray_origin(event.position);var direction:=camera.project_ray_normal(event.position);var plane:=Plane(Vector3.UP,0);var hit=plane.intersects_ray(origin,direction)
+		var hit=ground_command_hit(camera.project_ray_origin(event.position),camera.project_ray_normal(event.position))
 		if hit==null:return
 		var point:Vector3=hit
-		command_team(point);get_viewport().set_input_as_handled()
+		command_team(point);show_command_ring(point);get_viewport().set_input_as_handled()
 
 func finish(victory:bool)->void:
 	if ended:return

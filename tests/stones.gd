@@ -14,8 +14,8 @@ func _initialize() -> void:
 	var user_data:=GameData.make_quiblet(0,20)
 	user_data.moves=[
 		{"name":"Water Shot","slots":6,"stones":["echo","heavy","reach","chain","split","seeking"]},
-		{"name":"Water Burst","slots":6,"stones":["rush","lingering","blast","force","drain","link:Bubble Shot"]},
-		{"name":"Bubble Shot","slots":1,"stones":["link_from:Water Burst"]},
+		{"name":"Water Burst","slots":6,"stones":["rush","lingering","blast","force","drain","link:Water Jet"]},
+		{"name":"Water Jet","slots":1,"stones":["link_from:Water Burst"]},
 		{"name":"Healing Bloom","slots":1,"stones":["sharing"]}
 	]
 	var user:=QuibletActor3D.new();user.setup(user_data);user.position=Vector3.ZERO;arena.add_child(user);user.set_physics_process(false);user.move_used.connect(_record_event)

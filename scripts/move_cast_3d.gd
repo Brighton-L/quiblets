@@ -135,8 +135,6 @@ func _ready()->void:
 		airborne_visual=orb(aim+Vector3.UP*1.8,Vector3(.55,3.5,.55));airborne_visual.rotation.z=-.8
 	if profile.get("visual","")=="vine":vine_visual=orb(origin+Vector3.UP*.7,Vector3(.1,.1,.1))
 	if mode=="heal_field":flower(origin)
-	if move_name=="Bubble Burst":
-		for i in 8:orb(origin+Vector3(cos(i*TAU/8)*radius,.6,sin(i*TAU/8)*radius),Vector3.ONE*.65,.5)
 	if move_name=="Whirlpool":
 		for visual in visuals:
 			var ring:=TorusMesh.new();ring.inner_radius=.7;ring.outer_radius=1.0;ring.rings=20;ring.ring_segments=8;visual.mesh=ring;visual.scale=Vector3(radius,.5,radius)

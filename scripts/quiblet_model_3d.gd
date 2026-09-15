@@ -1,6 +1,8 @@
 class_name QuibletModel3D
 extends Node3D
 
+const SIZE_MULTIPLIER:=.75
+
 var species_index := 0
 var enemy := false
 var body_material: StandardMaterial3D
@@ -12,7 +14,7 @@ var floating_time:=0.0
 func setup(index: int, is_enemy := false, model_scale := 1.0) -> void:
 	species_index = index
 	enemy = is_enemy
-	scale = Vector3.ONE * model_scale
+	scale = Vector3.ONE * model_scale * SIZE_MULTIPLIER
 	build_model()
 
 func animate_walking(phase:float,bounce:float,tilt:=0.0)->void:

@@ -34,9 +34,9 @@ func run()->void:
 	check(events.any(func(e):return e.name=="Water Jet" and e.echo and e.time>=stream_seconds-.1),"Echo did not repeat the entire finished stream (events: %s)"%str(events.map(func(e):return "%s%s@%.2f"%[e.name,"(echo)" if e.echo else "",e.time])))
 	check(events.any(func(e):return e.name=="Water Shot" and is_equal_approx(e.strength,.65*1.35)),"Link did not apply the destination's Heavy Stone at reduced strength")
 	check(user.move_cooldowns[1]==30,"Link changed the destination's existing cooldown")
-	fixture([{"name":"Water Shot","slots":2,"stones":["link:Bubble Shot","link_from:Leaf Shot"]},{"name":"Bubble Shot","slots":2,"stones":["link_from:Water Shot","link:Leaf Shot"]},{"name":"Leaf Shot","slots":2,"stones":["link_from:Bubble Shot","link:Water Shot"]}])
+	fixture([{"name":"Water Shot","slots":2,"stones":["link:Hydro Shot","link_from:Leaf Shot"]},{"name":"Hydro Shot","slots":2,"stones":["link_from:Water Shot","link:Leaf Shot"]},{"name":"Leaf Shot","slots":2,"stones":["link_from:Hydro Shot","link:Water Shot"]}])
 	user.use_move(0,enemy);await create_timer(1.8).timeout
-	check(events.size()==3 and events[0].name=="Water Shot" and events[1].name=="Bubble Shot" and events[2].name=="Leaf Shot","Link chain revisited a move or failed to reach all three moves")
+	check(events.size()==3 and events[0].name=="Water Shot" and events[1].name=="Hydro Shot" and events[2].name=="Leaf Shot","Link chain revisited a move or failed to reach all three moves")
 	# A move plays out in full once started: a stun landing while it is in flight
 	# neither drops nor delays the Echo and the Link.
 	fixture([{"name":"Rain Drop","slots":2,"stones":["echo","link:Water Shot"]},{"name":"Water Shot","slots":2,"stones":["reach","link_from:Rain Drop"]}])
@@ -106,7 +106,7 @@ func run()->void:
 	var team:Array=[]
 	for i in 5:
 		var q:=GameData.make_quiblet(i,20)
-		var names:Array=["Firestorm","Whirlpool","Water Jet","Healing Bloom"] if i%2==0 else ["Flame Dash","Bubble Trap","Ignite","Combust"]
+		var names:Array=["Firestorm","Whirlpool","Water Jet","Healing Bloom"] if i%2==0 else ["Flame Dash","Whirlpool","Ignite","Combust"]
 		q.moves=[]
 		for name in names:q.moves.append({"name":name,"slots":2,"stones":[]})
 		team.append(q)

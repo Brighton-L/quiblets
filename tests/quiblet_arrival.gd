@@ -15,17 +15,29 @@ func run()->void:
 	game.pending_stew={"recipe":"Test Stew","quality":"Good","score":10,"arrivals":arrivals,"arrival_names":["Plip","Bloomie"],"arrival_species":[0,5],"leftovers":0,"boosted":false,"expeditions_remaining":1}
 	assert(game.advance_pending_stew());assert(game.roster.size()==initial_count+2)
 	assert(not game.quiblet_arrival_music.playing)
-	game.show_camp();await process_frame;await process_frame
+	game.show_camp();await create_timer(.4).timeout
+	assert(game.screen=="camp" and not is_instance_valid(game.arrival_sequence),"Returning to camp must wait for collection")
+	assert(game.world_root.get_node("CookingReadyIndicator").visible,"Ready stew stays marked until clicked")
+	game.show_team();game.show_camp();await process_frame
+	assert(not is_instance_valid(game.arrival_sequence),"Returning from menus must not collect stew")
+	game.open_cooking_pot();await process_frame;await process_frame
 	assert(game.screen=="quiblet_arrival" and is_instance_valid(game.arrival_sequence))
+	assert(game.arrival_sequence.visitors.size()==2,"All visitors must enter together")
+	var second_actor:Node3D=game.arrival_sequence.visitors[1].actor
+	var second_start:Vector3=second_actor.position
 	assert(game.content.find_child("CampTeamPanel",true,false)==null)
 	assert(game.world_root.get_node("CampResidents").visible and game.world_root.get_node("CampResidents").is_processing())
 	assert(not game.world_root.get_node("CookingReadyIndicator").visible)
 	game.arrival_sequence.advance();assert(game.arrival_sequence.index==0)
 	for visitor in 2:
 		var sequence=game.arrival_sequence
-		var deadline:=Time.get_ticks_msec()+12000
+		var deadline:=Time.get_ticks_msec()+(12000 if visitor==0 else 3000)
 		while not sequence.can_continue and Time.get_ticks_msec()<deadline:await process_frame
 		assert(sequence.can_continue,"Arrival must finish its reveal")
+		if visitor==0:
+			assert(second_actor.position.distance_to(second_start)>10,"Second visitor must walk in with the first")
+			assert(second_actor.position.distance_to(sequence.actor.position)>1,"Visitors should stand separately beside the pot")
+		else:assert(sequence.actor==second_actor,"Next card must use the visitor already beside the pot")
 		assert(sequence.cards.find_child("ResultEquipment",true,false)!=null)
 		assert(sequence.cards.find_child("ResultName",true,false).text==GameData.display_name(arrivals[visitor]))
 		assert(game.quiblet_arrival_music.playing)

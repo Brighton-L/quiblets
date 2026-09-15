@@ -4,7 +4,7 @@ func _initialize() -> void:
 	var expected_species := ["Plip","Swellit","Spriggle","Frondle","Vinee","Bloomie","Sparko","Scorchit","Fistor","Carapuff","Burlow","Stackle","Shelter","Mimbit","Pidler","Gloopit","Blubber","Cysicle","Gagglet","Gaggle"]
 	var expected_types := ["Water","Water","Green","Green","Green","Green","Fire","Fire","Psychic","Psychic","Earth","Earth","Normal","Normal","Normal","Poison","Air","Ice","Air","Air"]
 	var expected_learnsets := [
-		["Water Shot","Bubble Shot","Splash Dash","Backwash","Water Burst","Rain Drop","Spray"],
+		["Water Shot","Water Jet","Splash Dash","Backwash","Water Burst","Rain Drop","Spray"],
 		["Water Shot","Water Jet","Hydro Shot","Breaker","Riptide","Undertow","Whirlpool","Wave Rush","Tidal Wave","Water Spout","Downpour","Tsunami"],
 		["Leaf Shot","Seed Pop","Sprout","Thorn Burst","Spore Cloud","Seed Mine","Soothing Scent"],
 		["Leaf Shot","Vine Whip","Vine Spear","Rootbind","Thorn Burst","Sprout","Seed Pop","Overgrowth","Root Slam","Growth Spurt","Seed Mine"],
@@ -200,7 +200,7 @@ func _initialize() -> void:
 	var move_description:RichTextLabel=move_overlay.find_child("MoveInfoDescription",true,false)
 	assert(move_overlay!=null and move_overlay.find_child("MoveInfoLargeIcon",true,false)!=null and move_info_labels.any(func(entry):return entry.text==inspected_entry.name) and move_description!=null and move_description.text==GameData.MOVES[inspected_entry.name].desc and move_description.autowrap_mode!=TextServer.AUTOWRAP_OFF and not move_description.scroll_active and move_info_labels.any(func(entry):return entry.text.begins_with("Base cooldown:")) and move_info_labels.any(func(entry):return entry.text.begins_with("Base damage:")) and move_overlay.find_children("SupportedMoveStoneIcon*","",true,false).size()==supported_count,"Clicking a move icon should open its dimmed detail menu with wrapped description, stats, large icon, and compatible Move Stones")
 	move_overlay.find_child("BackButton",true,false).pressed.emit();await process_frame
-	assert(game.move_stone_display_texture("link_from:Water Burst").resource_path=="res://textures/MoveStones/LinkStoneOcupied.png" and game.move_stone_display_texture("link:Bubble Shot").resource_path==GameData.stone_info("link").texture,"Only the destination side of a linked move should use the occupied Link Stone texture")
+	assert(game.move_stone_display_texture("link_from:Water Burst").resource_path=="res://textures/MoveStones/LinkStoneOcupied.png" and game.move_stone_display_texture("link:Water Jet").resource_path==GameData.stone_info("link").texture,"Only the destination side of a linked move should use the occupied Link Stone texture")
 	assert(game.roster[game.selected_roster].power_slot_types.all(func(value):return value in ["Health","Attack","Flex"]),"Every power slot has a fixed Health, Attack, or Flex type")
 	var inventory_cards:Array=game.content.find_children("StoneInventoryCard*","",true,false)
 	assert(inventory_cards.size()==2,"The Health tab should list owned Health stones")

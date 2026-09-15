@@ -611,8 +611,8 @@ const COLORS := {
 const SPECIES := [
 	{"name":"Plip", "element":"Water", "color":Color("#69c8e5"), "accent":Color("#d8f6ff"), "shape":"fins", "base_hp":150, "base_atk":30, "range":165.0, "family":"plip", "evolves_to":1, "evolve_level":18, "model":"res://models/Plip.glb", "model_yaw":0.0},
 	{"name":"Swellit", "element":"Water", "color":Color("#3f91c7"), "accent":Color("#bfe9ff"), "shape":"fins", "base_hp":198, "base_atk":35, "range":180.0, "family":"plip"},
-	{"name":"Spriggle", "element":"Green", "color":Color("#78bd64"), "accent":Color("#daf09b"), "shape":"ears", "base_hp":152, "base_atk":30, "range":155.0, "family":"spriggle", "evolves_to":3, "evolve_level":18},
-	{"name":"Frondle", "element":"Green", "color":Color("#4f9f68"), "accent":Color("#c9e785"), "shape":"crest", "base_hp":196, "base_atk":34, "range":125.0, "family":"spriggle"},
+	{"name":"Spriggle", "model":"res://models/Spriggle.glb", "model_yaw":PI*1.5, "element":"Green", "color":Color("#78bd64"), "accent":Color("#daf09b"), "shape":"ears", "base_hp":152, "base_atk":30, "range":155.0, "family":"spriggle", "evolves_to":3, "evolve_level":18},
+	{"name":"Frondle", "model":"res://models/Frondle.glb", "model_yaw":PI*1.5, "element":"Green", "color":Color("#4f9f68"), "accent":Color("#c9e785"), "shape":"crest", "base_hp":196, "base_atk":34, "range":125.0, "family":"spriggle"},
 	{"name":"Vinee", "element":"Green", "color":Color("#65ad65"), "accent":Color("#e1ef8b"), "shape":"tail", "base_hp":174, "base_atk":37, "range":100.0, "family":"vinee"},
 	{"name":"Bloomie", "element":"Green", "color":Color("#8dcf75"), "accent":Color("#f2b7d2"), "shape":"tuft", "base_hp":185, "base_atk":24, "range":145.0, "family":"bloomie", "model":"res://models/Blomie.glb", "model_yaw":PI*1.5},
 	{"name":"Sparko", "element":"Fire", "color":Color("#f07a4d"), "accent":Color("#ffd25f"), "shape":"tail", "base_hp":140, "base_atk":39, "range":145.0, "family":"sparko", "evolves_to":7, "evolve_level":18},
@@ -634,11 +634,6 @@ const SPECIES := [
 const MOVES := {
 	"Water Shot":{"power":30.0,"cooldown":1.3,"range":200.0,"color":Color("#5bb9dc"),"kind":"projectile","desc":"Fires a fast, compact projectile of water."},
 	"Water Jet":{"power":24.0,"cooldown":3.0,"range":220.0,"color":Color("#5bb9dc"),"kind":"projectile","desc":"Fires a continuous narrow stream that repeatedly damages enemies caught in it."},
-	"Bubble Shot":{"power":34.0,"cooldown":2.0,"range":180.0,"color":Color("#5bb9dc"),"kind":"projectile","desc":"Fires a slow bubble that pops on impact, damaging a small area."},
-	"Bubble Burst":{"power":42.0,"cooldown":3.2,"range":95.0,"color":Color("#5bb9dc"),"kind":"burst","desc":"Creates bubbles around the user that burst, damaging nearby enemies."},
-	"Bubble Trap":{"power":18.0,"cooldown":5.5,"range":170.0,"color":Color("#5bb9dc"),"kind":"projectile","desc":"Encases an enemy in a bubble and temporarily prevents movement."},
-	"Bubble Shield":{"power":0.0,"cooldown":7.0,"range":0.0,"color":Color("#5bb9dc"),"kind":"recover","desc":"Encases the user in a bubble that absorbs a limited amount of incoming damage."},
-	"Big Bubble":{"power":62.0,"cooldown":5.5,"range":175.0,"color":Color("#5bb9dc"),"kind":"projectile","desc":"Sends a huge, slow bubble forward that damages and pushes enemies along with it."},
 	"Splash Dash":{"power":44.0,"cooldown":3.0,"range":110.0,"color":Color("#5bb9dc"),"kind":"burst","icon":"res://textures/Moves/SplashDash.png","desc":"The user surges forward in a splash of water, damaging enemies it hits."},
 	"Backwash":{"power":56.0,"cooldown":4.0,"range":90.0,"color":Color("#5bb9dc"),"kind":"burst","desc":"Fires a powerful short-range blast of water with strong knockback."},
 	"Water Burst":{"power":50.0,"cooldown":4.2,"range":105.0,"color":Color("#5bb9dc"),"kind":"burst","desc":"Releases an explosion of water in every direction around the user."},
@@ -795,8 +790,39 @@ const MOVES := {
 	"Gaggle Rush":{"power":56.0,"cooldown":6.5,"range":170.0,"color":Color("#d9933f"),"kind":"burst","desc":"Both heads honk and flap as Gaggle barrels through the enemy group, disrupting and weakening several enemies at once."}
 }
 
+# Resolve retired move names when existing Quiblets are loaded into memory.
+const RETIRED_MOVES:={"Bubble Shot":"Water Jet","Bubble Burst":"Water Burst","Bubble Trap":"Whirlpool","Bubble Shield":"Guard","Big Bubble":"Tidal Wave"}
+
+static func replace_retired_moves(q:Dictionary)->void:
+	var replacements:Dictionary={}
+	var used:Array=[]
+	for entry in q.get("moves",[]):
+		if not RETIRED_MOVES.has(str(entry.name)):used.append(str(entry.name))
+	for entry in q.get("moves",[]):
+		var old:=str(entry.name)
+		if not RETIRED_MOVES.has(old):continue
+		var replacement:String=RETIRED_MOVES[old]
+		if used.has(replacement):
+			for candidate in learnset(int(q.species)):
+				if not used.has(candidate):replacement=candidate;break
+		entry.name=replacement;used.append(replacement);replacements[old]=replacement
+	# Keep Link Stones connected to their renamed move, and retain slot capacity
+	# and every fitted stone. Memory Fruit must not restore a retired move.
+	for entry in q.get("moves",[]):
+		for i in entry.get("stones",[]).size():
+			var value:=str(entry.stones[i])
+			for prefix in ["link:","link_from:"]:
+				if value.begins_with(prefix):
+					var target:=value.trim_prefix(prefix)
+					if replacements.has(target):entry.stones[i]=prefix+str(replacements[target])
+	var memory:Array=[]
+	for value in q.get("memory",[]):
+		var name:String=replacements.get(str(value),RETIRED_MOVES.get(str(value),str(value)))
+		if not memory.has(name):memory.append(name)
+	if q.has("memory"):q.memory=memory
+
 const LEARNSETS := [
-	["Water Shot","Bubble Shot","Splash Dash","Backwash","Water Burst","Rain Drop","Spray"],
+	["Water Shot","Water Jet","Splash Dash","Backwash","Water Burst","Rain Drop","Spray"],
 	["Water Shot","Water Jet","Hydro Shot","Breaker","Riptide","Undertow","Whirlpool","Wave Rush","Tidal Wave","Water Spout","Downpour","Tsunami"],
 	["Leaf Shot","Seed Pop","Sprout","Thorn Burst","Spore Cloud","Seed Mine","Soothing Scent"],
 	["Leaf Shot","Vine Whip","Vine Spear","Rootbind","Thorn Burst","Sprout","Seed Pop","Overgrowth","Root Slam","Growth Spurt","Seed Mine"],

@@ -31,7 +31,7 @@ func create_stone_drag_preview()->Control:
 	var icon:=TextureRect.new()
 	icon.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
 	icon.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	icon.texture=load(GameData.stone_info(str(item_data.effect)).texture)
+	icon.texture=load(str(item_data.texture)) if item_data.get("kind","")=="charm" else load(GameData.stone_info(str(item_data.effect)).texture)
 	icon.size=Vector2(56,56)
 	icon.position=-icon.size*.5
 	icon.mouse_filter=Control.MOUSE_FILTER_IGNORE

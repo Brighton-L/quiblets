@@ -1,6 +1,6 @@
 extends SceneTree
 
-# Ground between the camera and a fighter fades to 20% and fades back once clear.
+# Only enemies trigger the fighter terrain fade; player Quiblets do not.
 var failures:=0
 var checks:=0
 
@@ -28,8 +28,11 @@ func run()->void:
 	actor.position=Vector3(hidden.x,0,hidden.y);camera.global_position=actor.position+Vector3(0,13,15)
 	check(e.occluded_by_terrain(actor),"A ridge between the Quiblet and the camera counts as hiding it")
 	for i in 30:e.update_wall_fades(1.0/60.0)
+	check(e.fading_wall_count()==0 and int(e.terrain_material.get_shader_parameter("fade_count"))==0,"Player Quiblets must not fade the terrain")
+	e.team.erase(actor);actor.enemy=true;e.enemies.append(actor)
+	for i in 30:e.update_wall_fades(1.0/60.0)
 	var weight:float=float(e.fade_weights.get(actor.get_instance_id(),0.0))
-	check(is_equal_approx(weight,1.0) and e.fading_wall_count()==1 and int(e.terrain_material.get_shader_parameter("fade_count"))==1 and int(e.terrain_fade_material.get_shader_parameter("fade_count"))==1 and is_equal_approx(float(e.terrain_fade_material.get_shader_parameter("fade_alpha")),e.WALL_FADE_ALPHA),"A hidden Quiblet fades the ground on its line of sight to 20%% (weight %.2f)"%weight)
+	check(is_equal_approx(weight,1.0) and e.fading_wall_count()==1 and int(e.terrain_material.get_shader_parameter("fade_count"))==1 and int(e.terrain_fade_material.get_shader_parameter("fade_count"))==1 and is_equal_approx(float(e.terrain_fade_material.get_shader_parameter("fade_alpha")),e.WALL_FADE_ALPHA),"A hidden enemy fades the ground on its line of sight to 20%% (weight %.2f)"%weight)
 	check(e.terrain_material.next_pass==e.terrain_fade_material and not e.terrain_material.shader.code.contains("ALPHA=") and e.terrain_fade_material.shader.code.contains("ALPHA="),"The opaque pass cuts the hole and only the next pass is transparent, so water in the troughs stays visible")
 	# Step into the open: the fade eases off over a few frames, then stops.
 	actor.position=Vector3(hidden.x,0,hidden.y-6);camera.global_position=actor.position+Vector3(0,13,15)

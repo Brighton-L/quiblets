@@ -9,7 +9,7 @@ func run()->void:
 	var environment:=WorldEnvironment.new();var env:=Environment.new();env.background_mode=Environment.BG_COLOR;env.background_color=Color("#233844");env.ambient_light_source=Environment.AMBIENT_SOURCE_COLOR;env.ambient_light_color=Color.WHITE;env.ambient_light_energy=.7;environment.environment=env;world.add_child(environment)
 	var light:=DirectionalLight3D.new();light.rotation_degrees=Vector3(-65,-25,0);world.add_child(light)
 	var camera:=Camera3D.new();world.add_child(camera);camera.position=Vector3(0,30,24);camera.look_at(Vector3.ZERO);camera.projection=Camera3D.PROJECTION_ORTHOGONAL;camera.size=30
-	var names:=["Water Jet","Whirlpool","Healing Bloom","Fire Trail","Bubble Shield","Downpour"]
+	var names:=["Water Jet","Whirlpool","Healing Bloom","Fire Trail","Guard","Downpour"]
 	for i in names.size():
 		var group:=Node3D.new();world.add_child(group)
 		var center:=Vector3((i%3-1)*9,0,(i/3)*8-4)

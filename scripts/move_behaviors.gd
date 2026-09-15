@@ -7,11 +7,6 @@ extends RefCounted
 const PROFILES:={
 	"Water Shot":{"mode":"projectile","speed":16.0,"radius":.18},
 	"Water Jet":{"mode":"beam","duration":1.8,"tick":.2,"radius":.32},
-	"Bubble Shot":{"mode":"projectile","speed":4.0,"radius":.42,"splash":1.25,"knockback":.45},
-	"Bubble Burst":{"mode":"area","anchor":"self","radius":2.7,"visual":"bubbles"},
-	"Bubble Trap":{"mode":"projectile","speed":5.0,"radius":.4,"status":"bubble","status_duration":3.5},
-	"Bubble Shield":{"mode":"buff","status":"shield","duration":6.0,"amount":.35},
-	"Big Bubble":{"mode":"wave","speed":2.5,"radius":1.1,"width":2.2,"carry":true,"knockback":.6,"visual":"bubble"},
 	"Splash Dash":{"mode":"dash","speed":12.0,"radius":.65,"physical":true},
 	"Backwash":{"mode":"cone","angle":.65,"knockback":2.6},
 	"Water Burst":{"mode":"area","anchor":"self","radius":3.0,"knockback":.5},

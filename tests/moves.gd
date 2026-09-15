@@ -76,9 +76,6 @@ func run()->void:
 	fixture();var rainsplit=cast("Rain Drop",["split"]);check(rainsplit.patches.size()==3 and rainsplit.airborne_drops.size()==3,"Split Rain Drop launches three separate drops")
 	fixture();cast("Water Shot",["seeking"]);victim.position.z=1;advance(.6);check(victim.current_hp<10000,"Seeking did not steer toward a moving target")
 	fixture();var behind:=actor(Vector3(3.5,0,0),true);cast("Hydro Shot");advance(.5);check(victim.current_hp<10000 and behind.current_hp<10000,"Hydro Shot did not pierce two enemies")
-	fixture();var adjacent:=actor(Vector3(2,0,1),true);cast("Bubble Shot");advance(.65);check(adjacent.current_hp<10000,"Bubble Shot did not splash nearby enemies")
-	check(BEHAVIORS.supports("Bubble Shot","force") and victim.position.x>2.0,"Bubble Shot's pop should cause knockback and accept a Force Stone")
-	fixture();cast("Bubble Shot",["force"]);advance(.65);check(victim.position.x>2.45,"A Force Stone should increase Bubble Shot's pop knockback")
 	fixture();cast("Seed Pop");advance(.3);check(victim.current_hp==10000,"Seed Pop damaged before its fuse");advance(.7);check(victim.current_hp<10000,"Seed Pop did not burst after its fuse")
 	fixture();user.obstacle_rects=[Rect2(.9,-1,.4,2)];cast("Water Shot");advance(.5);check(victim.current_hp==10000,"Projectile passed through a level obstacle")
 	# Spatial shapes: rear/side targets must not take forward-only hits.
@@ -98,8 +95,7 @@ func run()->void:
 		fixture();victim.position.x=5;cast(name);advance(1);check(victim.current_hp==10000,name+" triggered without a nearby enemy");victim.position.x=1;advance(.1);check(victim.current_hp<10000,name+" did not trigger on approach")
 	fixture();cast("Fire Trail");advance(.6);victim.statuses.clear();victim.position=Vector3(.7,0,0);var trail_hp:=victim.current_hp;advance(.5);check(victim.current_hp<trail_hp,"Fire Trail left no damaging flames behind")
 	# Status interactions and their expiry, not just visual flags.
-	fixture();cast("Bubble Shield");advance(.1);var shield_hp:=user.current_hp;user.take_damage(30,victim);check(user.current_hp==shield_hp,"Bubble Shield healed instead of absorbing damage");user.take_damage(4000,victim);check(not user.statuses.has("shield") and user.current_hp<shield_hp,"Shield did not break when exhausted")
-	fixture();cast("Bubble Trap");advance(.5);check(victim.movement_locked(),"Bubble Trap did not immobilize");victim.take_damage(1300,user);check(not victim.statuses.has("bubble"),"Bubble Trap did not pop from enough damage")
+	fixture();cast("Guard");advance(.1);var shield_hp:=user.current_hp;user.take_damage(30,victim);check(user.current_hp==shield_hp,"Guard healed instead of absorbing damage");user.take_damage(4000,victim);check(not user.statuses.has("shield") and user.current_hp<shield_hp,"Shield did not break when exhausted")
 	fixture();cast("Rootbind");advance(.1);check(victim.movement_locked() and not victim.actions_locked(),"Roots should immobilize without blocking attacks");advance(3.2);check(not victim.movement_locked(),"Roots did not expire")
 	fixture();cast("Thorn Armor");advance(.1);user.take_damage(100,victim);check(victim.current_hp==9960,"Thorn Armor did not reflect damage")
 	fixture();user.current_hp=2000;cast("Cocoon");advance(.2);check(user.actions_locked() and user.current_hp>2000,"Cocoon did not lock actions and heal gradually");var invalid=cast("Water Shot");check(invalid==null,"Cocoon allowed another move");advance(4);check(not user.actions_locked(),"Cocoon did not unlock actions on completion")
@@ -138,7 +134,7 @@ func run()->void:
 	fixture();var ordinary=cast("Fireball");var ordinary_area:float=ordinary.area_scale;ordinary.finish(false);var blast=cast("Fireball",["blast"]);check(blast.area_scale>ordinary_area,"Blast did not expand the splash size")
 	fixture();var plain=cast("Water Shot");var plain_range:float=plain.distance;plain.finish(false);var reach=cast("Water Shot",["reach"]);check(reach.distance>plain_range,"Reach did not extend projectile travel")
 	fixture();user.current_hp=1000;victim.current_hp=10;cast("Water Shot",["drain"]);advance(.3);check(is_equal_approx(user.current_hp,1001.5),"Drain healed from nominal damage instead of actual damage dealt")
-	fixture();cast("Bubble Shield",["sharing"]);advance(.1);check(ally.statuses.has("shield") and ally.statuses.shield.amount<user.statuses.shield.amount,"Sharing did not grant a reduced shield to nearby allies")
+	fixture();cast("Guard",["sharing"]);advance(.1);check(ally.statuses.has("shield") and ally.statuses.shield.amount<user.statuses.shield.amount,"Sharing did not grant a reduced shield to nearby allies")
 	fixture();var canceled=cast("Water Shot");user.cast_epoch+=1;advance(.5);check(canceled.done and victim.current_hp==10000,"Stale cast continued after knockout/expedition end")
 	fixture();var freed=cast("Water Shot",["seeking"]);victim.free();advance(.5);check(freed.done,"Projectile did not safely finish after its target was freed")
 	arena.free()

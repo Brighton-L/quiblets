@@ -20,6 +20,9 @@ func run()->void:
 	check(recipe.name=="Plain Stew" and game.calculate_stew_score(recipe)==25 and game.calculate_quality()=="Decent","Common varied Plain Stew should be Decent with a score of 25")
 	recipe=set_pot(game,{"Stonebean":5})
 	check(game.calculate_stew_score(recipe)==52 and game.calculate_quality()=="Good","Tier-2 recipe match should be Good")
+	game.leftover_boost=true
+	check(game.recipe_precision_points(recipe)==42 and game.calculate_stew_score(recipe)==64,"Matching leftovers should contribute all 12 points above five matching ingredients")
+	game.leftover_boost=false
 	recipe=set_pot(game,{"Brinepod":5})
 	check(game.calculate_stew_score(recipe)==72 and game.calculate_quality()=="Great","Tier-3 recipe match should be Great")
 	recipe=set_pot(game,{"Sunplum":2,"Frostberry":2,"Sparkfruit":1})

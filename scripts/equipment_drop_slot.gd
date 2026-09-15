@@ -29,6 +29,8 @@ func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
 	# An empty Move Stone slot dragged from another move lands on any of this move's slots.
 	if data.get("kind", "") == "move_slot":
 		return slot_kind == "move" and int(data.get("move_index", -1)) != primary_index and controller != null and controller.can_receive_move_slot(primary_index)
+	if slot_kind == "charm":
+		return data.get("kind","")=="charm" and controller!=null and controller.charm_slot_accepts(primary_index,str(data.get("charm_type","")))
 	if slot_kind == "power":
 		return data.get("kind", "") == "power_stone" and (accepted_power_type.is_empty() or data.get("stone_type", "") == accepted_power_type)
 	if data.get("kind", "") != "move_stone":
@@ -61,6 +63,10 @@ func create_move_slot_drag_preview()->Control:
 	return slot_preview
 
 func create_equipment_drag_preview(data:Dictionary)->Control:
+	if slot_kind=="charm":
+		var charm_preview:=Control.new();charm_preview.size=size;charm_preview.mouse_filter=Control.MOUSE_FILTER_IGNORE
+		controller.add_charm_icon(charm_preview,str(data.charm_type),-size*.5,size)
+		return charm_preview
 	if slot_kind=="move":
 		var preview:=Control.new();preview.size=size;preview.mouse_filter=Control.MOUSE_FILTER_IGNORE
 		controller.add_fitted_move_stone(preview,str(data.effect))
