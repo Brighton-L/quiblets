@@ -17,7 +17,7 @@ const HARVEST_SECONDS:=2.5
 const HARVEST_RADIUS:=1.4
 # Which ingredient tags each prop kind grows; every kind, boulders included, gives something.
 const HARVEST_TAGS:={
-	"tree":["fruit","leaf"],"bush":["leaf","fruit"],"big_mushroom":["fungus"],"mushroom":["fungus"],"cactus":["spicy","dry"],
+	"grass":["leaf"],"flower":["seed","leaf"],"reeds":["leaf","root"],"tree":["fruit","leaf"],"bush":["leaf","fruit"],"big_mushroom":["fungus"],"mushroom":["fungus"],"cactus":["spicy","dry"],
 	"crystal":["seed","hard"],"pillar":["earthy","hard"],"block":["earthy","hard"],"mound":["root","earthy"],"boulder":["earthy","hard"]
 }
 var harvest_progress:=0.0
@@ -27,6 +27,7 @@ const SHARD_HOLD_SECONDS:=1.4
 const SHARD_SHRINK_SECONDS:=1.3
 
 var kind:="tree"
+var shape_variant:=0
 var cell:Vector2i=Vector2i.ZERO
 var max_hp:=100.0
 var hp:=100.0
@@ -53,8 +54,10 @@ func harvest_tags()->Array:
 
 func setup(prop_kind:String,prop_cell:Vector2i,biome:Dictionary,stage_level:int,rng:RandomNumberGenerator)->void:
 	kind=prop_kind;cell=prop_cell;position=Vector3(cell.x,0,cell.y);max_hp=prop_hp(kind,stage_level);hp=max_hp
-	rotation.y=rng.randf_range(-.5,.5)
+	rotation.y=rng.randf_range(0.0,TAU)
+	shape_variant=rng.randi_range(0,2)
 	match kind:
+		"grass","flower","reeds":build_ground_plant(biome,rng)
 		"boulder":build_boulder(biome,rng)
 		"big_mushroom":build_big_mushroom(biome,rng)
 		"mushroom":build_mushroom(biome,rng)
@@ -65,13 +68,46 @@ func setup(prop_kind:String,prop_cell:Vector2i,biome:Dictionary,stage_level:int,
 		"block":build_block(biome,rng)
 		"bush":build_bush(biome,rng)
 		_:build_tree(biome,rng)
+	apply_shape_variation(biome,rng)
 	set_process(false)
+
+# Three silhouettes per kind, plus small seeded proportion differences. Apply
+# transforms to the pieces, not the gameplay root: harvesting and blocked tiles
+# keep their existing size, and the bases remain anchored to the ground.
+func apply_shape_variation(biome:Dictionary,rng:RandomNumberGenerator)->void:
+	var accent:Color=biome.get("accent",Color("#6ea85a"))
+	var stone:Color=biome.get("cliff",Color("#7b7f72"))
+	if shape_variant>0:
+		match kind:
+			"cactus":
+				var arm:=cylinder(Vector3(.27,.7,0),.12,.14,.5,accent);arm.rotation.z=PI*.5
+				cylinder(Vector3(.5,.94,0),.12,.14,.48,accent);ball(Vector3(.5,1.18,0),Vector3.ONE*.12,accent)
+				if shape_variant==2:
+					var other:=cylinder(Vector3(-.25,.5,0),.11,.13,.46,accent);other.rotation.z=PI*.5
+					cylinder(Vector3(-.46,.7,0),.11,.13,.4,accent)
+			"mushroom","big_mushroom":
+				var size:=.65 if kind=="big_mushroom" else .35
+				for i in shape_variant:
+					var offset:=Vector3(.4 if i==0 else -.35,0,.26 if i==0 else -.2)
+					cylinder(offset+Vector3(0,size*.4,0),size*.15,size*.2,size*.8,Color("#f4ecd8"))
+					ball(offset+Vector3(0,size*.85,0),Vector3(size*.6,size*.3,size*.55),prop_tone(accent,i+1))
+			"pillar":
+				if shape_variant==1:cube(Vector3(0,2.2,0),Vector3(.8,.22,.65),stone.lightened(.15))
+				else:cube(Vector3(.32,.23,.12),Vector3(.5,.46,.48),stone)
+			"block":cube(Vector3(.38,.2,.22),Vector3(.5,.4,.5),stone)
+			"crystal":cube(Vector3(-.4,.35,.28),Vector3(.22,.7,.22),accent,Vector3(.15,0,-.3))
+			"mound":ball(Vector3(.35,.18,.16),Vector3(.4,.22,.35),accent)
+	var profiles:=[Vector3(1,1,1),Vector3(.85,1.16,.9),Vector3(1.06,.8,.91)]
+	var proportions:Vector3=profiles[shape_variant]*Vector3(rng.randf_range(.96,1.04),rng.randf_range(.94,1.06),rng.randf_range(.96,1.04))
+	proportions*=float(biome.get("prop_scale",1.0))
+	for part in parts:
+		part.position*=proportions;part.scale*=proportions
 
 # Props in the soft-meadow style: smooth blobs and tapered cylinders in matte
 # single colours, with a faint shadow disc that is not part of the breakable body.
 const LEAF_GREENS:=["#5cb15c","#6fbf6a","#8ccf80","#9fd98f"]
 func leaf_green(biome:Dictionary,index:int)->Color:
-	return Color(LEAF_GREENS[index%LEAF_GREENS.size()]).lerp(biome.get("accent",Color("#6fbf6a")),.3)
+	return Color(LEAF_GREENS[index%LEAF_GREENS.size()]).lerp(biome.get("accent",Color("#6fbf6a")),.85 if biome.get("name","") in ["golden","forest","thicket"] else .3)
 
 func plain_material(color:Color)->StandardMaterial3D:
 	var mat:=StandardMaterial3D.new();mat.albedo_color=color;mat.roughness=1.0;mat.specular_mode=BaseMaterial3D.SPECULAR_DISABLED;return mat
@@ -152,6 +188,8 @@ func build_tree(biome:Dictionary,rng:RandomNumberGenerator)->void:
 	var s:float=rng.randf_range(.28,.38)
 	trunk(biome,6.0*s,1.05*s)
 	var blobs:Array=[[0,8.6,0,4.6],[-3.4,7,.6,3],[3.4,7,-.6,3],[0,11,.4,2.8],[1.6,8.4,2.6,2.4]]
+	if shape_variant==1:blobs=[[0,7,0,3.7],[-1.8,9,.3,3.0],[.6,11,-.3,2.8],[.3,13,0,1.9]]
+	elif shape_variant==2:blobs=[[-2.4,7,0,3.9],[2.6,7.8,.4,3.6],[0,9,-1,3.4],[1.2,7,2.6,2.8]]
 	for i in blobs.size():
 		var blob:Array=blobs[i];ball(Vector3(blob[0],blob[1],blob[2])*s,Vector3.ONE*float(blob[3])*s,leaf_green(biome,i))
 	shadow(5.2*s)
@@ -164,6 +202,8 @@ func build_bush(biome:Dictionary,rng:RandomNumberGenerator)->void:
 	var s:float=rng.randf_range(.95,1.2)
 	# A full, rounded dome of overlapping leaves rather than three stray balls.
 	var blobs:Array=[[0,.40,0,.50],[.34,.32,.05,.37],[-.34,.32,-.05,.37],[.05,.32,.34,.35],[-.05,.32,-.34,.35],[.12,.60,.06,.35],[-.12,.55,-.08,.31]]
+	if shape_variant==1:blobs=[[0,.4,0,.45],[.12,.7,0,.36],[-.25,.31,.05,.32],[.25,.32,-.05,.3]]
+	elif shape_variant==2:blobs=[[-.34,.3,0,.38],[0,.38,.04,.45],[.38,.28,-.06,.34],[-.12,.27,.3,.31],[.18,.25,-.3,.3]]
 	for i in blobs.size():
 		var blob:Array=blobs[i];ball(Vector3(blob[0],blob[1],blob[2])*s,Vector3.ONE*float(blob[3])*s,leaf_green(biome,i%3))
 	shadow(.85*s)
@@ -231,3 +271,13 @@ func _process(delta:float)->void:
 			node.scale=Vector3.ONE*maxf(remaining,.001)
 			if remaining<=0.0:node.queue_free();shards.erase(shard)
 	if shards.is_empty():queue_free()
+
+func build_ground_plant(biome:Dictionary,rng:RandomNumberGenerator)->void:
+	var green:Color=biome.get("accent",Color("#7aaf61"))
+	for i in range(4+shape_variant):
+		var offset:=Vector3(rng.randf_range(-.4,.4),0,rng.randf_range(-.4,.4));var h:=rng.randf_range(.4,.85) if kind!="reeds" else rng.randf_range(.9,1.5)
+		var stem:=cylinder(offset+Vector3(0,h*.5,0),.025,.045,h,green);stem.rotation.z=rng.randf_range(-.18,.18)
+		if kind=="flower":
+			var color:=Color("#f4d17a") if i%2==0 else Color("#db92b4")
+			ball(offset+Vector3(0,h,0),Vector3(.15,.08,.15),color)
+		elif kind=="reeds":ball(offset+Vector3(0,h,0),Vector3(.07,.19,.07),Color("#967453"))

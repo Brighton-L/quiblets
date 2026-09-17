@@ -34,8 +34,8 @@ func run()->void:
 	for recipe in GameData.SPICE_RECIPES:check(reachable.has(recipe.name) and int(minimums.get(recipe.name,0)) in [4,5] and not recipe.has("ingredients"),"Recipe must require four or five ingredients and be reachable: "+recipe.name)
 	var rolls:={}
 	for i in 100:
-		var result:=GameData.revitalize_power_stone({"type":"Health","power":10,"bonuses":[]},3)
-		check(int(result.power)>=248 and int(result.power)<=253,"Revitalizer bonus must be within 0–5");rolls[result.power]=true
+		var result:=GameData.revitalize_power_stone({"type":"Health","power":10,"bonuses":[]},40)
+		check(int(result.power)>=240 and int(result.power)<=245,"Revitalizer bonus must be within 0–5");rolls[result.power]=true
 	check(rolls.size()>1,"Separate revitalizations should vary")
 	var game=load("res://main.tscn").instantiate();root.add_child(game);await process_frame
 	game.unlocked_spices.append("Hot Flakes");game.spice_inventory["Hot Flakes"]["great"]=2;game.spice_inventory["Hot Flakes"]["basic"]=1;game.special_items["Bountiful Berry"]=1

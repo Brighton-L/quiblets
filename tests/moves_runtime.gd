@@ -106,7 +106,7 @@ func run()->void:
 	var team:Array=[]
 	for i in 5:
 		var q:=GameData.make_quiblet(i,20)
-		var names:Array=["Firestorm","Whirlpool","Water Jet","Healing Bloom"] if i%2==0 else ["Flame Dash","Whirlpool","Ignite","Combust"]
+		var names:Array=["Firestorm","Whirlpool","Water Jet","Healing Bloom"] if i%2==0 else ["Flame Dash","Whirlpool","Ignite","Meteor Ember"]
 		q.moves=[]
 		for name in names:q.moves.append({"name":name,"slots":2,"stones":[]})
 		team.append(q)

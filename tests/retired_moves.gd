@@ -16,5 +16,17 @@ func _initialize():
  assert(q.moves[1].slots==3 and q.moves[1].stones==["link_from:Water Jet","echo"])
  assert(q.moves[2].name=="Guard" and q.moves[2].stones==["sharing"])
  for name in q.memory:assert(GameData.MOVES.has(name) and not name.contains("Bubble"))
+ assert(not GameData.MOVES.has("Fire Trail"))
+ for learnset in GameData.LEARNSETS:assert(not learnset.has("Fire Trail"))
+ var fire:=GameData.make_quiblet(7,6)
+ fire.moves=[{"name":"Fire Trail","slots":3,"stones":["echo","heavy"]}];fire.memory=["Fire Trail"]
+ GameData.replace_retired_moves(fire)
+ assert(fire.moves[0].name=="Flame Dash" and fire.moves[0].slots==3 and fire.moves[0].stones==["echo","heavy"] and fire.memory==["Flame Dash"])
+ assert(not GameData.MOVES.has("Combust"))
+ for learnset in GameData.LEARNSETS:assert(not learnset.has("Combust"))
+ assert(GameData.learnset(7).has("Meteor Ember"))
+ fire.moves=[{"name":"Combust","slots":2,"stones":["echo"]}];fire.memory=["Combust"]
+ GameData.replace_retired_moves(fire)
+ assert(fire.moves[0].name=="Meteor Ember" and fire.moves[0].slots==2 and fire.moves[0].stones==["echo"] and fire.memory==["Meteor Ember"])
  print("Retired moves, learnsets, memory and fitted Link Stones passed")
  quit()

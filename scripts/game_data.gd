@@ -1,15 +1,12 @@
 class_name GameData
 extends RefCounted
 
-const EXPEDITION_AREAS:=[
-	"Longgrass Fields","Splitstream","Tanglewood","Leaning Cliffs",
-	"Soggy Bottom","Cinder Hills","Glittergut Cave","Whiteout",
-	"Baked Flats","Cloudtops","Swallowed Ruins","Thunder Beach",
-	"Afterdark","Giant’s Footprint","Farside Valley","???"
-]
+const MAIN_AREA_COUNT:=16
+const OPTIONAL_AREA_HOSTS:={16:1,17:2,18:3,19:5}
+const EXPEDITION_AREAS:=["Rolling Steppe", "Windy Fields", "Winding Creeks", "Crooked Cliffs", "Soggy Lowlands", "Lush Basin", "Glimmering Grotto", "Shivering Shelf", "Parched Plains", "Highland Peaks", "Muddy Moor", "Foaming Fjord", "Gloomy Glade", "Looming Lowlands", "Distant Downs", "Mystery Meadow", "Rustling Thicket", "Pebbled Shoals", "Rocky Ravine", "Golden Grove"]
 
 static func expedition_area_level(area_index:int)->int:
-	var index:=clampi(area_index,0,EXPEDITION_AREAS.size()-1)
+	var index:=clampi(int(OPTIONAL_AREA_HOSTS.get(area_index,area_index)),0,MAIN_AREA_COUNT-1)
 	# Early areas begin close to a fresh Quiblet's level, then rise smoothly.
 	return [2,5,9][index] if index<3 else 13+(index-3)*4
 
@@ -18,22 +15,403 @@ static func expedition_area_level(area_index:int)->int:
 # how many rivers cut the field, how walled-in it is ("walls": 0 = wide open
 # plains, 1 = a tight cave), and the water colour used for rivers and pools.
 const EXPEDITION_BIOMES:=[
-	{"name":"meadow","ground":"#a6e26a","path":"#f2df9c","cliff":"#7a4a28","accent":"#3f7650","decor":["tree","bush","rock"],"density":.24,"walls":.1,"rivers":1,"water_color":"#7fd6f7"},
-	{"name":"river","ground":"#a3df68","path":"#f0dc9a","cliff":"#78482a","accent":"#3f7650","decor":["tree","bush","rock"],"water":true,"water_color":"#7fd6f7","density":.18,"walls":.1,"rivers":3},
-	{"name":"forest","ground":"#8fd35c","path":"#e2cf8e","cliff":"#6a4127","accent":"#2f5f3e","decor":["tree","bush","big_mushroom"],"density":.42,"walls":.6,"rivers":1,"water_color":"#6fcbe9","rock":"#8f9a8c","trunk":"birch"},
-	{"name":"cliffs","ground":"#c2b184","path":"#e6d7a8","cliff":"#9a7a52","accent":"#6e5b43","decor":["boulder","rock"],"density":.2,"walls":.7,"rivers":0,"water_color":"#5fcff0"},
-	{"name":"swamp","ground":"#6f9a52","path":"#b2a66e","cliff":"#5a4a34","accent":"#8bd06a","decor":["big_mushroom","mushroom"],"water":true,"water_color":"#5f9a8e","density":.26,"walls":.35,"rivers":3,"rock":"#6f7a5e"},
-	{"name":"volcanic","ground":"#7a5c55","path":"#ab7a6c","cliff":"#4a3835","accent":"#f06a3f","decor":["boulder","rock"],"density":.2,"walls":.55,"rivers":1,"water_color":"#ff7a4a","rock":"#5a3a36"},
-	{"name":"cave","ground":"#66748f","path":"#95a2ba","cliff":"#3a4356","accent":"#7fe0ff","decor":["boulder","crystal","big_mushroom"],"density":.26,"walls":1.0,"rivers":1,"water_color":"#4f9fd0","rock":"#5e6d8a"},
-	{"name":"snow","ground":"#eef4f8","path":"#d3e3ee","cliff":"#a9bfd0","accent":"#ffffff","decor":["mound","boulder"],"density":.24,"walls":.2,"rivers":1,"water_color":"#a9dcf5"},
-	{"name":"desert","ground":"#e6cf9a","path":"#9cd66c","cliff":"#c9a267","accent":"#6ea85a","decor":["cactus","boulder"],"density":.16,"walls":.15,"rivers":0,"water_color":"#5fd0f0","rock":"#8f5f56"},
-	{"name":"sky","ground":"#d5e9f8","path":"#f0f8ff","cliff":"#f2f7fc","accent":"#ffffff","decor":["mound"],"density":.2,"walls":.25,"rivers":2,"water_color":"#bfe6ff"},
-	{"name":"ruins","ground":"#a3a894","path":"#cbc9b0","cliff":"#75786c","accent":"#b9b6a3","decor":["pillar","block"],"density":.22,"walls":.8,"rivers":1,"water_color":"#6fa9b4"},
-	{"name":"beach","ground":"#efdea7","path":"#a4dc73","cliff":"#c9a465","accent":"#4f9f68","decor":["tree","boulder"],"water":true,"water_color":"#7fdcf7","density":.16,"walls":.05,"rivers":2},
-	{"name":"night","ground":"#524873","path":"#726699","cliff":"#2f2745","accent":"#c78cff","decor":["big_mushroom","crystal"],"density":.26,"walls":.65,"rivers":1,"water_color":"#6a5fb0","rock":"#5c4c8a"},
-	{"name":"crater","ground":"#a8825f","path":"#c9a883","cliff":"#6a4d37","accent":"#8c7a68","decor":["boulder"],"density":.3,"walls":.5,"rivers":0,"water_color":"#5fcff0","rock":"#8a5c4c"},
-	{"name":"valley","ground":"#a9e070","path":"#f1e0a3","cliff":"#78492a","accent":"#3f7650","decor":["tree","bush","rock"],"water":true,"water_color":"#84dbf4","density":.22,"walls":.15,"rivers":2,"trunk":"birch"},
-	{"name":"void","ground":"#3f365a","path":"#5c5280","cliff":"#221d33","accent":"#ff8fd2","decor":["crystal","pillar"],"density":.3,"walls":.85,"rivers":1,"water_color":"#8a66e0","rock":"#4a3f6e"}
+ {
+  "name": "meadow",
+  "ground": "#a6d973",
+  "path": "#ddcf99",
+  "cliff": "#846443",
+  "accent": "#65a557",
+  "decor": [
+   "tree",
+   "bush",
+   "boulder"
+  ],
+  "density": 0.14,
+  "walls": 0.06,
+  "rivers": 1,
+  "river_width": 2,
+  "relief": 0.6,
+  "landform": "rolling",
+  "water_color": "#74c4d4",
+  "prop_scale": 1.0
+ },
+ {
+  "name": "fields",
+  "ground": "#b3cb67",
+  "path": "#dfce98",
+  "cliff": "#8b7651",
+  "accent": "#c7b866",
+  "decor": [
+   "grass",
+   "flower",
+   "boulder"
+  ],
+  "density": 0.3,
+  "walls": 0.08,
+  "rivers": 1,
+  "river_width": 2,
+  "relief": 0.2,
+  "landform": "flat",
+  "water_color": "#74c4d4",
+  "prop_scale": 1.0
+ },
+ {
+  "name": "creeks",
+  "ground": "#84c780",
+  "path": "#c5cb97",
+  "cliff": "#71886b",
+  "accent": "#529c71",
+  "decor": [
+   "reeds",
+   "bush",
+   "boulder"
+  ],
+  "density": 0.25,
+  "walls": 0.12,
+  "rivers": 6,
+  "river_width": 2,
+  "relief": 0.35,
+  "landform": "rolling",
+  "water_color": "#74c4d4",
+  "prop_scale": 1.0
+ },
+ {
+  "name": "cliffs",
+  "ground": "#a6aa82",
+  "path": "#d6c5a0",
+  "cliff": "#8b8175",
+  "accent": "#728568",
+  "decor": [
+   "boulder",
+   "pillar"
+  ],
+  "density": 0.22,
+  "walls": 0.8,
+  "rivers": 1,
+  "river_width": 2,
+  "relief": 1.4,
+  "landform": "ridges",
+  "water_color": "#74c4d4",
+  "prop_scale": 1.0
+ },
+ {
+  "name": "swamp",
+  "ground": "#7f9b62",
+  "path": "#a29370",
+  "cliff": "#626e54",
+  "accent": "#72954b",
+  "decor": [
+   "reeds",
+   "mushroom",
+   "bush"
+  ],
+  "density": 0.5,
+  "walls": 0.15,
+  "rivers": 5,
+  "river_width": 4,
+  "relief": 0.12,
+  "landform": "wetland",
+  "water_color": "#799d8c",
+  "prop_scale": 1.0
+ },
+ {
+  "name": "basin",
+  "ground": "#70be68",
+  "path": "#b8cc86",
+  "cliff": "#64805b",
+  "accent": "#388953",
+  "decor": [
+   "tree",
+   "bush",
+   "flower"
+  ],
+  "density": 0.7,
+  "walls": 0.25,
+  "rivers": 4,
+  "river_width": 2,
+  "relief": 0.7,
+  "landform": "basin",
+  "water_color": "#74c4d4",
+  "prop_scale": 1.0
+ },
+ {
+  "name": "cave",
+  "ground": "#777e9b",
+  "path": "#a4adc1",
+  "cliff": "#494d69",
+  "accent": "#81deea",
+  "decor": [
+   "crystal",
+   "pillar",
+   "boulder"
+  ],
+  "density": 0.4,
+  "walls": 0.95,
+  "rivers": 2,
+  "river_width": 3,
+  "relief": 0.45,
+  "landform": "cavern",
+  "water_color": "#74c4d4",
+  "prop_scale": 1.0
+ },
+ {
+  "name": "snow",
+  "ground": "#e8eff5",
+  "path": "#c6d9e6",
+  "cliff": "#92aec5",
+  "accent": "#d5edfa",
+  "decor": [
+   "mound",
+   "boulder",
+   "crystal"
+  ],
+  "density": 0.18,
+  "walls": 0.45,
+  "rivers": 1,
+  "river_width": 2,
+  "relief": 0.65,
+  "landform": "ridges",
+  "water_color": "#93cad5",
+  "prop_scale": 1.0
+ },
+ {
+  "name": "desert",
+  "ground": "#cdb17a",
+  "path": "#b99a68",
+  "cliff": "#a58358",
+  "accent": "#9b9a60",
+  "decor": [
+   "cactus",
+   "boulder",
+   "bush"
+  ],
+  "density": 0.12,
+  "walls": 0.12,
+  "rivers": 0,
+  "river_width": 2,
+  "relief": 0.4,
+  "landform": "dry",
+  "water_color": "#74c4d4",
+  "prop_scale": 1.0
+ },
+ {
+  "name": "mountain",
+  "ground": "#9cb0a1",
+  "path": "#c4c4ad",
+  "cliff": "#758492",
+  "accent": "#6a897d",
+  "decor": [
+   "boulder",
+   "pillar"
+  ],
+  "density": 0.22,
+  "walls": 0.85,
+  "rivers": 2,
+  "river_width": 2,
+  "relief": 2.2,
+  "landform": "ridges",
+  "water_color": "#74c4d4",
+  "prop_scale": 1.0
+ },
+ {
+  "name": "moor",
+  "ground": "#797659",
+  "path": "#91816c",
+  "cliff": "#62584e",
+  "accent": "#a487a6",
+  "decor": [
+   "grass",
+   "flower",
+   "mound"
+  ],
+  "density": 0.24,
+  "walls": 0.16,
+  "rivers": 2,
+  "river_width": 3,
+  "relief": 0.5,
+  "landform": "wetland",
+  "water_color": "#799d8c",
+  "prop_scale": 1.0
+ },
+ {
+  "name": "fjord",
+  "ground": "#789b91",
+  "path": "#b1b7a1",
+  "cliff": "#657b85",
+  "accent": "#467e78",
+  "decor": [
+   "boulder",
+   "tree"
+  ],
+  "density": 0.2,
+  "walls": 0.7,
+  "rivers": 5,
+  "river_width": 7,
+  "relief": 1.5,
+  "landform": "fjords",
+  "water_color": "#376d99",
+  "prop_scale": 1.0
+ },
+ {
+  "name": "forest",
+  "ground": "#456e58",
+  "path": "#85966c",
+  "cliff": "#3f5148",
+  "accent": "#305443",
+  "decor": [
+   "tree",
+   "bush",
+   "mushroom"
+  ],
+  "density": 0.85,
+  "walls": 0.7,
+  "rivers": 1,
+  "river_width": 2,
+  "relief": 0.55,
+  "landform": "groves",
+  "water_color": "#74c4d4",
+  "prop_scale": 1.0
+ },
+ {
+  "name": "giant",
+  "ground": "#93b07a",
+  "path": "#c4bb8a",
+  "cliff": "#737e64",
+  "accent": "#487748",
+  "decor": [
+   "tree",
+   "boulder",
+   "big_mushroom"
+  ],
+  "density": 0.55,
+  "walls": 0.85,
+  "rivers": 1,
+  "river_width": 3,
+  "relief": 0.9,
+  "landform": "looming",
+  "water_color": "#74c4d4",
+  "prop_scale": 1.6
+ },
+ {
+  "name": "downs",
+  "ground": "#9cc785",
+  "path": "#d3cd9f",
+  "cliff": "#859b75",
+  "accent": "#658f60",
+  "decor": [
+   "tree",
+   "bush",
+   "flower"
+  ],
+  "density": 0.22,
+  "walls": 0.3,
+  "rivers": 2,
+  "river_width": 3,
+  "relief": 1.2,
+  "landform": "rolling",
+  "water_color": "#74c4d4",
+  "prop_scale": 1.0
+ },
+ {
+  "name": "mystery",
+  "ground": "#a6c796",
+  "path": "#d4c8aa",
+  "cliff": "#998eaa",
+  "accent": "#cf8fce",
+  "decor": [
+   "tree",
+   "crystal",
+   "flower",
+   "cactus",
+   "mound"
+  ],
+  "density": 0.45,
+  "walls": 0.55,
+  "rivers": 3,
+  "river_width": 3,
+  "relief": 0.9,
+  "landform": "mixed",
+  "water_color": "#74c4d4",
+  "prop_scale": 1.0
+ },
+ {
+  "name": "thicket",
+  "ground": "#568449",
+  "path": "#839860",
+  "cliff": "#495b3b",
+  "accent": "#3a683c",
+  "decor": [
+   "bush",
+   "tree",
+   "grass"
+  ],
+  "density": 1.0,
+  "walls": 0.9,
+  "rivers": 1,
+  "river_width": 2,
+  "relief": 0.3,
+  "landform": "groves",
+  "water_color": "#74c4d4",
+  "prop_scale": 1.0
+ },
+ {
+  "name": "shoals",
+  "ground": "#d6cf9e",
+  "path": "#e5dbb2",
+  "cliff": "#aab8a0",
+  "accent": "#a9c9b4",
+  "decor": [
+   "reeds",
+   "boulder"
+  ],
+  "density": 0.22,
+  "walls": 0.08,
+  "rivers": 7,
+  "river_width": 3,
+  "relief": 0.1,
+  "landform": "wetland",
+  "water_color": "#74c4d4",
+  "prop_scale": 1.0
+ },
+ {
+  "name": "ravine",
+  "ground": "#a38a70",
+  "path": "#c7ac84",
+  "cliff": "#796959",
+  "accent": "#7f8a64",
+  "decor": [
+   "boulder",
+   "pillar"
+  ],
+  "density": 0.35,
+  "walls": 1.0,
+  "rivers": 0,
+  "river_width": 2,
+  "relief": 1.3,
+  "landform": "ravine",
+  "water_color": "#74c4d4",
+  "prop_scale": 1.0
+ },
+ {
+  "name": "golden",
+  "ground": "#c7bd6f",
+  "path": "#ded09a",
+  "cliff": "#93805b",
+  "accent": "#d9ad45",
+  "decor": [
+   "tree",
+   "bush",
+   "flower"
+  ],
+  "density": 0.55,
+  "walls": 0.3,
+  "rivers": 2,
+  "river_width": 2,
+  "relief": 0.5,
+  "landform": "groves",
+  "water_color": "#74c4d4",
+  "prop_scale": 1.0
+ }
 ]
 
 # Pokémon Quest–style voxel faces: every cube in an expedition shares one 3×2
@@ -229,7 +607,7 @@ const PASSIVE_REGEN_PER_SECOND:=.01
 const EXTRA_ENEMY_AREAS:=[6,12]
 
 static func enemy_scaling(area_index:int)->Dictionary:
-	var area:=float(clampi(area_index,0,EXPEDITION_AREAS.size()-1))
+	var area:=float(clampi(int(OPTIONAL_AREA_HOSTS.get(area_index,area_index)),0,MAIN_AREA_COUNT-1))
 	var previous:Array=ENEMY_SCALING_ANCHORS[0]
 	for anchor in ENEMY_SCALING_ANCHORS:
 		if area<=float(anchor[0]):
@@ -248,7 +626,7 @@ const ENEMY_LEVEL_CATCH_UP:=[[0,0.0],[2,0.0],[3,.2],[6,.45],[10,.7],[15,.9]]
 const ENEMY_STONE_SHARE:=[[0,0.0],[2,0.0],[3,.25],[6,.55],[10,.85],[15,1.1]]
 
 static func anchored_value(anchors:Array,area_index:int)->float:
-	var area:=float(clampi(area_index,0,EXPEDITION_AREAS.size()-1))
+	var area:=float(clampi(int(OPTIONAL_AREA_HOSTS.get(area_index,area_index)),0,MAIN_AREA_COUNT-1))
 	var previous:Array=anchors[0]
 	for anchor in anchors:
 		if area<=float(anchor[0]):
@@ -302,6 +680,7 @@ static func knockout_revive_seconds(_knockouts:int)->float:
 	return KNOCKOUT_REVIVE_SECONDS
 
 static func extra_enemies_for_area(area_index:int)->int:
+	area_index=int(OPTIONAL_AREA_HOSTS.get(area_index,area_index))
 	var extra:=0
 	for threshold in EXTRA_ENEMY_AREAS:
 		if area_index>=int(threshold):extra+=1
@@ -467,19 +846,23 @@ static func power_stone_drop_average(tier:int)->int:
 	var power_range:Vector2i=POWER_STONE_RANGES[clampi(tier,1,POWER_STONE_RANGES.size())-1]
 	return roundi((power_range.x+power_range.y)*.5)
 
-const REVITALIZE_SHARE:=.90
+const REVITALIZE_MAX_POWER:=630
 const COMBINE_MIN_STONES:=2
 const COMBINE_MAX_STONES:=4
 
-# Stone Workshop: Revitalizer. The stone's power becomes 90% of the average drop
-# at the given loot tier, plus a random 0–5 bonus on a successful upgrade.
-# Stones already at the baseline or above cannot be upgraded again at that tier.
-static func revitalized_power(stone:Dictionary,loot_tier:int)->int:
-	return maxi(int(stone.power),roundi(power_stone_drop_average(loot_tier)*REVITALIZE_SHARE))
+# Revitalizer follows reached expedition levels directly, independently of loot tiers.
+# A fixed progress baseline prevents repeated upgrades from farming random bonuses.
+static func revitalizer_base_power(stage_level:int)->int:
+	return clampi(stage_level*6,20,REVITALIZE_MAX_POWER)
 
-static func revitalize_power_stone(stone:Dictionary,loot_tier:int)->Dictionary:
-	var result:=normalize_power_stone(stone);var power:=revitalized_power(result,loot_tier)
-	if power>int(result.power):result.power=power+randi_range(0,5);result.tier=maxi(int(result.tier),clampi(loot_tier,1,POWER_STONE_RANGES.size()))
+static func revitalized_power(stone:Dictionary,stage_level:int)->int:
+	return maxi(int(stone.power),revitalizer_base_power(stage_level))
+
+static func revitalize_power_stone(stone:Dictionary,stage_level:int)->Dictionary:
+	var result:=normalize_power_stone(stone);var power:=revitalized_power(result,stage_level)
+	if power>int(result.power):
+		result.power=power+randi_range(0,5)
+		result.tier=maxi(int(result.tier),power_stone_tier_for_power(int(result.power)))
 	return normalize_power_stone(result)
 
 # Stone Workshop: Converter. Everything stays except the stat type.
@@ -632,11 +1015,11 @@ const SPECIES := [
 ]
 
 const MOVES := {
-	"Water Shot":{"power":30.0,"cooldown":1.3,"range":200.0,"color":Color("#5bb9dc"),"kind":"projectile","desc":"Fires a fast, compact projectile of water."},
-	"Water Jet":{"power":24.0,"cooldown":3.0,"range":220.0,"color":Color("#5bb9dc"),"kind":"projectile","desc":"Fires a continuous narrow stream that repeatedly damages enemies caught in it."},
+	"Water Shot":{"icon":"res://textures/Moves/WaterShot.png","power":30.0,"cooldown":1.3,"range":200.0,"color":Color("#5bb9dc"),"kind":"projectile","desc":"Fires a fast, compact projectile of water."},
+	"Water Jet":{"icon":"res://textures/Moves/WaterJet.png","power":24.0,"cooldown":3.0,"range":220.0,"color":Color("#5bb9dc"),"kind":"projectile","desc":"Fires a continuous narrow stream that repeatedly damages enemies caught in it."},
 	"Splash Dash":{"power":44.0,"cooldown":3.0,"range":110.0,"color":Color("#5bb9dc"),"kind":"burst","icon":"res://textures/Moves/SplashDash.png","desc":"The user surges forward in a splash of water, damaging enemies it hits."},
 	"Backwash":{"power":56.0,"cooldown":4.0,"range":90.0,"color":Color("#5bb9dc"),"kind":"burst","desc":"Fires a powerful short-range blast of water with strong knockback."},
-	"Water Burst":{"power":50.0,"cooldown":4.2,"range":105.0,"color":Color("#5bb9dc"),"kind":"burst","desc":"Releases an explosion of water in every direction around the user."},
+	"Water Burst":{"icon":"res://textures/Moves/WaterBurst.png","power":50.0,"cooldown":4.2,"range":105.0,"color":Color("#5bb9dc"),"kind":"burst","desc":"Releases an explosion of water in every direction around the user."},
 	"Rain Drop":{"power":48.0,"cooldown":4.5,"range":190.0,"color":Color("#5bb9dc"),"kind":"burst","desc":"Launches water upward so it falls onto a targeted area."},
 	"Hydro Shot":{"power":72.0,"cooldown":5.2,"range":240.0,"color":Color("#5bb9dc"),"kind":"projectile","desc":"Fires a large, compressed water projectile that deals heavy damage and pierces enemies."},
 	"Breaker":{"power":64.0,"cooldown":5.0,"range":100.0,"color":Color("#5bb9dc"),"kind":"burst","desc":"Creates a tall wave in front of the user that crashes onto nearby enemies."},
@@ -649,20 +1032,20 @@ const MOVES := {
 	"Spray":{"power":38.0,"cooldown":2.6,"range":95.0,"color":Color("#5bb9dc"),"kind":"burst","desc":"Blasts a wide cone of water at close range."},
 	"Downpour":{"power":68.0,"cooldown":7.0,"range":190.0,"color":Color("#5bb9dc"),"kind":"burst","desc":"Creates heavy rain over an area, repeatedly damaging enemies inside."},
 	"Tsunami":{"power":92.0,"cooldown":10.0,"range":220.0,"color":Color("#5bb9dc"),"kind":"burst","desc":"Unleashes a massive wave across a broad area, dealing extreme damage and carrying enemies."},
-	"Leaf Shot":{"power":30.0,"cooldown":1.3,"range":200.0,"color":Color("#65b96d"),"kind":"projectile","desc":"Fires a sharp leaf as a fast projectile."},
+	"Leaf Shot":{"icon":"res://textures/Moves/LeafShot.png","power":30.0,"cooldown":1.3,"range":200.0,"color":Color("#65b96d"),"kind":"projectile","desc":"Fires a sharp leaf as a fast projectile."},
 	"Vine Whip":{"power":42.0,"cooldown":2.6,"range":100.0,"color":Color("#65b96d"),"kind":"burst","desc":"Sweeps a long vine across an arc in front of the user."},
 	"Vine Spear":{"power":48.0,"cooldown":3.0,"range":190.0,"color":Color("#65b96d"),"kind":"projectile","desc":"Thrusts a vine straight forward as a long piercing stab."},
 	"Vine Grab":{"power":30.0,"cooldown":4.5,"range":160.0,"color":Color("#65b96d"),"kind":"projectile","desc":"Grabs an enemy with a vine and pulls it toward the user."},
 	"Rootbind":{"power":22.0,"cooldown":5.0,"range":170.0,"color":Color("#65b96d"),"kind":"burst","desc":"Grows roots around an enemy, temporarily holding it in place."},
-	"Thorn Burst":{"power":52.0,"cooldown":4.0,"range":165.0,"color":Color("#65b96d"),"kind":"burst","desc":"Causes sharp thorns to erupt from the ground around a targeted location."},
+	"Thorn Burst":{"icon":"res://textures/Moves/ThornBurst.png","power":52.0,"cooldown":4.0,"range":165.0,"color":Color("#65b96d"),"kind":"burst","desc":"Causes sharp thorns to erupt from the ground around a targeted location."},
 	"Sprout":{"power":40.0,"cooldown":3.0,"range":170.0,"color":Color("#65b96d"),"kind":"burst","desc":"Rapidly grows a plant underneath an enemy, striking it from below."},
 	"Seed Pop":{"power":38.0,"cooldown":2.5,"range":190.0,"color":Color("#65b96d"),"kind":"projectile","desc":"Fires a seed that sticks where it lands and bursts shortly afterward."},
-	"Healing Bloom":{"power":0.0,"cooldown":7.0,"range":0.0,"color":Color("#65b96d"),"kind":"recover","desc":"Grows a flower that periodically heals nearby allies."},
+	"Healing Bloom":{"icon":"res://textures/Moves/HealingBloom.png","power":0.0,"cooldown":7.0,"range":0.0,"color":Color("#65b96d"),"kind":"recover","desc":"Grows a flower that periodically heals nearby allies."},
 	"Pollen Puff":{"power":0.0,"cooldown":5.0,"range":0.0,"color":Color("#65b96d"),"kind":"recover","desc":"Releases healing pollen that restores HP to the user and nearby allies."},
-	"Soothing Scent":{"power":0.0,"cooldown":6.0,"range":0.0,"color":Color("#65b96d"),"kind":"recover","desc":"Removes negative status effects from the user."},
+	"Soothing Scent":{"icon":"res://textures/Moves/SoothingScent.png","power":0.0,"cooldown":6.0,"range":0.0,"color":Color("#65b96d"),"kind":"recover","desc":"Removes negative status effects from the user."},
 	"Overgrowth":{"power":76.0,"cooldown":7.0,"range":150.0,"color":Color("#65b96d"),"kind":"burst","desc":"Causes a huge mass of vegetation to erupt, damaging and pushing enemies."},
 	"Spore Cloud":{"power":24.0,"cooldown":6.0,"range":130.0,"color":Color("#65b96d"),"kind":"burst","desc":"Releases spores that inflict a disabling status on enemies caught inside."},
-	"Thorn Armor":{"power":0.0,"cooldown":7.5,"range":0.0,"color":Color("#65b96d"),"kind":"recover","desc":"Temporarily covers the user in thorns so enemies that hit it take damage."},
+	"Thorn Armor":{"icon":"res://textures/Moves/ThornArmor.png","power":0.0,"cooldown":7.5,"range":0.0,"color":Color("#65b96d"),"kind":"recover","desc":"Temporarily covers the user in thorns so enemies that hit it take damage."},
 	"Seed Mine":{"power":58.0,"cooldown":5.5,"range":160.0,"color":Color("#65b96d"),"kind":"burst","desc":"Plants a dormant seed that violently sprouts when an enemy approaches."},
 	"Root Slam":{"power":72.0,"cooldown":6.0,"range":155.0,"color":Color("#65b96d"),"kind":"burst","desc":"Grows a massive root that rises and slams down onto an area."},
 	"Vine Swing":{"power":38.0,"cooldown":3.0,"range":180.0,"color":Color("#65b96d"),"kind":"burst","desc":"Attaches a vine to a target or location and rapidly pulls the user toward it."},
@@ -670,23 +1053,21 @@ const MOVES := {
 	"Cocoon":{"power":0.0,"cooldown":9.0,"range":0.0,"color":Color("#65b96d"),"kind":"recover","desc":"Encases the user and gradually heals it while preventing other actions."},
 	"Leech Bloom":{"power":46.0,"cooldown":5.0,"range":155.0,"color":Color("#65b96d"),"kind":"projectile","desc":"Grows a parasitic bloom that damages a target and restores HP to the user."},
 	"Last Bloom":{"power":0.0,"cooldown":11.0,"range":0.0,"color":Color("#65b96d"),"kind":"recover","desc":"Creates a powerful final bloom that greatly heals nearby allies when the user is in danger."},
-	"Fireball":{"power":36.0,"cooldown":1.6,"range":205.0,"color":Color("#ef654c"),"kind":"projectile","desc":"Fires a basic ball of flame that explodes on impact."},
+	"Fireball":{"icon":"res://textures/Moves/Fireball.png","power":36.0,"cooldown":1.6,"range":205.0,"color":Color("#ef654c"),"kind":"projectile","desc":"Fires a basic ball of flame that explodes on impact."},
 	"Flame Burst":{"power":46.0,"cooldown":2.7,"range":95.0,"color":Color("#ef654c"),"kind":"burst","desc":"Releases a concentrated blast of fire directly in front of the user."},
 	"Spark Burst":{"power":42.0,"cooldown":3.0,"range":100.0,"color":Color("#ef654c"),"kind":"burst","desc":"Releases fire outward around the user."},
-	"Flare":{"power":54.0,"cooldown":4.0,"range":110.0,"color":Color("#ef654c"),"kind":"burst","desc":"Creates a sudden fiery explosion around the user with knockback."},
-	"Flame Dash":{"power":48.0,"cooldown":3.2,"range":120.0,"color":Color("#ef654c"),"kind":"burst","desc":"Engulfs the user in fire and dashes through enemies."},
+	"Flare":{"icon":"res://textures/Moves/Flare.png","power":54.0,"cooldown":4.0,"range":110.0,"color":Color("#ef654c"),"kind":"burst","desc":"Creates a sudden fiery explosion around the user with knockback."},
+	"Flame Dash":{"icon":"res://textures/Moves/FlameDash.png","power":48.0,"cooldown":3.2,"range":120.0,"color":Color("#ef654c"),"kind":"burst","desc":"Engulfs the user in fire and dashes through enemies."},
 	"Blazing Rush":{"power":66.0,"cooldown":5.0,"range":145.0,"color":Color("#ef654c"),"kind":"burst","desc":"Performs a longer, heavier fiery charge through enemies."},
-	"Fire Trail":{"power":52.0,"cooldown":4.5,"range":145.0,"color":Color("#ef654c"),"kind":"burst","desc":"Rushes forward while leaving persistent flames behind."},
 	"Flame Wave":{"power":64.0,"cooldown":5.0,"range":180.0,"color":Color("#ef654c"),"kind":"burst","desc":"Sends a broad moving wall of fire forward."},
 	"Firestorm":{"power":72.0,"cooldown":7.0,"range":190.0,"color":Color("#ef654c"),"kind":"burst","desc":"Causes repeated flame eruptions throughout a targeted area."},
-	"Inferno":{"power":100.0,"cooldown":11.0,"range":120.0,"color":Color("#ef654c"),"kind":"burst","desc":"Creates an enormous explosion around the user with a very long cooldown."},
+	"Inferno":{"icon":"res://textures/Moves/Inferno.png","power":100.0,"cooldown":11.0,"range":120.0,"color":Color("#ef654c"),"kind":"burst","desc":"Creates an enormous explosion around the user with a very long cooldown."},
 	"Flame Pillar":{"power":64.0,"cooldown":5.5,"range":190.0,"color":Color("#ef654c"),"kind":"burst","desc":"Causes a column of fire to erupt beneath a target."},
 	"Meteor Ember":{"power":70.0,"cooldown":6.5,"range":210.0,"color":Color("#ef654c"),"kind":"burst","desc":"Launches fire high into the air before it crashes onto a targeted location."},
 	"Flame Spin":{"power":56.0,"cooldown":4.5,"range":100.0,"color":Color("#ef654c"),"kind":"burst","desc":"Spins while engulfed in fire, repeatedly damaging nearby enemies."},
 	"Heat Haze":{"power":0.0,"cooldown":7.0,"range":0.0,"color":Color("#ef654c"),"kind":"recover","desc":"Surrounds the user with distorted hot air, reducing enemy accuracy."},
 	"Ignite":{"power":34.0,"cooldown":4.0,"range":180.0,"color":Color("#ef654c"),"kind":"projectile","desc":"Sets an enemy on fire, dealing damage over time."},
 	"Fire Mine":{"power":58.0,"cooldown":5.5,"range":165.0,"color":Color("#ef654c"),"kind":"burst","desc":"Leaves a dormant ember that explodes when an enemy approaches."},
-	"Combust":{"power":70.0,"cooldown":5.0,"range":165.0,"color":Color("#ef654c"),"kind":"burst","desc":"Causes a Burning enemy to erupt for immediate damage, consuming its Burn."},
 	"Smoke Cloud":{"power":20.0,"cooldown":6.0,"range":135.0,"color":Color("#ef654c"),"kind":"burst","desc":"Fills an area with smoke that interferes with enemy accuracy and targeting."},
 	"Cauterize":{"power":0.0,"cooldown":6.0,"range":0.0,"color":Color("#ef654c"),"kind":"recover","desc":"Damages the user slightly to remove applicable negative status effects."},
 	"Firework":{"power":76.0,"cooldown":7.0,"range":210.0,"color":Color("#ef654c"),"kind":"burst","desc":"Launches fire upward, where it explodes and rains burning fragments over an area."},
@@ -710,9 +1091,9 @@ const MOVES := {
 	"Pitfall":{"power":30.0,"cooldown":5.5,"range":160.0,"color":Color("#c8965a"),"kind":"burst","desc":"Creates a hidden hole that traps the first enemy to cross it briefly."},
 	"Sinkhole":{"power":46.0,"cooldown":5.5,"range":170.0,"color":Color("#c8965a"),"kind":"burst","desc":"Collapses an area of ground, damaging enemies and pulling them toward the center."},
 	"Burrow":{"power":0.0,"cooldown":7.0,"range":0.0,"color":Color("#c8965a"),"kind":"recover","desc":"Dives underground temporarily to avoid danger and reposition."},
-	"Groundbreaker":{"power":62.0,"cooldown":5.0,"range":175.0,"color":Color("#c8965a"),"kind":"burst","desc":"Bursts the ground apart in a powerful line or area attack."},
+	"Groundbreaker":{"icon":"res://textures/Moves/Groundbreaker.png","power":62.0,"cooldown":5.0,"range":175.0,"color":Color("#c8965a"),"kind":"burst","desc":"Bursts the ground apart in a powerful line or area attack."},
 	"Dust Cloud":{"power":22.0,"cooldown":6.0,"range":150.0,"color":Color("#c8965a"),"kind":"burst","desc":"Kicks up a thick cloud of dust that reduces enemy accuracy or visibility."},
-	"Mud Shot":{"power":36.0,"cooldown":2.6,"range":185.0,"color":Color("#c8965a"),"kind":"projectile","desc":"Fires a blob of mud that damages and slows the target."},
+	"Mud Shot":{"icon":"res://textures/Moves/MudShot.png","power":36.0,"cooldown":2.6,"range":185.0,"color":Color("#c8965a"),"kind":"projectile","desc":"Fires a blob of mud that damages and slows the target."},
 	"Dig Punch":{"power":80.0,"cooldown":6.5,"range":160.0,"color":Color("#a9743d"),"kind":"burst","desc":"Burrows to an enemy, erupts directly beneath them, and punches upward with its head."},
 	"Dust-Up":{"power":60.0,"cooldown":6.5,"range":120.0,"color":Color("#a9743d"),"kind":"burst","desc":"Burrows near enemies, then erupts with a huge dusty blast that deals moderate damage and may inflict Confused."},
 	"Tunneling Charge":{"power":72.0,"cooldown":6.0,"range":170.0,"color":Color("#a9743d"),"kind":"burst","desc":"Travels rapidly underground in a straight line, damaging or disturbing enemies above the tunnel before emerging at the end."},
@@ -734,7 +1115,7 @@ const MOVES := {
 	"Spin":{"power":44.0,"cooldown":4.5,"range":100.0,"color":Color("#d8c39a"),"kind":"burst","desc":"Spins its shell rapidly, damaging and pushing away nearby enemies."},
 	"Hunker Down":{"power":0.0,"cooldown":9.0,"range":0.0,"color":Color("#d8c39a"),"kind":"recover","desc":"Fully retreats into its shell, becoming extremely resistant but unable to move or attack."},
 	"Shelter":{"power":0.0,"cooldown":8.0,"range":0.0,"color":Color("#d8c39a"),"kind":"recover","desc":"Uses its oversized shell as cover, reducing damage taken by nearby allies positioned behind or close to it."},
-	"Distract":{"power":0.0,"cooldown":5.5,"range":0.0,"color":Color("#d8c39a"),"kind":"recover","desc":"Makes a ridiculous display or noise that causes nearby enemies to target Mimbit temporarily."},
+	"Distract":{"icon":"res://textures/Moves/Distract.png","power":0.0,"cooldown":5.5,"range":0.0,"color":Color("#d8c39a"),"kind":"recover","desc":"Makes a ridiculous display or noise that causes nearby enemies to target Mimbit temporarily."},
 	"Cheer":{"power":0.0,"cooldown":7.0,"range":0.0,"color":Color("#d8c39a"),"kind":"recover","desc":"Temporarily increases nearby allies' attack power."},
 	"Encourage":{"power":0.0,"cooldown":7.0,"range":0.0,"color":Color("#d8c39a"),"kind":"recover","desc":"Reduces a chosen ally's current move cooldowns."},
 	"Copycat":{"power":24.0,"cooldown":5.0,"range":200.0,"color":Color("#d8c39a"),"kind":"burst","desc":"Repeats a weaker version of the last move used by an allied Quiblet, using Mimbit's own Move Stones."},
@@ -780,7 +1161,7 @@ const MOVES := {
 	"Honk":{"power":18.0,"cooldown":4.0,"range":120.0,"color":Color("#e8b45a"),"kind":"burst","desc":"Lets out a loud honk that briefly lowers nearby enemies' attack and interrupts what they're doing."},
 	"Wingbeat":{"power":38.0,"cooldown":3.0,"range":110.0,"color":Color("#e8b45a"),"kind":"burst","desc":"Flaps hard and pushes nearby enemies away."},
 	"Feather Guard":{"power":0.0,"cooldown":6.5,"range":0.0,"color":Color("#e8b45a"),"kind":"recover","desc":"Fluffs up its feathers and takes reduced damage for a short time."},
-	"Scare":{"power":0.0,"cooldown":6.0,"range":175.0,"color":Color("#e8b45a"),"kind":"burst","desc":"Jumps in front of an enemy, spreads its wings and feathers, and causes it to flee and stop targeting an ally for a few seconds. Deals no damage."},
+	"Scare":{"icon":"res://textures/Moves/Scare.png","power":0.0,"cooldown":6.0,"range":175.0,"color":Color("#e8b45a"),"kind":"burst","desc":"Jumps in front of an enemy, spreads its wings and feathers, and causes it to flee and stop targeting an ally for a few seconds. Deals no damage."},
 	"Escort":{"power":0.0,"cooldown":7.0,"range":0.0,"color":Color("#e8b45a"),"kind":"recover","desc":"Flies beside a chosen ally for a short time, shielding it and helping intercept nearby attackers."},
 	"Alarm Honk":{"power":0.0,"cooldown":7.0,"range":0.0,"color":Color("#e8b45a"),"kind":"recover","desc":"Warns the team, briefly raising allies' evasion so fewer incoming attacks connect."},
 	"Peck":{"power":40.0,"cooldown":5.0,"range":220.0,"color":Color("#e8b45a"),"kind":"burst","desc":"Rapidly dashes to one enemy and pecks it hard, then immediately dashes to the next living enemy, until every currently alive enemy has been hit exactly once."},
@@ -791,7 +1172,7 @@ const MOVES := {
 }
 
 # Resolve retired move names when existing Quiblets are loaded into memory.
-const RETIRED_MOVES:={"Bubble Shot":"Water Jet","Bubble Burst":"Water Burst","Bubble Trap":"Whirlpool","Bubble Shield":"Guard","Big Bubble":"Tidal Wave"}
+const RETIRED_MOVES:={"Bubble Shot":"Water Jet","Bubble Burst":"Water Burst","Bubble Trap":"Whirlpool","Bubble Shield":"Guard","Big Bubble":"Tidal Wave","Fire Trail":"Flame Dash","Combust":"Meteor Ember"}
 
 static func replace_retired_moves(q:Dictionary)->void:
 	var replacements:Dictionary={}
@@ -829,7 +1210,7 @@ const LEARNSETS := [
 	["Vine Whip","Vine Spear","Vine Grab","Rootbind","Thorn Burst","Sprout","Seed Mine","Root Slam","Leech Bloom"],
 	["Healing Bloom","Pollen Puff","Soothing Scent","Spore Cloud","Thorn Armor","Cocoon","Last Bloom"],
 	["Fireball","Flame Burst","Spark Burst","Flare","Flame Dash","Flame Pillar","Ignite"],
-	["Fireball","Flame Burst","Flare","Flame Dash","Blazing Rush","Fire Trail","Flame Wave","Firestorm","Inferno","Flame Pillar","Ignite","Combust"],
+	["Fireball","Flame Burst","Flare","Flame Dash","Blazing Rush","Flame Wave","Firestorm","Inferno","Flame Pillar","Ignite","Meteor Ember"],
 	["Mind Jab","Psycho Punch","Fist Barrage","Helping Hand"],
 	["Psy Bolt","Psychic Push","Telekinesis","Psychic Pull","Psy Barrier","Gravity Well","Mind Squeeze","Psy Wall","Psy Bounce","Puff Grab","Mind Pop"],
 	["Rock Toss","Quake","Mud Shot","Pitfall","Sinkhole","Burrow","Groundbreaker","Dust Cloud","Dig Punch","Dust-Up","Tunneling Charge"],

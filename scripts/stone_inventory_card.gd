@@ -6,6 +6,7 @@ const POWER_STONE_ICON_SCRIPT:=preload("res://scripts/power_stone_icon.gd")
 signal chosen(data: Dictionary)
 
 var item_data: Dictionary = {}
+var drag_disabled:=false
 
 func setup(data: Dictionary) -> void:
 	item_data = data
@@ -16,7 +17,7 @@ func _gui_input(event: InputEvent) -> void:
 		chosen.emit(item_data)
 
 func _get_drag_data(_at_position: Vector2) -> Variant:
-	if item_data.is_empty() or item_data.get("fitted",false):
+	if drag_disabled or item_data.is_empty() or item_data.get("fitted",false):
 		return null
 	set_drag_preview(create_stone_drag_preview())
 	return item_data

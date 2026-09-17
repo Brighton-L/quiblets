@@ -82,6 +82,7 @@ func _notification(what:int)->void:
 		if controller!=null:controller.finish_equipment_drag()
 
 func _gui_input(event: InputEvent) -> void:
+	if locked:return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
 		remove_requested.emit(slot_kind, primary_index, secondary_index)
 	elif event is InputEventMouseButton and event.button_index==MOUSE_BUTTON_LEFT and not event.pressed:

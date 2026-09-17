@@ -1,6 +1,6 @@
 extends SceneTree
 
-const EXPECTED:=["Longgrass Fields","Splitstream","Tanglewood","Leaning Cliffs","Soggy Bottom","Cinder Hills","Glittergut Cave","Whiteout","Baked Flats","Cloudtops","Swallowed Ruins","Thunder Beach","Afterdark","Giant’s Footprint","Farside Valley","???"]
+const EXPECTED:=["Rolling Steppe","Windy Fields","Winding Creeks","Crooked Cliffs","Soggy Lowlands","Lush Basin","Glimmering Grotto","Shivering Shelf","Parched Plains","Highland Peaks","Muddy Moor","Foaming Fjord","Gloomy Glade","Looming Lowlands","Distant Downs","Mystery Meadow","Rustling Thicket","Pebbled Shoals","Rocky Ravine","Golden Grove"]
 const TYPES:=["level","level","level","berry_grove","level","level","boss","optional_berry_grove"]
 var failures:=0
 var checks:=0
@@ -16,25 +16,20 @@ func run()->void:
 	var game=load("res://main.tscn").instantiate();root.add_child(game);await process_frame
 	for species_index in [1,2,6,5]:game.roster.append(GameData.make_quiblet(species_index,6))
 	game.team_indices.assign([0,1,2,3,4])
-	check(game.map_page_count()==6,"Six pages should expose all sixteen areas")
-	var seen:Array=[]
-	for page in game.map_page_count():
-		game.set_map_page(page);await process_frame
-		var indices:Array=game.visible_map_areas();check(indices.size()==(1 if page==5 else 3),"Wrong island count on page")
-		check(game.content.find_children("AreaCard*","Control",true,false).is_empty(),"Island info cards must not appear beneath islands")
-		check(game.world_root.find_children("AreaLabel*","Label3D",false,false).size()==indices.size(),"Hidden island labels remained")
-		for local_index in indices.size():
-			var index:int=indices[local_index];seen.append(index)
-			check(game.world_root.get_node("AreaLabel%d"%index).text==EXPECTED[index],"Wrong island label")
-			check(game.map_area_at_point(game.map_island_position(local_index))==index,"Island hit target resolves incorrectly")
-	check(seen==range(16),"Pagination skipped or duplicated an island")
+	check(game.map_page_count()==1,"The island should be one map")
+	game.show_map();await process_frame
+	check(game.visible_map_areas().size()==16,"Only main regions should begin visible")
+	for index in game.visible_map_areas():
+		check(game.content.find_child("AreaLabel%d"%index,true,false).text==EXPECTED[index],"Wrong region label")
+		check(game.map_area_at_point(game.map_island_position(index))==index,"Region hit target resolves incorrectly")
 	check(GameData.expedition_area_level(0)==2 and GameData.expedition_area_level(1)==5 and GameData.expedition_area_level(15)==61,"Expedition level scaling should start gently and rise smoothly")
-	game.set_map_page(5);await process_frame
-	var click:=InputEventMouseButton.new();click.button_index=MOUSE_BUTTON_LEFT;click.pressed=true;click.position=game.camera_3d.unproject_position(Vector3.ZERO)
-	game._unhandled_input(click);await process_frame
+	game.area_progress[14]=7;game.show_map();await process_frame
+	game.content.find_child("RegionButton15",true,false).pressed.emit();await process_frame
 	check(game.screen=="area_levels" and game.selected_area_index==15 and game.expedition==null,"Island click bypassed the level menu")
 	check(game.content.find_child("BackButton",true,false)!=null,"Level menu needs a return button")
 	for area in 16:
+		game.area_progress.fill(0)
+		if area>0:game.area_progress[area-1]=7
 		game.show_area_levels(area);await process_frame
 		check(game.area_progress[area]==0,"Fresh area unexpectedly has progress")
 		for node in 8:
@@ -42,6 +37,7 @@ func run()->void:
 			check(data.type==TYPES[node] and card!=null,"Incorrect route node sequence")
 			check(play.disabled==(node>0),"Only the first level should begin unlocked")
 			check(card.find_children("*","Label",true,false).any(func(item):return str(item.text).contains("♥") and str(item.text).contains("⚔") and str(item.text).contains("◎")),"Level lacks difficulty details")
+	game.area_progress.fill(0)
 	game.show_area_levels(0);await process_frame;game.start_area_level(0,1);check(game.screen=="area_levels","Locked level was playable")
 	for node in 8:
 		game.start_area_level(0,node);await process_frame
@@ -49,7 +45,7 @@ func run()->void:
 		check(not str(game.expedition.obstacles).is_empty(),"Level map was not built")
 		if node==0:
 			var first:Expedition3D=game.expedition
-			check(first.max_waves>=5 and first.max_waves<=7 and first.spawn_points.size()==first.SPAWN_POINTS and first.enemies.size()>=1 and first.enemies.size()<=2 and first.enemies.all(func(enemy):return int(enemy.get_meta("group"))==1 and is_equal_approx(enemy.damage_multiplier,.58) and not enemy.get_meta("alerted",false)),"A level should open with one small idle set at a spawn area, with more sets and the boss to come")
+			check(first.max_waves>=5 and first.max_waves<=7 and first.spawn_points.size()==1 and first.enemies.size()>=1 and first.enemies.size()<=2 and first.enemies.all(func(enemy):return int(enemy.get_meta("group"))==1 and is_equal_approx(enemy.damage_multiplier,.58) and not enemy.get_meta("alerted",false)),"A level should open with one small idle set at a spawn area, with more sets and the boss to come")
 			var member:QuibletActor3D=first.team[0];member.current_hp=member.max_hp*.5
 			var first_point:int=int(first.enemies[0].get_meta("spawn_point"))
 			for enemy in first.enemies.duplicate():first._on_actor_defeated(enemy)
@@ -66,7 +62,7 @@ func run()->void:
 	var boss_stage:Expedition3D=game.expedition
 	check(boss_stage.max_waves>=8 and boss_stage.max_waves<=10 and boss_stage.zones.size()==4 and boss_stage.enemies.size()>=2 and not boss_stage.enemies.any(func(enemy):return enemy.get_meta("level_boss",false)),"Boss level should run more enemy sets than a regular level, each one larger, with the boss last")
 	check(boss_stage.enemies.all(func(enemy):return int(enemy.data.level)>=boss_stage.enemy_level(-1)+1),"Boss-level sets should be at least one level stronger than regular enemies")
-	# Park the team by the third arena so the boss picks it as the nearest, then beat every set.
+	# Park the team deeper into the map, then beat every set.
 	var far_arena:Vector2=boss_stage.zones[3].center
 	for member in boss_stage.team:member.position=Vector3(far_arena.x-3.0,0,far_arena.y)
 	var sets_seen:int=0
@@ -76,7 +72,7 @@ func run()->void:
 		for enemy in boss_stage.enemies.duplicate():boss_stage._on_actor_defeated(enemy)
 		boss_stage.intermission=.01;boss_stage._process(.02)
 	var bosses:Array=boss_stage.enemies.filter(func(enemy):return enemy.get_meta("level_boss",false))
-	check(sets_seen==boss_stage.max_waves-1 and bosses.size()==1 and boss_stage.enemies.size()==4 and int(bosses[0].get_meta("zone"))==3 and boss_stage.camera_pan_time>0.0,"Beating the last set should bring the boss and its escorts into the nearest arena and pan the camera there")
+	check(sets_seen==boss_stage.max_waves-1 and bosses.size()==1 and boss_stage.enemies.size()==4 and boss_stage.encounter_walk_distance(boss_stage.team_centroid(),Vector2(boss_stage.camera_pan_target.x,boss_stage.camera_pan_target.z))<=boss_stage.SET_MAX_WALK_DISTANCE and boss_stage.camera_pan_time>0.0,"Beating the last set should bring the boss and its escorts within walking range and pan the camera there")
 	var stage_boss:QuibletActor3D=bosses[0];var escort:QuibletActor3D=boss_stage.enemies.filter(func(enemy):return not enemy.get_meta("level_boss",false))[0]
 	check(stage_boss.scale.x>1.8 and int(stage_boss.data.level)==int(escort.data.level)+4 and stage_boss.max_hp>GameData.max_hp(stage_boss.data)*float(GameData.enemy_scaling(0).hp)*3.9 and stage_boss.damage_multiplier>escort.damage_multiplier*1.6,"The stage boss should be much tougher than its escorts")
 	var rewards:Array=[];boss_stage.reward_acquired.connect(func(reward,_position):rewards.append(reward))

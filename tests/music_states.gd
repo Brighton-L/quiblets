@@ -80,9 +80,17 @@ func run()->void:
 	game.close_expedition_pause();await process_frame
 	check(not game.get_tree().paused and game.expedition_music.playing,"Music continues after the pause menu closes")
 	game.expedition.wave=game.expedition.max_waves-1;game.expedition.spawn_wave();await process_frame
-	check_loop(game.expedition_music,"res://audio/Music/Expedition.wav","The Boss theme must wait for the boss's grunt, not start at its spawn")
-	await create_timer(2.4).timeout
-	check_loop(game.expedition_music,"res://audio/Music/BossTheme.wav","The Boss theme should start once the boss has grunted")
+	check_loop(game.expedition_music,"res://audio/Music/Expedition.wav","The Expedition theme should fade during the opening camera pan")
+	await create_timer(1.0).timeout
+	check(game.expedition_music.volume_db< -2.0 and game.expedition_music.volume_db> -20.0,"Expedition music should fade gradually during the outward pan")
+	await create_timer(1.4).timeout
+	check(game.current_expedition_music_path.ends_with("Expedition.wav") and game.expedition_music.volume_db<=-70.0,"Normal music should be silent while the boss grunts")
+	check(is_instance_valid(game.expedition.boss_grunt_player) and game.expedition.boss_grunt_player.playing,"Boss grunt should play during the silent introduction")
+	while game.expedition.camera_pan_time>0.0:await process_frame
+	check_loop(game.expedition_music,"res://audio/Music/BossTheme.wav","Boss music should start when the camera begins returning")
+	check(game.expedition_music.volume_db< -10.0,"Boss music should begin quietly")
+	await create_timer(.65).timeout
+	check(is_equal_approx(game.expedition_music.volume_db,0.0),"Boss music should finish its quick fade in")
 	var level_boss:QuibletActor3D=game.expedition.enemies[-1]
 	check(level_boss.get_meta("level_boss",false),"Final regular-level wave has no level boss")
 	var escorts_before:int=game.expedition.enemies.size()-1;var loot_before:int=0
@@ -102,7 +110,7 @@ func run()->void:
 	game.start_area_level(0,6);await process_frame
 	check_loop(game.expedition_music,"res://audio/Music/Expedition.wav","A Boss level should open on the Expedition theme until its boss grunts")
 	check(game.expedition.max_waves>=8 and game.expedition.enemies.size()>=2 and not game.expedition.enemies.any(func(enemy):return enemy.get_meta("level_boss",false)),"Boss level should open with its first enemy set")
-	game.expedition.wave=game.expedition.max_waves-1;game.expedition.spawn_wave();await create_timer(2.4).timeout
+	game.expedition.wave=game.expedition.max_waves-1;game.expedition.spawn_wave();await create_timer(5.2).timeout
 	check_loop(game.expedition_music,"res://audio/Music/BossTheme.wav","A Boss level's boss should bring in the Boss theme after its grunt")
 	game.expedition.finish(false);await process_frame
 	check(game.screen=="expedition_changes","Boss expedition did not open Quiblet updates")

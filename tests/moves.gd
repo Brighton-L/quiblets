@@ -65,7 +65,6 @@ func run()->void:
 		for stone in GameData.MOVE_STONES:
 			if stone.effect=="link" or not BEHAVIORS.supports(name,stone.effect):continue
 			fixture();user.current_hp=2000
-			if name=="Combust":victim.add_status("burn",3,2,user)
 			var modified=cast(name,[stone.effect])
 			check(is_instance_valid(modified),name+" failed to cast with "+stone.effect)
 			advance(.15)
@@ -93,7 +92,6 @@ func run()->void:
 	fixture();cast("Downpour");advance(.5);var rain_hp:=victim.current_hp;advance(.7);check(victim.current_hp<rain_hp,"Downpour was not persistent")
 	for name in ["Seed Mine","Fire Mine"]:
 		fixture();victim.position.x=5;cast(name);advance(1);check(victim.current_hp==10000,name+" triggered without a nearby enemy");victim.position.x=1;advance(.1);check(victim.current_hp<10000,name+" did not trigger on approach")
-	fixture();cast("Fire Trail");advance(.6);victim.statuses.clear();victim.position=Vector3(.7,0,0);var trail_hp:=victim.current_hp;advance(.5);check(victim.current_hp<trail_hp,"Fire Trail left no damaging flames behind")
 	# Status interactions and their expiry, not just visual flags.
 	fixture();cast("Guard");advance(.1);var shield_hp:=user.current_hp;user.take_damage(30,victim);check(user.current_hp==shield_hp,"Guard healed instead of absorbing damage");user.take_damage(4000,victim);check(not user.statuses.has("shield") and user.current_hp<shield_hp,"Shield did not break when exhausted")
 	fixture();cast("Rootbind");advance(.1);check(victim.movement_locked() and not victim.actions_locked(),"Roots should immobilize without blocking attacks");advance(3.2);check(not victim.movement_locked(),"Roots did not expire")
@@ -107,8 +105,7 @@ func run()->void:
 	for i in 1000:
 		if not user.accepts_hit_from(victim):misses+=1
 	check(misses>400 and misses<600,"Smoke Cloud did not reduce the affected enemy's accuracy")
-	fixture();cast("Ignite");advance(.3);var ignite_hp:=victim.current_hp;advance(.5);check(victim.current_hp<ignite_hp,"Ignite did not deal damage over time");cast("Combust");advance(.1);check(not victim.statuses.has("burn") and victim.current_hp<ignite_hp-60,"Combust did not consume Burn for immediate damage")
-	fixture();check(cast("Combust")==null and user.move_cooldowns[0]==0,"Combust activated on a non-burning target")
+	fixture();cast("Ignite");advance(.3);var ignite_hp:=victim.current_hp;advance(.5);check(victim.current_hp<ignite_hp,"Ignite did not deal damage over time")
 	fixture();user.current_hp=1000;cast("Leech Bloom");advance(.6);check(user.current_hp>1000,"Leech Bloom did not heal from damage")
 	fixture();user.add_status("burn",3,1,victim);cast("Cauterize");advance(.1);check(not user.statuses.has("burn") and user.current_hp<10000,"Cauterize did not pay its health cost and cleanse")
 	fixture();cast("Growth Spurt");advance(.1);var enlarged=cast("Vine Whip");check(enlarged.area_scale>1 and enlarged.force_scale>1,"Growth Spurt did not enlarge physical attack size and force")

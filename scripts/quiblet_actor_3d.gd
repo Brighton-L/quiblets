@@ -483,3 +483,19 @@ func update_status_visual()->void:
 			"haste","hasten":tint=Color(.95,.9,.4,.4)
 			"weaken":tint=Color(.6,.55,.5,.4)
 	status_visual.material_override.albedo_color=tint
+
+var exclamation_icon:Sprite3D
+var exclamation_tween:Tween
+func show_exclamation()->void:
+	if not is_inside_tree():return
+	if is_instance_valid(exclamation_icon):exclamation_icon.queue_free()
+	if exclamation_tween!=null and exclamation_tween.is_valid():exclamation_tween.kill()
+	exclamation_icon=Sprite3D.new();exclamation_icon.name="ExclamationIcon";exclamation_icon.texture=preload("res://textures/UI/ExclaimIcon.png")
+	exclamation_icon.billboard=BaseMaterial3D.BILLBOARD_ENABLED;exclamation_icon.no_depth_test=true;exclamation_icon.pixel_size=.004
+	var height:=2.3
+	if is_instance_valid(model):
+		var bounds:AABB=model.transform*model.combined_aabb(model)
+		height=maxf(1.0,bounds.end.y+.45)
+	exclamation_icon.position=Vector3(0,height,0);add_child(exclamation_icon);exclamation_icon.scale=Vector3.ONE*.3
+	exclamation_tween=create_tween();exclamation_tween.tween_property(exclamation_icon,"scale",Vector3.ONE,.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	exclamation_tween.tween_interval(2.4);exclamation_tween.tween_property(exclamation_icon,"modulate:a",0.0,.3);exclamation_tween.tween_callback(exclamation_icon.queue_free)

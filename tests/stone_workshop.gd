@@ -59,10 +59,16 @@ func run()->void:
 	for i in 8:many.append(stone("Health",100,[{"name":"Critical Hit Rate","stacks":3},{"name":"Evasion","stacks":3},{"name":"Damage Resistance","stacks":3}]))
 	var capped_totals:=GameData.stone_bonus_totals(many)
 	check(is_equal_approx(float(capped_totals.crit),.5) and is_equal_approx(float(capped_totals.evasion),.3) and is_equal_approx(float(capped_totals.resist),.4),"Equipped totals stop at each stat's cap")
-	# Revitalizer formula: max(current, round(drop average × 0.9)).
-	check(GameData.power_stone_drop_average(5)==590 and GameData.revitalized_power(stone("Health",100,[]),5)==531 and GameData.revitalized_power(stone("Health",600,[]),5)==600,"Revitalized power is the larger of the current power and 90% of the drop average")
-	var revived:=GameData.revitalize_power_stone(stone("Health",100,["Health"]),3)
-	check(int(revived.power)>=248 and int(revived.power)<=253 and int(revived.tier)==3 and revived.bonuses==["Health"] and revived.type=="Health","Revitalizing keeps the stone and lifts its power and tier")
+	# Direct level scaling, smooth within tiers, capped without weakening strong stones.
+	check(GameData.revitalized_power(stone("Health",100,[]),40)==240 and GameData.revitalized_power(stone("Health",600,[]),40)==600,"Revitalizer uses expedition level and preserves stronger stones")
+	check(GameData.revitalizer_base_power(40)==240 and GameData.revitalizer_base_power(41)==246,"Revitalizer improves within the same loot tier")
+	check(GameData.revitalizer_base_power(0)==20 and GameData.revitalizer_base_power(200)==630,"Revitalizer respects lower and upper bounds")
+	for trial in 40:
+		var original:=stone("Health",100,["Health"])
+		var revived:=GameData.revitalize_power_stone(original,40)
+		check(int(revived.power)>=240 and int(revived.power)<=245 and int(revived.tier)==3 and revived.bonuses==["Health"] and revived.type=="Health","Revitalizing keeps bonuses and type with a random 0–5 bonus")
+		check(original.power==100 and GameData.revitalize_power_stone(revived,40)==revived,"Revitalizing neither mutates input nor repeatedly rolls a bonus")
+	check(GameData.revitalize_power_stone(stone("Attack",700,[]),200).power==700,"Above-cap stones remain unchanged")
 	# Converter keeps everything but the type.
 	var converted:=GameData.convert_power_stone(a)
 	check(converted.type=="Health" and int(converted.power)==410 and converted.bonuses==a.bonuses and converted.quality==a.quality,"Converting swaps the stat type only")
@@ -97,21 +103,22 @@ func run()->void:
 	game.apply_stone_workshop();await process_frame
 	check(game.special_items["Combiner Charm"]==1 and not game.stone_workshop.charm_inserted,"A combination consumes exactly one charm and empties its slot")
 	check(game.power_stone_inventory.size()==3 and game.power_stone_inventory[2].quality=="Obsidian" and int(game.power_stone_inventory[2].power)==118 and game.stone_workshop.selected.is_empty(),"Combining consumes the inputs and adds the Obsidian result")
-	# Revitalizer uses the highest reached node's loot tier.
+	# Revitalizer uses the highest reached expedition level.
 	game.area_progress.fill(0);game.area_progress[0]=7
 	var reached:int=game.highest_reached_stage_level()
 	check(reached==maxi(int(game.area_level_data(0,6).level),int(game.area_level_data(1,0).level)),"Clearing an island's boss reaches its whole route and the next island's first level")
 	game.area_progress[0]=3;var reachable:int=0
 	for level_index in 4:reachable=maxi(reachable,int(game.area_level_data(0,level_index).level))
-	check(game.highest_reached_stage_level()==reachable and reachable<int(game.area_level_data(0,6).level),"Only reached nodes count toward the loot tier")
+	check(game.highest_reached_stage_level()==reachable and reachable<int(game.area_level_data(0,6).level),"Only reached nodes count toward revitalizer power")
 	game.area_progress[0]=0;check(game.highest_reached_stage_level()==int(game.area_level_data(0,0).level),"A fresh game has reached only the first level");game.area_progress[0]=7
+	game.power_stone_inventory[1].power=10
 	game.set_stone_workshop_mode("revitalize");game.workshop_pick_stone(1);await process_frame
-	var expected:int=maxi(90,roundi(GameData.power_stone_drop_average(game.workshop_loot_tier())*.9))
-	check(game.workshop_problem()=="" if expected>90 else game.workshop_problem()!="","Revitalizer availability follows the formula")
-	if expected>90:
+	var expected:int=maxi(10,GameData.revitalizer_base_power(game.highest_reached_stage_level()))
+	check(game.workshop_problem()=="" if expected>10 else game.workshop_problem()!="","Revitalizer availability follows the formula")
+	if expected>10:
 		game.apply_stone_workshop();await process_frame
 		check(int(game.power_stone_inventory[1].power)>=expected and int(game.power_stone_inventory[1].power)<=expected+5 and game.power_stone_inventory[1].bonuses.is_empty() and game.stone_workshop.selected.is_empty(),"Revitalizing sets the formula power")
-		game.workshop_pick_stone(1);check(game.workshop_problem()!="","A revitalized stone cannot be revitalized again at the same tier")
+		game.workshop_pick_stone(1);check(game.workshop_problem()!="","A revitalized stone cannot be revitalized again at the same progress")
 	# Converter.
 	game.set_stone_workshop_mode("convert");game.workshop_pick_stone(0);await process_frame
 	check(game.content.find_child("WorkshopResult",true,false)!=null,"The Converter previews its result")
