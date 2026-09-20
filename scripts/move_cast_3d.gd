@@ -39,6 +39,11 @@ var airborne_visual:MeshInstance3D
 # One arcing drop per patch, so a Split raindrop/meteor visibly launches several.
 var airborne_drops:Array[MeshInstance3D]=[]
 var vine_visual:MeshInstance3D
+var erupting_rocks:Array[MeshInstance3D]=[]
+var contact_time:=0.0
+var maneuver_points:Array[Vector3]=[]
+var maneuver_index:=0
+var owns_motion_lock:=false
 
 func setup(source, move_entry:Dictionary, new_target, power_scale:float, is_echo:bool)->void:
 	caster_ref=weakref(source);epoch=source.cast_epoch;source_enemy=source.enemy
@@ -61,6 +66,11 @@ func setup(source, move_entry:Dictionary, new_target, power_scale:float, is_echo
 	direction=flat(aim-origin).normalized()
 	if direction.length()<.01:direction=Vector3.RIGHT
 	aim=origin+direction*minf(flat(aim-origin).length(),distance)
+	# A grab without a reachable target still performs its lunge/zap in the
+	# aimed direction instead of disappearing as soon as it is created.
+	if profile.mode=="contact" and (not is_instance_valid(new_target) or flat(new_target.global_position-origin).length()>distance+.5):
+		profile.mode="dash" if profile.get("attach",false) else "line"
+		profile.speed=12.0;profile.radius=maxf(.65,float(profile.get("radius",.65)));radius=float(profile.radius)*area_scale
 	color=Color(move.color)
 	details={"real_effect":true,"echo":is_echo,"strength":strength,"chain":false}
 	for stone in ["split","seeking","blast","force","lingering"]:details[stone]=count(stone)>0
@@ -89,26 +99,41 @@ func _ready()->void:
 	top_level=true;global_position=Vector3.ZERO
 	var actor=source()
 	if not is_instance_valid(actor):finish();return
+	if profile.get("escape",false):
+		var danger=nearest(origin,[],6.0)
+		if is_instance_valid(danger):direction=flat(origin-danger.global_position).normalized()
+		else:direction=-direction
+		if direction.length()<.01:direction=Vector3.BACK
+		aim=origin+direction*distance
 	actor.move_used.emit(actor,move_name,target(),details)
 	var copies:=1+2*count("split")
-	base_scale=1.0 if copies==1 else 1.4/float(copies)
+	var split_scale:=1.0 if copies==1 else 1.4/float(copies)
+	copies*=int(profile.get("projectile_count",profile.get("patch_count",1)))
+	base_scale=split_scale
 	var mode:String=profile.mode
+	if profile.get("rear",false):direction=-flat(actor.facing()).normalized()
 	if mode in ["projectile","wave"]:
 		for i in copies:
-			var angle:float=(i-(copies-1)*.5)*.19
+			var angle:float=(i-(copies-1)*.5)*float(profile.get("spread",.19))
 			var heading:=direction.rotated(Vector3.UP,angle)
 			var visual:=orb(origin+Vector3.UP*.7,Vector3.ONE*radius*2.0)
+			if move_name in ["Rockslide","Stone Skip","Pebble Spray"]:
+				visual.mesh=BoxMesh.new();visual.rotation=Vector3(.3,angle,.4)
 			if profile.get("visual","")=="leaf":visual.scale=Vector3(.45,.09,.8);visual.rotation.y=atan2(heading.x,heading.z)
 			if profile.get("visual","")=="vine":visual.scale=Vector3(.16,.16,.45)
 			if mode=="wave":visual.scale=Vector3(float(profile.get("width",radius*2))*area_scale,.9,radius*2);visual.rotation.y=atan2(heading.x,heading.z)
 			shots.append({"pos":origin,"dir":heading,"travel":0.0,"hits":{},"visual":visual,"fuse":-1.0,"done":false})
 	elif mode in ["field","heal_field","mine","area","firework"]:
-		var center:Vector3=aim if profile.get("anchor","")=="target" else origin
+		var center:Vector3=aim if profile.get("anchor","") in ["target","target_follow"] else origin
 		for i in copies:
-			var offset:=Vector3.ZERO if copies==1 else Vector3(cos(TAU*i/copies),0,sin(TAU*i/copies))*radius*.65
+			var offset:=Vector3.ZERO if copies==1 else Vector3(cos(TAU*i/copies),0,sin(TAU*i/copies))*float(profile.get("patch_spread",radius*.65))
 			patches.append({"pos":center+offset,"offset":offset})
 			var height:=.07 if mode!="mine" else .35
 			visuals.append(orb(center+offset+Vector3.UP*.08,Vector3(radius*2,height,radius*2),.22))
+	elif mode=="contact":
+		actor.motion_lock+=1;owns_motion_lock=true
+		visuals.append(orb(origin+Vector3.UP*.65,Vector3(.13,.13,1),.8))
+	elif mode=="maneuver":build_maneuver()
 	elif mode=="dash":
 		actor.motion_lock+=1
 		if profile.get("stop_at_target",false):distance=minf(distance,flat(aim-origin).length())
@@ -135,6 +160,11 @@ func _ready()->void:
 		airborne_visual=orb(aim+Vector3.UP*1.8,Vector3(.55,3.5,.55));airborne_visual.rotation.z=-.8
 	if profile.get("visual","")=="vine":vine_visual=orb(origin+Vector3.UP*.7,Vector3(.1,.1,.1))
 	if mode=="heal_field":flower(origin)
+	if move_name=="Rock Ring":
+		for i in 12:
+			var angle:=TAU*i/12.0
+			var rock:=orb(origin+Vector3(sin(angle)*radius*.8,-.4,cos(angle)*radius*.8),Vector3(.45,.9,.45),1.0)
+			rock.mesh=BoxMesh.new();rock.rotation=Vector3(.15,angle,.2);erupting_rocks.append(rock)
 	if move_name=="Whirlpool":
 		for visual in visuals:
 			var ring:=TorusMesh.new();ring.inner_radius=.7;ring.outer_radius=1.0;ring.rings=20;ring.ring_segments=8;visual.mesh=ring;visual.scale=Vector3(radius,.5,radius)
@@ -147,8 +177,11 @@ func _physics_process(delta:float)->void:
 	# already in flight still lands if the user is knocked out. Only a knocked-out
 	# user's own body-driven dash or beam stops, and the expedition ending stops all.
 	if not is_instance_valid(actor):finish(false);return
-	if actor.cast_epoch!=epoch and (actor.current_hp>0 or profile.mode in ["dash","beam"]):finish(false);return
+	if actor.cast_epoch!=epoch and (actor.current_hp>0 or profile.mode in ["dash","beam","contact","maneuver"]):finish(false);return
 	elapsed+=delta
+	actor.model.animate_species_move(move_name,elapsed,float(profile.get("delay",0.0)))
+	for rock in erupting_rocks:
+		rock.position.y=origin.y+lerpf(-.4,.6,clampf((elapsed-float(profile.get("delay",0.0)))/.16,0,1))
 	for fragment in fragments.duplicate():
 		fragment.time-=delta
 		fragment.visual.position=Vector3(fragment.point)+Vector3.UP*(maxf(0,fragment.time)/.2*3.0)
@@ -187,8 +220,14 @@ func _physics_process(delta:float)->void:
 			for shot in shots:
 				if not shot.done:update_shot(shot,delta)
 			if shots.all(func(s):return s.done):finish()
+		"contact":update_contact(delta)
+		"maneuver":update_maneuver(delta)
 		"dash":update_dash(delta)
 		"beam","field","heal_field","firework":
+			if profile.get("anchor","")=="target_follow":
+				var followed=target()
+				if not is_instance_valid(followed) or followed.current_hp<=0:finish();return
+				for i in patches.size():patches[i].pos=followed.global_position+patches[i].offset;visuals[i].position=patches[i].pos+Vector3.UP*.3
 			if profile.get("anchor","")=="self_follow":
 				for i in patches.size():patches[i].pos=actor.global_position+patches[i].offset;visuals[i].position=patches[i].pos+Vector3.UP*.08
 			if profile.get("spin",false):actor.model.rotation.y+=delta*12
@@ -202,6 +241,7 @@ func _physics_process(delta:float)->void:
 							var spread:float=0.0 if int(round(next_tick/.2))%3==1 else .65
 							var fragment:Vector3=patch.pos+Vector3(cos(next_tick*17),0,sin(next_tick*17))*radius*spread
 							fragments.append({"point":fragment,"time":.2,"visual":orb(fragment+Vector3.UP*3.0,Vector3(.25,.6,.25),.9)})
+						elif profile.get("anchor","")=="target_follow":hit(target(),damage*tick/2.0*base_scale)
 						else:area_hits(patch.pos,radius,damage*tick/2.0*base_scale)
 				animate_field()
 			if elapsed-delay>=duration and fragments.is_empty():finish()
@@ -255,7 +295,8 @@ func update_shot(shot:Dictionary,delta:float)->void:
 	var blocked:bool=end.distance_to(start+Vector3(shot.dir)*step)>.01
 	var hits:Array=[]
 	for other in opponents():
-		if shot.hits.has(other.get_instance_id()) and profile.mode!="wave":continue
+		if shot.hits.has(other.get_instance_id()) and profile.mode!="wave":
+			if not profile.has("repeat_hit") or elapsed-float(shot.hits[other.get_instance_id()])<float(profile.repeat_hit):continue
 		var hit_radius:float=radius+.5
 		if profile.mode=="wave":
 			var relative:Vector3=other.global_position-end;var across:=Vector3(shot.dir).cross(Vector3.UP)
@@ -270,13 +311,14 @@ func update_shot(shot:Dictionary,delta:float)->void:
 		var point:Vector3=start.lerp(end,record.t)
 		if profile.has("fuse"):
 			shot.pos=point;shot.fuse=float(profile.fuse);shot.visual.position=point+Vector3.UP*.15;return
-		if not shot.hits.has(other.get_instance_id()):
-			shot.hits[other.get_instance_id()]=true
+		if not shot.hits.has(other.get_instance_id()) or (profile.has("repeat_hit") and elapsed-float(shot.hits[other.get_instance_id()])>=float(profile.repeat_hit)):
+			shot.hits[other.get_instance_id()]=elapsed
 			if profile.has("splash"):area_hits(point,float(profile.splash)*area_scale,damage*base_scale);pulse(point,float(profile.splash)*area_scale)
 			else:hit(other,damage*base_scale*float(profile.get("direct_scale",1.0)))
 		if profile.get("carry",false) and other.current_hp>0:other.displace(Vector3(shot.dir)*step)
 		if profile.mode=="projectile" and not profile.get("pierce",false):end_shot(shot);return
 	shot.pos=end;shot.travel+=step;shot.visual.position=end+Vector3.UP*.7
+	if profile.get("skip",false):shot.visual.scale=Vector3(1,.25,1);shot.visual.position.y=end.y+.15+absf(sin(shot.travel*4.0))*.5
 	if blocked:
 		# A shot stopped by a tree or boulder breaks against it.
 		var splash:float=float(profile.get("splash",0.0))*area_scale
@@ -295,22 +337,81 @@ func update_dash(delta:float)->void:
 	var step:float=minf(float(profile.speed)*delta,maxf(0,distance-travel))
 	var end:Vector3=actor.safe_displacement(start,start+direction*step,.55)
 	actor.global_position=end;actor.model.look_at(end+direction,Vector3.UP,true);travel+=step
+	if profile.get("leap",false):actor.model.position.y=sin(clampf(travel/maxf(distance,.01),0,1)*PI)*1.5
 	visuals[0].position=end+Vector3.UP*.55
 	for other in opponents():
 		if not dash_hits.has(other.get_instance_id()) and segment_hit(start,end,other.global_position,radius+.5)>=0:
 			dash_hits[other.get_instance_id()]=true;hit(other,damage)
+			if profile.get("stop_on_hit",false):travel=distance;break
 	if profile.has("trail") and (patches.is_empty() or Vector3(patches[-1].pos).distance_to(end)>.6):
-		patches.append({"pos":end,"time":float(profile.trail)*duration_scale,"tick":0.0});visuals.append(orb(end+Vector3.UP*.12,Vector3(1.3,.25,1.3),.65))
+		patches.append({"pos":end,"time":float(profile.trail)*duration_scale,"tick":0.0})
+		var trail_width:=float(profile.get("trail_radius",.65))*2.0
+		visuals.append(orb(end+Vector3.UP*.12,Vector3(trail_width,.25,trail_width),.4 if move_name=="Toxic Drift" else .65))
 	for patch in patches:
 		patch.time-=delta;patch.tick-=delta
-		if patch.time>0 and patch.tick<=0:patch.tick=.4;area_hits(patch.pos,.8,damage*.12)
+		if patch.time>0 and patch.tick<=0:patch.tick=.4;area_hits(patch.pos,float(profile.get("trail_radius",.8)),damage*.12)
 	if travel>=distance-.001 or end.distance_to(start+direction*step)>.01:
+		if profile.has("end_burst"):
+			area_hits(end,float(profile.end_burst)*area_scale,damage*float(profile.get("burst_scale",1.0)));pulse(end,float(profile.end_burst)*area_scale)
 		if profile.has("trail"):
 			# Leave the flames behind, but release the user to move and cast.
 			profile.mode="field";profile.anchor="trail";profile.tick=.4
-			profile.duration=float(profile.trail)*duration_scale;duration=profile.duration;elapsed=0;next_tick=.4;radius=.8
+			profile.duration=float(profile.trail)*duration_scale;duration=profile.duration;elapsed=0;next_tick=.4;radius=float(profile.get("trail_radius",.8))
 			actor.motion_lock=maxi(0,actor.motion_lock-1);visuals[0].visible=false
 		else:finish()
+
+func update_contact(delta:float)->void:
+	var actor=source();var victim=target()
+	if not is_instance_valid(victim) or victim.current_hp<=0 or actor.current_hp<=0:finish();return
+	var gap:=flat(victim.global_position-actor.global_position)
+	if gap.length()>distance+.5:finish();return
+	if profile.get("attach",false):
+		var desired:Vector3=victim.global_position-gap.normalized()*.75
+		var proposed:Vector3=actor.global_position.move_toward(desired,12.0*delta)
+		actor.global_position=actor.safe_displacement(actor.global_position,proposed,.55)
+		if flat(victim.global_position-actor.global_position).length()>1.2:
+			if elapsed>1.0:finish()
+			return
+	contact_time+=delta
+	if profile.get("restrain",false):victim.add_status("root",.18,1.0,actor)
+	var beam_start:Vector3=actor.global_position+Vector3.UP*.65
+	var beam_end:Vector3=victim.global_position+Vector3.UP*.65
+	visuals[0].position=(beam_start+beam_end)*.5;visuals[0].scale=Vector3(.13,.13,maxf(.01,beam_start.distance_to(beam_end)))
+	if beam_start.distance_to(beam_end)>.01:visuals[0].look_at(beam_end)
+	if contact_time>=next_tick:
+		var tick:float=profile.get("tick",.4);next_tick+=tick
+		hit(victim,damage*tick/1.2)
+	if contact_time>=duration:
+		if profile.has("release_knockback") and victim.current_hp>0:
+			victim.displace(gap.normalized()*float(profile.release_knockback)*force_scale)
+		finish()
+
+func build_maneuver()->void:
+	var actor=source();var victim=target()
+	actor.motion_lock+=1;owns_motion_lock=true
+	var center:Vector3=aim
+	var across:=direction.cross(Vector3.UP)
+	match str(profile.pattern):
+		"touch":maneuver_points=[center-direction*.65,origin]
+		"side":maneuver_points=[center+across*.7,center-across*1.4]
+		"zigzag":maneuver_points=[center+across*.6,center-direction*.6,center-across*.6,center+direction*.6,origin]
+	visuals.append(orb(origin+Vector3.UP*.5,Vector3(.6,.6,.6),.5))
+
+func update_maneuver(delta:float)->void:
+	var actor=source()
+	if actor.current_hp<=0 or maneuver_index>=maneuver_points.size():finish();return
+	var start:Vector3=actor.global_position;var goal:Vector3=maneuver_points[maneuver_index]
+	var desired:=start.move_toward(goal,float(profile.speed)*delta)
+	var end:Vector3=actor.safe_displacement(start,desired,.55);actor.global_position=end;visuals[0].position=end+Vector3.UP*.5
+	var returning:bool=profile.pattern in ["touch","zigzag"] and maneuver_index==maneuver_points.size()-1
+	if not returning:
+		for victim in opponents():
+			if not dash_hits.has(victim.get_instance_id()) and segment_hit(start,end,victim.global_position,radius+.5)>=0:
+				dash_hits[victim.get_instance_id()]=true;hit(victim,damage)
+	if end.distance_to(desired)>.05:finish();return
+	if end.distance_to(goal)<.08:
+		maneuver_index+=1;dash_hits.clear()
+		if maneuver_index>=maneuver_points.size():finish()
 
 func linear_hits(amount:float)->void:
 	var actor=source();var end:Vector3=actor.safe_displacement(origin,origin+direction*distance,.05)
@@ -361,8 +462,8 @@ func hit(victim,amount:float,center:Vector3=Vector3.INF,chain_depth:int=0,visite
 		if profile.has("swirl"):victim.displace(away.cross(Vector3.UP)*float(profile.swirl)*force_scale)
 		if profile.has("launch"):victim.add_status("launch",.8,float(profile.launch)*force_scale*effect_scale,actor)
 		if profile.has("burn"):victim.add_status("burn",float(profile.burn)*duration_scale,damage*.12*base_scale*pow(.6,chain_depth),actor,.15*count("drain"))
-		if profile.has("poison"):victim.add_status("poison",float(profile.poison)*duration_scale,damage*.10*base_scale*pow(.6,chain_depth),actor,.15*count("drain"))
-		if profile.has("status"):
+		if profile.has("poison") and randf()<minf(1.0,float(profile.get("poison_chance",1.0))+(float(victim.statuses.contaminated.amount) if victim.statuses.has("contaminated") else 0.0)):victim.add_status("poison",float(profile.poison)*duration_scale,damage*.10*base_scale*pow(.6,chain_depth),actor,.15*count("drain"))
+		if profile.has("status") and randf()<float(profile.get("status_chance",1.0)):
 			# Control statuses (slow, confuse, defense_down) carry an explicit fractional
 			# "amount"; leech scales with damage; everything else uses the effect scale.
 			var magnitude:float=damage*.12*base_scale*pow(.6,chain_depth) if profile.status=="leech" else float(profile.get("amount",effect_scale))
@@ -519,6 +620,10 @@ func finish(emit_completion:bool=true)->void:
 	if done:return
 	done=true
 	var actor=source()
+	if is_instance_valid(actor):
+		actor.model.animate_species_move("",0,0)
+		if profile.get("jump",false) or profile.get("leap",false):actor.model.position.y=0.0
+		if owns_motion_lock:actor.motion_lock=maxi(0,actor.motion_lock-1);owns_motion_lock=false
 	if is_instance_valid(actor) and profile.mode in ["dash","beam"]:actor.motion_lock=maxi(0,actor.motion_lock-1)
 	if emit_completion:finished.emit()
 	set_physics_process(false)

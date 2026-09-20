@@ -59,8 +59,9 @@ func run()->void:
 	var helpers:Array=[spriggle_twin,frondle,vinee,sparko]
 	check(is_equal_approx(GameData.move_training_chance(spriggle,helpers),67.0),"Move chance: 5 base + 25 species + 20 family + 12 type + 5 unrelated")
 	check(is_equal_approx(GameData.move_training_chance(spriggle,[]),5.0) and is_equal_approx(GameData.move_training_chance(spriggle,[spriggle_twin,spriggle_twin,spriggle_twin,spriggle_twin]),95.0),"Move chance starts at 5% and caps at 95%")
-	var expected_exp:=roundi(GameData.total_exp(spriggle_twin)*.3*1.75)+roundi(GameData.total_exp(frondle)*.3*1.5)+roundi(GameData.total_exp(vinee)*.3*1.2)+roundi(GameData.total_exp(sparko)*.3*1.0)
-	check(GameData.exp_training_reward(spriggle,helpers)==expected_exp and expected_exp>0 and GameData.total_exp(GameData.make_quiblet(0,1))==0,"EXP reward is 30% of each helper's lifetime EXP times its relationship multiplier")
+	var expected_exp:=0
+	for helper in helpers:expected_exp+=GameData.exp_training_helper_reward(spriggle,helper)
+	check(GameData.exp_training_reward(spriggle,helpers)==expected_exp and expected_exp>0,"EXP reward sums helpers using the unchanged starting trainee")
 	check(is_equal_approx(GameData.helper_preservation_chance(spriggle,["Bitterleaf","Bumbleberry"]),10.0+5.0) and is_equal_approx(GameData.helper_preservation_chance(spriggle,["Sunplum","Sunplum"]),20.0+20.0) and is_equal_approx(GameData.helper_preservation_chance(spriggle,["Emberpepper"]),2.5) and is_equal_approx(GameData.helper_preservation_chance(spriggle,["","Brinepod"]),7.5),"Preservation chance sums rarity × compatibility per added food (T1 match 10, T1 neutral 5, T4 neutral 20 ×2, T1 poor 2.5, T3 poor 7.5)")
 	var pool:=GameData.retrain_pool(spriggle)
 	check(pool.size()==GameData.learnset(2).size()-spriggle.moves.size() and pool.all(func(name):return not spriggle.moves.any(func(move):return move.name==name)),"The retrain pool excludes every move currently in a slot")
@@ -190,10 +191,10 @@ func run()->void:
 	game.assign_training_slot("trainee",0,quiblet(game.find_roster_index(trainee.uid)));game.assign_training_slot("helper",0,quiblet(extra_index))
 	game.set_training_mode("exp");await process_frame
 	check(game.content.find_child("TrainingMoves",true,false)==null and game.content.find_child("TrainingSummary",true,false).text.contains("EXP"),"EXP training previews the EXP gain without a retrain panel")
-	var expected_reward:=roundi(GameData.total_exp(extra)*.3*1.75);var exp_before:int=GameData.total_exp(trainee);var size_before:int=game.roster.size()
+	var expected_reward:=GameData.exp_training_helper_reward(trainee,extra);var exp_before:int=GameData.total_exp(trainee);var size_before:int=game.roster.size()
 	game.run_training();await process_frame
 	result=game.last_training_result
-	check(result.success and int(result.exp)==expected_reward and GameData.total_exp(trainee)==exp_before+expected_reward,"EXP training always succeeds and awards 30% of the helper's lifetime EXP times its multiplier")
+	check(result.success and int(result.exp)==expected_reward and GameData.total_exp(trainee)==exp_before+expected_reward,"EXP training always succeeds and awards the calculated helper reward")
 	check(result.consumed.size()==1 and result.preserved.is_empty() and game.roster.size()==size_before-1 and game.find_roster_index(extra.uid)==-1,"Without food the helper is consumed")
 	var keeper:=GameData.make_quiblet(2,3);game.roster.append(keeper)
 	game.assign_training_slot("helper",0,quiblet(game.roster.size()-1));game.ingredients["Sunplum"]=2

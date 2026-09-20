@@ -2,7 +2,7 @@ class_name GameData
 extends RefCounted
 
 const MAIN_AREA_COUNT:=16
-const OPTIONAL_AREA_HOSTS:={16:1,17:2,18:3,19:5}
+const OPTIONAL_AREA_HOSTS:={16:1,17:5,18:9,19:13}
 const EXPEDITION_AREAS:=["Rolling Steppe", "Windy Fields", "Winding Creeks", "Crooked Cliffs", "Soggy Lowlands", "Lush Basin", "Glimmering Grotto", "Shivering Shelf", "Parched Plains", "Highland Peaks", "Muddy Moor", "Foaming Fjord", "Gloomy Glade", "Looming Lowlands", "Distant Downs", "Mystery Meadow", "Rustling Thicket", "Pebbled Shoals", "Rocky Ravine", "Golden Grove"]
 
 static func expedition_area_level(area_index:int)->int:
@@ -24,7 +24,14 @@ const EXPEDITION_BIOMES:=[
   "decor": [
    "tree",
    "bush",
-   "boulder"
+   "boulder",
+   "wildflowers",
+   "tussock",
+   "flowering_shrub",
+   "seed_heads",
+   "mossy_boulder",
+   "heather",
+   "layered_rocks"
   ],
   "density": 0.14,
   "walls": 0.06,
@@ -44,7 +51,13 @@ const EXPEDITION_BIOMES:=[
   "decor": [
    "grass",
    "flower",
-   "boulder"
+   "boulder",
+   "tussock",
+   "wildflowers",
+   "heather",
+   "flowering_shrub",
+   "seed_heads",
+   "weathered_stone"
   ],
   "density": 0.3,
   "walls": 0.08,
@@ -64,7 +77,13 @@ const EXPEDITION_BIOMES:=[
   "decor": [
    "reeds",
    "bush",
-   "boulder"
+   "boulder",
+   "fern",
+   "driftwood",
+   "wildflowers",
+   "mossy_boulder",
+   "flowering_shrub",
+   "stump"
   ],
   "density": 0.25,
   "walls": 0.12,
@@ -83,7 +102,12 @@ const EXPEDITION_BIOMES:=[
   "accent": "#728568",
   "decor": [
    "boulder",
-   "pillar"
+   "pillar",
+   "layered_rocks",
+   "tussock",
+   "weathered_stone",
+   "succulent",
+   "heather"
   ],
   "density": 0.22,
   "walls": 0.8,
@@ -103,7 +127,12 @@ const EXPEDITION_BIOMES:=[
   "decor": [
    "reeds",
    "mushroom",
-   "bush"
+   "bush",
+   "fern",
+   "mushroom_cluster",
+   "driftwood",
+   "mossy_boulder",
+   "stump"
   ],
   "density": 0.5,
   "walls": 0.15,
@@ -123,7 +152,14 @@ const EXPEDITION_BIOMES:=[
   "decor": [
    "tree",
    "bush",
-   "flower"
+   "flower",
+   "fern",
+   "wildflowers",
+   "mushroom_cluster",
+   "flowering_shrub",
+   "mossy_boulder",
+   "stump",
+   "seed_heads"
   ],
   "density": 0.7,
   "walls": 0.25,
@@ -143,7 +179,10 @@ const EXPEDITION_BIOMES:=[
   "decor": [
    "crystal",
    "pillar",
-   "boulder"
+   "boulder",
+   "mushroom_cluster",
+   "layered_rocks",
+   "weathered_stone"
   ],
   "density": 0.4,
   "walls": 0.95,
@@ -163,7 +202,10 @@ const EXPEDITION_BIOMES:=[
   "decor": [
    "mound",
    "boulder",
-   "crystal"
+   "crystal",
+   "ice_cluster",
+   "layered_rocks",
+   "weathered_stone"
   ],
   "density": 0.18,
   "walls": 0.45,
@@ -183,7 +225,13 @@ const EXPEDITION_BIOMES:=[
   "decor": [
    "cactus",
    "boulder",
-   "bush"
+   "bush",
+   "heather",
+   "layered_rocks",
+   "driftwood",
+   "succulent",
+   "seed_heads",
+   "weathered_stone"
   ],
   "density": 0.12,
   "walls": 0.12,
@@ -202,7 +250,12 @@ const EXPEDITION_BIOMES:=[
   "accent": "#6a897d",
   "decor": [
    "boulder",
-   "pillar"
+   "pillar",
+   "layered_rocks",
+   "heather",
+   "weathered_stone",
+   "mossy_boulder",
+   "wildflowers"
   ],
   "density": 0.22,
   "walls": 0.85,
@@ -222,7 +275,13 @@ const EXPEDITION_BIOMES:=[
   "decor": [
    "grass",
    "flower",
-   "mound"
+   "mound",
+   "heather",
+   "tussock",
+   "mushroom_cluster",
+   "seed_heads",
+   "mossy_boulder",
+   "weathered_stone"
   ],
   "density": 0.24,
   "walls": 0.16,
@@ -241,7 +300,12 @@ const EXPEDITION_BIOMES:=[
   "accent": "#467e78",
   "decor": [
    "boulder",
-   "tree"
+   "tree",
+   "driftwood",
+   "layered_rocks",
+   "tussock",
+   "mossy_boulder",
+   "weathered_stone"
   ],
   "density": 0.2,
   "walls": 0.7,
@@ -261,7 +325,12 @@ const EXPEDITION_BIOMES:=[
   "decor": [
    "tree",
    "bush",
-   "mushroom"
+   "mushroom",
+   "fern",
+   "mushroom_cluster",
+   "stump",
+   "mossy_boulder",
+   "flowering_shrub"
   ],
   "density": 0.85,
   "walls": 0.7,
@@ -281,7 +350,12 @@ const EXPEDITION_BIOMES:=[
   "decor": [
    "tree",
    "boulder",
-   "big_mushroom"
+   "big_mushroom",
+   "fern",
+   "layered_rocks",
+   "stump",
+   "mossy_boulder",
+   "flowering_shrub"
   ],
   "density": 0.55,
   "walls": 0.85,
@@ -301,7 +375,14 @@ const EXPEDITION_BIOMES:=[
   "decor": [
    "tree",
    "bush",
-   "flower"
+   "flower",
+   "heather",
+   "wildflowers",
+   "tussock",
+   "seed_heads",
+   "flowering_shrub",
+   "mossy_boulder",
+   "layered_rocks"
   ],
   "density": 0.22,
   "walls": 0.3,
@@ -323,7 +404,15 @@ const EXPEDITION_BIOMES:=[
    "crystal",
    "flower",
    "cactus",
-   "mound"
+   "mound",
+   "wildflowers",
+   "fern",
+   "ice_cluster",
+   "mushroom_cluster",
+   "flowering_shrub",
+   "seed_heads",
+   "succulent",
+   "weathered_stone"
   ],
   "density": 0.45,
   "walls": 0.55,
@@ -343,7 +432,12 @@ const EXPEDITION_BIOMES:=[
   "decor": [
    "bush",
    "tree",
-   "grass"
+   "grass",
+   "fern",
+   "mushroom_cluster",
+   "flowering_shrub",
+   "stump",
+   "mossy_boulder"
   ],
   "density": 1.0,
   "walls": 0.9,
@@ -362,7 +456,12 @@ const EXPEDITION_BIOMES:=[
   "accent": "#a9c9b4",
   "decor": [
    "reeds",
-   "boulder"
+   "boulder",
+   "driftwood",
+   "tussock",
+   "layered_rocks",
+   "succulent",
+   "weathered_stone"
   ],
   "density": 0.22,
   "walls": 0.08,
@@ -381,7 +480,11 @@ const EXPEDITION_BIOMES:=[
   "accent": "#7f8a64",
   "decor": [
    "boulder",
-   "pillar"
+   "pillar",
+   "layered_rocks",
+   "heather",
+   "weathered_stone",
+   "succulent"
   ],
   "density": 0.35,
   "walls": 1.0,
@@ -401,7 +504,14 @@ const EXPEDITION_BIOMES:=[
   "decor": [
    "tree",
    "bush",
-   "flower"
+   "flower",
+   "wildflowers",
+   "fern",
+   "driftwood",
+   "flowering_shrub",
+   "stump",
+   "mossy_boulder",
+   "seed_heads"
   ],
   "density": 0.55,
   "walls": 0.3,
@@ -994,27 +1104,93 @@ const COLORS := {
 const SPECIES := [
 	{"name":"Plip", "element":"Water", "color":Color("#69c8e5"), "accent":Color("#d8f6ff"), "shape":"fins", "base_hp":150, "base_atk":30, "range":165.0, "family":"plip", "evolves_to":1, "evolve_level":18, "model":"res://models/Plip.glb", "model_yaw":0.0},
 	{"name":"Swellit", "element":"Water", "color":Color("#3f91c7"), "accent":Color("#bfe9ff"), "shape":"fins", "base_hp":198, "base_atk":35, "range":180.0, "family":"plip"},
-	{"name":"Spriggle", "model":"res://models/Spriggle.glb", "model_yaw":PI*1.5, "element":"Green", "color":Color("#78bd64"), "accent":Color("#daf09b"), "shape":"ears", "base_hp":152, "base_atk":30, "range":155.0, "family":"spriggle", "evolves_to":3, "evolve_level":18},
-	{"name":"Frondle", "model":"res://models/Frondle.glb", "model_yaw":PI*1.5, "element":"Green", "color":Color("#4f9f68"), "accent":Color("#c9e785"), "shape":"crest", "base_hp":196, "base_atk":34, "range":125.0, "family":"spriggle"},
+	{"name":"Spriggle", "visual_scale":0.85, "model":"res://models/Spriggle.glb", "model_yaw":PI*1.5, "element":"Green", "color":Color("#78bd64"), "accent":Color("#daf09b"), "shape":"ears", "base_hp":152, "base_atk":30, "range":155.0, "family":"spriggle", "evolves_to":3, "evolve_level":18},
+	{"name":"Frondle", "visual_scale":1.2, "model":"res://models/Frondle.glb", "model_yaw":PI*1.5, "element":"Green", "color":Color("#4f9f68"), "accent":Color("#c9e785"), "shape":"crest", "base_hp":196, "base_atk":34, "range":125.0, "family":"spriggle"},
 	{"name":"Vinee", "element":"Green", "color":Color("#65ad65"), "accent":Color("#e1ef8b"), "shape":"tail", "base_hp":174, "base_atk":37, "range":100.0, "family":"vinee"},
-	{"name":"Bloomie", "element":"Green", "color":Color("#8dcf75"), "accent":Color("#f2b7d2"), "shape":"tuft", "base_hp":185, "base_atk":24, "range":145.0, "family":"bloomie", "model":"res://models/Blomie.glb", "model_yaw":PI*1.5},
+	{"name":"Bloomie", "element":"Green", "color":Color("#8dcf75"), "accent":Color("#f2b7d2"), "shape":"tuft", "base_hp":185, "base_atk":24, "range":145.0, "family":"bloomie", "model":"res://models/Bloomie.glb", "model_yaw":PI*1.5},
 	{"name":"Sparko", "element":"Fire", "color":Color("#f07a4d"), "accent":Color("#ffd25f"), "shape":"tail", "base_hp":140, "base_atk":39, "range":145.0, "family":"sparko", "evolves_to":7, "evolve_level":18},
 	{"name":"Scorchit", "element":"Fire", "color":Color("#d94b3f"), "accent":Color("#ffad48"), "shape":"horn", "base_hp":192, "base_atk":43, "range":105.0, "family":"sparko"},
 	{"name":"Fistor", "element":"Psychic", "color":Color("#a06fd6"), "accent":Color("#e7d3ff"), "shape":"fists", "base_hp":174, "base_atk":34, "range":150.0, "family":"fistor"},
 	{"name":"Carapuff", "element":"Psychic", "color":Color("#c39be8"), "accent":Color("#f0e4ff"), "shape":"puff", "base_hp":178, "base_atk":35, "range":160.0, "family":"carapuff"},
 	{"name":"Burlow", "element":"Earth", "color":Color("#b07d4e"), "accent":Color("#e6c79a"), "shape":"horn", "base_hp":176, "base_atk":41, "range":120.0, "family":"burlow"},
 	{"name":"Stackle", "element":"Earth", "color":Color("#8f8577"), "accent":Color("#c9bfa8"), "shape":"boulder", "base_hp":205, "base_atk":32, "range":110.0, "family":"stackle"},
-	{"name":"Shelter", "element":"Normal", "color":Color("#cdb98f"), "accent":Color("#efe3c6"), "shape":"shell", "base_hp":240, "base_atk":24, "range":90.0, "family":"shelter"},
-	{"name":"Mimbit", "element":"Normal", "color":Color("#e3c98f"), "accent":Color("#fff0c8"), "shape":"ears", "base_hp":120, "base_atk":22, "range":150.0, "family":"mimbit"},
+	{"name":"Shellmie", "model":"res://models/Shellmie.glb", "model_yaw":PI, "visual_scale":0.5, "element":"Normal", "color":Color("#cdb98f"), "accent":Color("#efe3c6"), "shape":"shell", "base_hp":240, "base_atk":24, "range":90.0, "family":"shelter"},
+	{"name":"Mimbit", "model_saturation":0.75, "model_emission":0.0, "model":"res://models/Mimbit.glb", "model_yaw":PI*1.5, "model_hover":1.0, "model_corner_roll":true, "element":"Normal", "color":Color("#e3c98f"), "accent":Color("#fff0c8"), "shape":"ears", "base_hp":120, "base_atk":22, "range":150.0, "family":"mimbit"},
 	{"name":"Pidler", "element":"Normal", "color":Color("#9a8fb0"), "accent":Color("#e6dcf2"), "shape":"web", "base_hp":150, "base_atk":33, "range":165.0, "family":"pidler"},
 	{"name":"Gloopit", "element":"Poison", "color":Color("#7cae57"), "accent":Color("#d7f0a8"), "shape":"gloop", "base_hp":170, "base_atk":36, "range":175.0, "family":"gloopit"},
 	{"name":"Blubber", "element":"Air", "color":Color("#8fc7dd"), "accent":Color("#dff2fa"), "shape":"balloon", "base_hp":175, "base_atk":37, "range":170.0, "family":"blubber", "model":"res://models/Blubber.glb", "model_yaw":PI, "model_hover":3.5, "model_corner_roll":true},
 	{"name":"Cysicle", "element":"Ice", "color":Color("#8fd0e6"), "accent":Color("#e2f7ff"), "shape":"spikes", "base_hp":168, "base_atk":40, "range":180.0, "family":"cysicle"},
 	{"name":"Gagglet", "element":"Air", "color":Color("#dcd2c4"), "accent":Color("#f0a24d"), "shape":"beak", "base_hp":165, "base_atk":30, "range":140.0, "family":"gaggle", "model":"res://models/Gagglet.glb", "evolves_to":19, "evolve_level":22},
-	{"name":"Gaggle", "element":"Air", "color":Color("#cfc4b4"), "accent":Color("#e8944a"), "shape":"twinbeak", "base_hp":210, "base_atk":34, "range":130.0, "family":"gaggle", "model":"res://models/Gaggle.glb"}
+	{"name":"Gaggle", "element":"Air", "color":Color("#cfc4b4"), "accent":Color("#e8944a"), "shape":"twinbeak", "base_hp":210, "base_atk":34, "range":130.0, "family":"gaggle", "model":"res://models/Gaggle.glb"},
+	{"name":"Gulper","element":"Poison","color":Color("#849d53"),"accent":Color("#c88aca"),"shape":"sphere","base_hp":215,"base_atk":33,"range":75.0,"family":"gulper","speed_multiplier":0.82},
+	{"name":"Tumblet","element":"Earth","color":Color("#8f887b"),"accent":Color("#c7b99a"),"shape":"sphere","base_hp":260,"base_atk":25,"range":75.0,"family":"tumblet","speed_multiplier":0.78,"knockback_resistance":0.5},
+	{"name":"Miasmum","element":"Poison","color":Color("#9275ac"),"accent":Color("#c6acdf"),"shape":"gloop","base_hp":180,"base_atk":34,"range":175.0,"family":"miasmum","model":"res://models/Miasmum.glb", "model_yaw":PI*1.5,"model_hover":0.65,"speed_multiplier":0.9},
+	{"name":"Sludgle","element":"Poison","color":Color("#879951"),"accent":Color("#beca80"),"shape":"gloop","base_hp":205,"base_atk":32,"range":90.0,"family":"sludgle","model":"res://models/Sludgle.glb", "model_yaw":0.0},
+	{"name": "Arcle", "element": "Electric", "shape": "tail", "base_hp": 210, "base_atk": 34, "range": 90.0, "family": "arcle", "model": "res://models/Arcle.glb", "model_yaw":PI*1.5, "visual_scale":0.3,"color":Color("#e5bf48"),"accent":Color("#fff0a0")},
+	{"name": "Zippet", "element": "Electric", "shape": "sphere", "base_hp": 140, "base_atk": 37, "range": 95.0, "family": "zippet", "speed_multiplier": 1.35,"color":Color("#e5bf48"),"accent":Color("#fff0a0")},
+	{"name": "Voltick", "element": "Electric", "shape": "horn", "base_hp": 245, "base_atk": 36, "range": 85.0, "family": "voltick", "model": "res://models/Voltick.glb", "model_yaw":PI*1.5, "visual_scale":0.8, "speed_multiplier": 0.85,"color":Color("#e5bf48"),"accent":Color("#fff0a0")},
+	{"name": "Electrish", "element": "Electric", "shape": "puff", "base_hp": 170, "base_atk": 35, "range": 150.0, "family": "electrish", "model": "res://models/Electrish.glb", "model_yaw":PI*1.5, "visual_scale":1.15, "model_hover": 0.6,"color":Color("#e5bf48"),"accent":Color("#fff0a0")}
 ]
 
 const MOVES := {
+	"Shock Bite":{"power": 48.0, "cooldown": 4.0, "range": 100.0, "kind": "burst", "desc": "Lunges and bites, with a small chance to Paralyze.","color":Color("#f4d456")},
+	"Latch":{"power": 20.0, "cooldown": 6.0, "range": 110.0, "kind": "burst", "desc": "Leaps onto an enemy, repeatedly biting and slowing it while attached.","color":Color("#f4d456")},
+	"Live Wire":{"power": 28.0, "cooldown": 5.5, "range": 170.0, "kind": "burst", "desc": "Maintains an electrical connection that repeatedly shocks an enemy and breaks beyond its reach.","color":Color("#f4d456")},
+	"Static Pulse":{"power": 35.0, "cooldown": 4.0, "range": 100.0, "kind": "burst", "desc": "Releases a quick radial pulse with a small Paralysis chance.","color":Color("#f4d456")},
+	"Tail Zap":{"power": 48.0, "cooldown": 4.5, "range": 100.0, "kind": "burst", "desc": "Whips its electrically charged tail across enemies beside and behind it.","color":Color("#f4d456")},
+	"Discharge":{"power": 85.0, "cooldown": 10.0, "range": 155.0, "kind": "burst", "desc": "Charges, then releases a powerful radial electrical blast.","color":Color("#f4d456")},
+	"Slither":{"power": 0.0, "cooldown": 4.0, "range": 170.0, "kind": "burst", "desc": "Wriggles forward rapidly to reposition without dealing damage.","color":Color("#f4d456")},
+	"Shock Toss":{"power": 45.0, "cooldown": 7.0, "range": 100.0, "kind": "burst", "desc": "Grabs and shocks an enemy, then throws it away.","color":Color("#f4d456")},
+	"Amp Drain":{"power": 25.0, "cooldown": 9.0, "range": 110.0, "kind": "burst", "desc": "Clamps onto an enemy and drains HP through repeated shocks while remaining vulnerable.","color":Color("#f4d456")},
+	"Zap":{"power": 30.0, "cooldown": 1.8, "range": 200.0, "kind": "projectile", "desc": "Fires a small, fast electrical bolt.","color":Color("#f4d456")},
+	"Shock Touch":{"power": 38.0, "cooldown": 4.5, "range": 125.0, "kind": "burst", "desc": "Darts into an enemy for a shock, then backs away.","color":Color("#f4d456")},
+	"Zip":{"power": 43.0, "cooldown": 4.0, "range": 190.0, "kind": "burst", "desc": "Dashes forward almost instantly, damaging enemies it passes through.","color":Color("#f4d456")},
+	"Jolt Kick":{"power": 60.0, "cooldown": 5.5, "range": 135.0, "kind": "burst", "desc": "Leaps at an enemy and kicks it away with charged legs.","color":Color("#f4d456")},
+	"Flashstep":{"power": 26.0, "cooldown": 5.0, "range": 145.0, "kind": "burst", "desc": "Darts sideways around an enemy, landing a light electrical hit.","color":Color("#f4d456")},
+	"Friction Dash":{"power": 25.0, "cooldown": 7.0, "range": 180.0, "kind": "burst", "desc": "Builds static while dashing, then releases an electrical burst on stopping or collision.","color":Color("#f4d456")},
+	"Thunderclap":{"power": 40.0, "cooldown": 6.0, "range": 110.0, "kind": "burst", "desc": "Cracks electricity around itself, briefly disrupting nearby enemies.","color":Color("#f4d456")},
+	"Zigzag":{"power": 18.0, "cooldown": 9.0, "range": 160.0, "kind": "burst", "desc": "Strikes a target from several directions with rapid dashes, then returns to its starting point.","color":Color("#f4d456")},
+	"Horn Zap":{"power": 36.0, "cooldown": 2.8, "range": 85.0, "kind": "burst", "desc": "Jabs with conductive horns and a chance to Paralyze.","color":Color("#f4d456")},
+	"Spark Ram":{"power": 70.0, "cooldown": 6.0, "range": 165.0, "kind": "burst", "desc": "Lowers its horns and charges through enemies with heavy damage and knockback.","color":Color("#f4d456")},
+	"Clamp":{"power": 20.0, "cooldown": 5.0, "range": 90.0, "kind": "burst", "desc": "Catches an enemy between its horns and briefly restrains it.","color":Color("#f4d456")},
+	"Ground Scrape":{"power": 45.0, "cooldown": 6.0, "range": 160.0, "kind": "burst", "desc": "Charges with its horns scraping the ground, spraying damaging sparks.","color":Color("#f4d456")},
+	"Grounded":{"power": 0.0, "cooldown": 9.0, "range": 0.0, "kind": "recover", "desc": "Plants its legs, greatly resisting knockback and electrical disruption for a short time.","color":Color("#f4d456")},
+	"Horn Lift":{"power": 50.0, "cooldown": 5.0, "range": 90.0, "kind": "burst", "desc": "Gets under an enemy and flicks it into the air with its horns.","color":Color("#f4d456")},
+	"Shock Clamp":{"power": 32.0, "cooldown": 8.0, "range": 100.0, "kind": "burst", "desc": "Locks an enemy between its horns and repeatedly shocks it, restricting both combatants movement.","color":Color("#f4d456")},
+	"Tentacle Zap":{"power": 38.0, "cooldown": 2.5, "range": 140.0, "kind": "burst", "desc": "Lashes an enemy with an electrified tentacle.","color":Color("#f4d456")},
+	"Nerve Sting":{"power": 22.0, "cooldown": 5.0, "range": 135.0, "kind": "burst", "desc": "Jabs with a conductive tentacle tip, with a high Paralysis chance.","color":Color("#f4d456")},
+	"Shock Net":{"power": 30.0, "cooldown": 7.0, "range": 150.0, "kind": "burst", "desc": "Spreads its tentacles into an electrified area that repeatedly damages and disrupts movement.","color":Color("#f4d456")},
+	"Jelly Drift":{"power": 0.0, "cooldown": 4.0, "range": 160.0, "kind": "burst", "desc": "Compresses its bell and quickly floats forward to reposition.","color":Color("#f4d456")},
+	"Jolt Grab":{"power": 28.0, "cooldown": 8.0, "range": 145.0, "kind": "burst", "desc": "Wraps an enemy in its tentacles, restraining and repeatedly shocking it while holding still.","color":Color("#f4d456")},
+	"Smog":{"power": 0.0, "cooldown": 6.0, "range": 170.0, "kind": "burst", "desc": "Blankets an area in smog, temporarily reducing enemy accuracy.","color":Color("#9c83b3")},
+	"Toxic Drift":{"power": 25.0, "cooldown": 6.0, "range": 150.0, "kind": "burst", "desc": "Glides through enemies, leaving an expanding poisonous trail.","color":Color("#9c83b3")},
+	"Contaminate":{"power": 20.0, "cooldown": 7.0, "range": 180.0, "kind": "burst", "desc": "Wraps one enemy in damaging haze and increases its chance of being Poisoned.","color":Color("#9c83b3")},
+	"Fume Shot":{"power": 43.0, "cooldown": 4.5, "range": 185.0, "kind": "projectile", "desc": "Compresses its fumes into a projectile that expands on impact.","color":Color("#9c83b3")},
+	"Pressure Cloud":{"power": 22.0, "cooldown": 7.0, "range": 115.0, "kind": "burst", "desc": "Compresses gas, then releases a cloud that strongly pushes enemies away.","color":Color("#9c83b3")},
+	"Miasmum":{"power": 40.0, "cooldown": 24.0, "range": 200.0, "kind": "burst", "desc": "Spreads apart and releases an enormous lingering poisonous atmosphere.","color":Color("#9c83b3")},
+	"Toxic Touch":{"power": 43.0, "cooldown": 4.0, "range": 90.0, "kind": "burst", "desc": "Lunges into an enemy and smears poisonous slime onto it.","color":Color("#9c83b3")},
+	"Sludge Wave":{"power": 45.0, "cooldown": 5.0, "range": 105.0, "kind": "burst", "desc": "Shakes off a splash of toxic slime around itself.","color":Color("#9c83b3")},
+	"Slime Slide":{"power": 48.0, "cooldown": 5.0, "range": 160.0, "kind": "burst", "desc": "Slides rapidly through enemies, damaging those in its path.","color":Color("#9c83b3")},
+	"Slip Slime":{"power": 12.0, "cooldown": 6.0, "range": 170.0, "kind": "burst", "desc": "Covers the ground beneath an enemy with slime that makes it skid while moving.","color":Color("#9c83b3")},
+	"Poison Coat":{"power": 26.0, "cooldown": 8.0, "range": 65.0, "kind": "burst", "desc": "Coats itself in toxic slime that damages and may poison touching enemies.","color":Color("#9c83b3")},
+	"Acid Splash":{"power": 65.0, "cooldown": 4.5, "range": 100.0, "kind": "burst", "desc": "Splashes close enemies with corrosive liquid for strong immediate damage.","color":Color("#9c83b3")},
+	"Slick Escape":{"power": 20.0, "cooldown": 10.0, "range": 190.0, "kind": "burst", "desc": "Rockets away from nearby danger, leaving a slowing, poisonous slime trail.","color":Color("#9c83b3")},
+	"Gulp":{"power": 80.0, "cooldown": 5, "range": 85.0, "kind": "burst", "desc": "Snaps its enormous mouth forward for a powerful close-range bite.","color":Color("#a4be58")},
+	"Slosh":{"power": 44.0, "cooldown": 4.8, "range": 100.0, "kind": "burst", "desc": "Swings its cup-body sideways, splashing poison in a wide arc.","color":Color("#a4be58")},
+	"Acid Spray":{"power": 38.0, "cooldown": 4.5, "range": 125.0, "kind": "burst", "desc": "Sprays a corrosive cone that damages enemies and lowers their defense.","color":Color("#a4be58")},
+	"Nectar":{"power": 0.0, "cooldown": 6, "range": 95.0, "kind": "burst", "desc": "Splashes sticky nectar nearby, slowing enemies.","color":Color("#a4be58")},
+	"Belch":{"power": 48.0, "cooldown": 6, "range": 90.0, "kind": "burst", "desc": "Blasts a short-range cloud that strongly knocks enemies back.","color":Color("#a4be58")},
+	"Sour Shot":{"power": 58.0, "cooldown": 3.8, "range": 180.0, "kind": "projectile", "desc": "Fires a fast acidic shot for direct damage without poison.","color":Color("#a4be58")},
+	"Dribble":{"power": 35.0, "cooldown": 7, "range": 85.0, "kind": "burst", "desc": "Spills five lingering poison puddles around itself.","color":Color("#a4be58")},
+	"Lid Smack":{"power": 42.0, "cooldown": 2.8, "range": 75.0, "kind": "burst", "desc": "Whacks a nearby enemy with its lid.","color":Color("#a4be58")},
+	"Rollout":{"power": 52.0, "cooldown": 5.5, "range": 175.0, "kind": "burst", "desc": "Curls into a stone ball and barrels through enemies.","color":Color("#b3a38a")},
+	"Unfurl":{"power": 55.0, "cooldown": 6, "range": 105.0, "kind": "burst", "desc": "Curls up, then springs open and strongly knocks nearby enemies away.","color":Color("#b3a38a")},
+	"Rockslide":{"power": 42.0, "cooldown": 5, "range": 180.0, "kind": "projectile", "desc": "Kicks a broad line of rocks through enemies.","color":Color("#b3a38a")},
+	"Pound":{"power": 75.0, "cooldown": 8, "range": 140.0, "kind": "burst", "desc": "Leaps high and slams down with a huge shockwave that can briefly paralyze enemies.","color":Color("#b3a38a")},
+	"Rolling Smash":{"power": 70.0, "cooldown": 6, "range": 115.0, "kind": "burst", "desc": "Makes a short, heavy rolling charge with high knockback.","color":Color("#b3a38a")},
+	"Stone Skip":{"power": 22.0, "cooldown": 4.8, "range": 210.0, "kind": "projectile", "desc": "Throws a flat skipping rock that can strike enemies repeatedly.","color":Color("#b3a38a")},
+	"Rock Ring":{"power": 52.0, "cooldown": 5.5, "range": 110.0, "kind": "burst", "desc": "Stomps to erupt a ring of rocks around itself.","color":Color("#b3a38a")},
+	"Pebble Spray":{"power": 17.0, "cooldown": 3.5, "range": 110.0, "kind": "projectile", "desc": "Kicks a short fan of small stones forward.","color":Color("#b3a38a")},
 	"Water Shot":{"icon":"res://textures/Moves/WaterShot.png","power":30.0,"cooldown":1.3,"range":200.0,"color":Color("#5bb9dc"),"kind":"projectile","desc":"Fires a fast, compact projectile of water."},
 	"Water Jet":{"icon":"res://textures/Moves/WaterJet.png","power":24.0,"cooldown":3.0,"range":220.0,"color":Color("#5bb9dc"),"kind":"projectile","desc":"Fires a continuous narrow stream that repeatedly damages enemies caught in it."},
 	"Splash Dash":{"power":44.0,"cooldown":3.0,"range":110.0,"color":Color("#5bb9dc"),"kind":"burst","icon":"res://textures/Moves/SplashDash.png","desc":"The user surges forward in a splash of water, damaging enemies it hits."},
@@ -1052,7 +1228,7 @@ const MOVES := {
 	"Growth Spurt":{"power":0.0,"cooldown":8.0,"range":0.0,"color":Color("#65b96d"),"kind":"recover","desc":"Temporarily makes the user larger, increasing the size and force of physical attacks."},
 	"Cocoon":{"power":0.0,"cooldown":9.0,"range":0.0,"color":Color("#65b96d"),"kind":"recover","desc":"Encases the user and gradually heals it while preventing other actions."},
 	"Leech Bloom":{"power":46.0,"cooldown":5.0,"range":155.0,"color":Color("#65b96d"),"kind":"projectile","desc":"Grows a parasitic bloom that damages a target and restores HP to the user."},
-	"Last Bloom":{"power":0.0,"cooldown":11.0,"range":0.0,"color":Color("#65b96d"),"kind":"recover","desc":"Creates a powerful final bloom that greatly heals nearby allies when the user is in danger."},
+	"Last Bloom":{"power":0.0,"cooldown":11.0,"range":0.0,"color":Color("#65b96d"),"kind":"recover","desc":"Creates a powerful bloom that greatly heals the user and nearby allies."},
 	"Fireball":{"icon":"res://textures/Moves/Fireball.png","power":36.0,"cooldown":1.6,"range":205.0,"color":Color("#ef654c"),"kind":"projectile","desc":"Fires a basic ball of flame that explodes on impact."},
 	"Flame Burst":{"power":46.0,"cooldown":2.7,"range":95.0,"color":Color("#ef654c"),"kind":"burst","desc":"Releases a concentrated blast of fire directly in front of the user."},
 	"Spark Burst":{"power":42.0,"cooldown":3.0,"range":100.0,"color":Color("#ef654c"),"kind":"burst","desc":"Releases fire outward around the user."},
@@ -1074,7 +1250,7 @@ const MOVES := {
 	"Mind Jab":{"power":32.0,"cooldown":1.3,"range":205.0,"color":Color("#b07fe0"),"kind":"projectile","desc":"Fires a psychic fist forward for a quick punch at range."},
 	"Psycho Punch":{"power":96.0,"cooldown":9.5,"range":150.0,"color":Color("#8a5fd0"),"kind":"burst","desc":"Creates an enormous psychic fist that delivers a slow, extremely powerful punch with heavy knockback."},
 	"Fist Barrage":{"power":42.0,"cooldown":4.6,"range":185.0,"color":Color("#a074dd"),"kind":"burst","desc":"Creates several psychic fists that rapidly pummel the target."},
-	"Helping Hand":{"power":0.0,"cooldown":8.0,"range":0.0,"color":Color("#c9a9f0"),"kind":"recover","desc":"Uses Fistor's floating fists to empower an ally, temporarily increasing its attack."},
+	"Helping Hand":{"icon":"res://textures/Moves/HelpingHand.png","power":0.0,"cooldown":8.0,"range":0.0,"color":Color("#c9a9f0"),"kind":"recover","desc":"Uses Fistor's floating fists to empower an ally, temporarily increasing its attack."},
 	"Psy Bolt":{"power":32.0,"cooldown":1.3,"range":205.0,"color":Color("#b07fe0"),"kind":"projectile","desc":"Fires a simple psychic projectile at an enemy."},
 	"Telekinesis":{"power":30.0,"cooldown":4.5,"range":175.0,"color":Color("#b07fe0"),"kind":"burst","desc":"Lifts or moves an enemy briefly using psychic force."},
 	"Psychic Push":{"power":46.0,"cooldown":3.2,"range":110.0,"color":Color("#b07fe0"),"kind":"burst","desc":"Sends a burst of psychic force forward, damaging and pushing enemies away."},
@@ -1107,7 +1283,7 @@ const MOVES := {
 	"Barricade":{"power":20.0,"cooldown":6.0,"range":160.0,"color":Color("#c8965a"),"kind":"burst","desc":"Spreads several rock pieces into a temporary obstacle line."},
 	"Rock Scatter":{"power":72.0,"cooldown":7.0,"range":150.0,"color":Color("#a9743d"),"kind":"burst","desc":"Explodes its body outward into multiple rock projectiles, then snaps itself back together."},
 	"Guard":{"power":0.0,"cooldown":6.0,"range":0.0,"color":Color("#d8c39a"),"kind":"recover","desc":"Braces behind its shell and greatly reduces incoming damage for a short time."},
-	"Taunt":{"power":0.0,"cooldown":6.0,"range":0.0,"color":Color("#d8c39a"),"kind":"recover","desc":"Makes nearby enemies prioritize Shelter as their target."},
+	"Taunt":{"power":0.0,"cooldown":6.0,"range":0.0,"color":Color("#d8c39a"),"kind":"recover","desc":"Makes nearby enemies prioritize Shellmie as their target."},
 	"Fortify":{"power":0.0,"cooldown":7.5,"range":0.0,"color":Color("#d8c39a"),"kind":"recover","desc":"Greatly increases defense but reduces movement speed temporarily."},
 	"Cover":{"power":0.0,"cooldown":7.0,"range":0.0,"color":Color("#d8c39a"),"kind":"recover","desc":"Protects a chosen nearby ally by taking part of the damage they would receive."},
 	"Body Block":{"power":40.0,"cooldown":5.0,"range":140.0,"color":Color("#d8c39a"),"kind":"burst","desc":"Rushes toward an ally in danger and knocks nearby enemies away."},
@@ -1133,7 +1309,7 @@ const MOVES := {
 	"Toxic Pop":{"power":34.0,"cooldown":4.0,"range":185.0,"color":Color("#8ec44f"),"kind":"projectile","desc":"Sticks a toxic glob onto an enemy that bursts after a short delay, damaging nearby enemies and potentially poisoning them."},
 	"Noxious Cloud":{"power":24.0,"cooldown":6.0,"range":150.0,"color":Color("#8ec44f"),"kind":"burst","desc":"Creates a toxic cloud that damages or poisons enemies inside it."},
 	"Acid Rain":{"power":40.0,"cooldown":7.0,"range":190.0,"color":Color("#8ec44f"),"kind":"burst","desc":"Causes corrosive droplets to fall repeatedly over a target area."},
-	"Nauseate":{"power":20.0,"cooldown":5.0,"range":175.0,"color":Color("#8ec44f"),"kind":"projectile","desc":"Inflicts a status that disrupts enemy actions or movement."},
+	"Nauseate":{"power":20.0,"cooldown":5.0,"range":175.0,"color":Color("#8ec44f"),"kind":"projectile","desc":"Inflicts Nauseated with foul toxins, occasionally interrupting actions and spoiling attacks."},
 	"Fume Burst":{"power":40.0,"cooldown":3.2,"range":95.0,"color":Color("#8ec44f"),"kind":"burst","desc":"Releases a short-range burst of toxic fumes around itself."},
 	"Poison Bomb":{"power":78.0,"cooldown":7.0,"range":200.0,"color":Color("#6fa83a"),"kind":"burst","desc":"Collects a large glob of poison and launches it in an arc. On impact it detonates into poison splatters that may inflict Poisoned."},
 	"Gust":{"power":40.0,"cooldown":2.6,"range":110.0,"color":Color("#a7d3e4"),"kind":"burst","desc":"Blows a concentrated blast of air forward with strong knockback."},
@@ -1222,7 +1398,15 @@ const LEARNSETS := [
 	["Gust","Air Burst","Updraft","Vacuum","Crosswind","Tailwind","Whirlwind","Wind Wall","Downdraft","Cyclone","Deflate"],
 	["Icicle Shot","Ice Spike","Cold Snap","Ice Wall","Frost Patch","Ice Cage","Glacier Rush","Hail","Iceberg","Icicle Mine","Shatter"],
 	["Wingbeat","Honk","Peck","Feather Guard","Tailwind","Scare","Escort","Alarm Honk"],
-	["Wingbeat","Honk","Peck","Feather Guard","Tailwind","Scare","Escort","Alarm Honk","Double Honk","Two-Headed Watch","Cross Peck","Gaggle Rush"]
+	["Wingbeat","Honk","Peck","Feather Guard","Tailwind","Scare","Escort","Alarm Honk","Double Honk","Two-Headed Watch","Cross Peck","Gaggle Rush"],
+	["Gulp", "Poison Spit", "Poison Bomb", "Slosh", "Acid Spray", "Nectar", "Belch", "Sour Shot", "Dribble", "Lid Smack"],
+	["Rollout", "Unfurl", "Rock Toss", "Brace", "Rockslide", "Pound", "Rolling Smash", "Stone Skip", "Rock Ring", "Pebble Spray"],
+	["Noxious Cloud", "Fume Burst", "Poison Spit", "Smog", "Nauseate", "Toxic Drift", "Contaminate", "Fume Shot", "Pressure Cloud", "Miasmum"],
+	["Toxic Touch", "Gunk Glob", "Sludge Wave", "Slime Slide", "Slip Slime", "Poison Coat", "Acid Splash", "Nauseate", "Mud Shot", "Slick Escape"],
+	["Shock Bite", "Latch", "Live Wire", "Static Pulse", "Tail Zap", "Discharge", "Slither", "Shock Toss", "Amp Drain"],
+	["Zap", "Shock Touch", "Zip", "Jolt Kick", "Static Pulse", "Flashstep", "Friction Dash", "Thunderclap", "Zigzag"],
+	["Horn Zap", "Spark Ram", "Clamp", "Shock Toss", "Ground Scrape", "Static Pulse", "Discharge", "Grounded", "Horn Lift", "Shock Clamp"],
+	["Tentacle Zap", "Static Pulse", "Nerve Sting", "Shock Net", "Live Wire", "Jelly Drift", "Discharge", "Jolt Grab"]
 ]
 
 const MOVE_STONES := [
@@ -1242,22 +1426,27 @@ const MOVE_STONES := [
 ]
 
 const INGREDIENTS := {
-	"Bumbleberry":{"icon":"●","texture":"res://textures/Items/BumbleBerry.png","color":Color("#a65ac7"),"tags":["sweet","soft","fruit"],"tier":1,"feel":"A pair of plump berries with a sweet, fizzy taste. They make a faint buzz when shaken."},
-	"Emberpepper":{"icon":"♠","texture":"res://textures/Items/Emberpepper.png","color":Color("#e45d3f"),"tags":["spicy","dry","plant"],"tier":1,"feel":"A scorching pepper that gets hotter the longer you chew it. Swallowing quickly is advised."},
-	"Dewmelon":{"icon":"◉","texture":"res://textures/Items/Dewmelon.png","color":Color("#74cfd0"),"tags":["sweet","juicy","fruit"],"tier":1,"feel":"A cool, watery melon with a thin, crisp rind. Cutting one open releases an impressive amount of juice."},
-	"Knobroot":{"icon":"◆","texture":"res://textures/Items/Knobroot.png","color":Color("#9a7148"),"tags":["earthy","hard","root"],"tier":1,"feel":"A crunchy root with a thick, flavorful knob at the end. Most Quiblets save the knob for last."},
-	"Curlcap":{"icon":"♣","texture":"res://textures/Items/Curlcap.png","color":Color("#bb8060"),"tags":["savory","soft","fungus"],"tier":1,"feel":"A firm mushroom with a cap that curls inward as it grows. The curled edges are especially chewy."},
-	"Stonebean":{"icon":"⬢","texture":"res://textures/Items/Stonebean.png","color":Color("#78818b"),"tags":["savory","hard","seed"],"tier":2,"feel":"A dense bean with a shell nearly as hard as stone. It takes some determined chewing to get inside."},
-	"Honeybulb":{"icon":"⬟","texture":"res://textures/Items/Honeybulb.png","color":Color("#e4ad39"),"tags":["sweet","earthy","root"],"tier":2,"feel":"A soft bulb filled with warm, sticky nectar. Biting into one without making a mess is nearly impossible."},
-	"Bitterleaf":{"icon":"❧","texture":"res://textures/Items/BitterLeaf.png","color":Color("#679b4c"),"tags":["bitter","dry","leaf"],"tier":1,"feel":"A thick, crunchy leaf with an incredibly bitter taste. Interestingly, some Quiblets can't get enough of it."},
-	"Puffshroom":{"icon":"☁","texture":"res://textures/Items/Puffshroom.png","color":Color("#b99ac9"),"tags":["bitter","soft","fungus"],"tier":2,"feel":"A soft mushroom with a cap full of tiny air pockets. Biting into one makes it collapse with a little puff."},
-	"Crystalcorn":{"icon":"✦","texture":"res://textures/Items/Crystalcorn.png","color":Color("#efc748"),"tags":["sweet","dry","seed"],"tier":2,"feel":"A hard, glassy kernel that cracks apart with a surprisingly sweet crunch."},
-	"Brinepod":{"icon":"◒","texture":"res://textures/Items/Brinepod.png","color":Color("#4aa7b8"),"tags":["salty","juicy","seed"],"tier":3,"feel":"A soft pod swollen with salty water. Bite too hard and most of it won't end up in your mouth."},
-	"Sparkfruit":{"icon":"⚡","texture":"res://textures/Items/Sparkfruit.png","color":Color("#e8d833"),"tags":["sour","juicy","fruit"],"tier":3,"feel":"A prickly fruit that builds up a small electric charge as it ripens. Tingly on the tongue."},
-	"Oldroot":{"icon":"⬣","texture":"res://textures/Items/Oldroot.png","color":Color("#69717a"),"tags":["bitter","hard","root"],"tier":3,"feel":"An incredibly tough root that can bend without breaking. Most Quiblets prefer to gnaw on it slowly."},
-	"Glowcap":{"icon":"✺","texture":"res://textures/Items/Glowcap.png","color":Color("#72c98b"),"tags":["savory","soft","fungus"],"tier":3,"feel":"A tender mushroom with a cap that gives off a faint green glow."},
-	"Frostberry":{"icon":"❄","texture":"res://textures/Items/FrostBerry.png","color":Color("#8bd9e8"),"tags":["sour","soft","fruit"],"tier":3,"feel":"A tiny berry that's always cold to the touch. Its frozen skin gives way with a sharp little crunch."},
-	"Sunplum":{"icon":"☀","texture":"res://textures/Items/SunPlum.png","color":Color("#ed9346"),"tags":["sweet","juicy","fruit"],"tier":4,"feel":"A juicy plum that stays pleasantly warm from the sun. Its flesh gets sweeter as it heats up."}
+	"Bumbleberry":{"icon":"●","texture":"res://textures/Ingredients/BumbleBerry.png","color":Color("#a65ac7"),"tags":["sweet","soft","fruit"],"tier":1,"feel":"A pair of plump berries with a sweet, fizzy taste. They make a faint buzz when shaken."},
+	"Emberpepper":{"icon":"♠","texture":"res://textures/Ingredients/Emberpepper.png","color":Color("#e45d3f"),"tags":["spicy","dry","plant"],"tier":1,"feel":"A scorching pepper that gets hotter the longer you chew it. Swallowing quickly is advised."},
+	"Dewmelon":{"icon":"◉","texture":"res://textures/Ingredients/Dewmelon.png","color":Color("#74cfd0"),"tags":["sweet","juicy","fruit"],"tier":1,"feel":"A cool, watery melon with a thin, crisp rind. Cutting one open releases an impressive amount of juice."},
+	"Knobroot":{"icon":"◆","texture":"res://textures/Ingredients/Knobroot.png","color":Color("#9a7148"),"tags":["earthy","hard","root"],"tier":1,"feel":"A crunchy root with a thick, flavorful knob at the end. Most Quiblets save the knob for last."},
+	"Curlcap":{"icon":"♣","texture":"res://textures/Ingredients/Curlcap.png","color":Color("#bb8060"),"tags":["savory","soft","fungus","spicy"],"tier":1,"feel":"A firm mushroom with a cap that curls inward as it grows. The curled edges are especially chewy."},
+	"Stonebean":{"icon":"⬢","texture":"res://textures/Ingredients/Stonebean.png","color":Color("#78818b"),"tags":["savory","earthy","hard","seed"],"tier":2,"feel":"A dense bean with a shell nearly as hard as stone. It takes some determined chewing to get inside."},
+	"Honeybulb":{"icon":"⬟","texture":"res://textures/Ingredients/Honeybulb.png","color":Color("#e4ad39"),"tags":["sweet","earthy","soft","root"],"tier":2,"feel":"A soft bulb filled with warm, sticky nectar. Biting into one without making a mess is nearly impossible."},
+	"Bitterleaf":{"icon":"❧","texture":"res://textures/Ingredients/BitterLeaf.png","color":Color("#679b4c"),"tags":["bitter","dry","leaf"],"tier":1,"feel":"A thick, crunchy leaf with an incredibly bitter taste. Interestingly, some Quiblets can't get enough of it."},
+	"Puffshroom":{"icon":"☁","texture":"res://textures/Ingredients/Puffshroom.png","color":Color("#b99ac9"),"tags":["bitter","savory","soft","fungus","spicy"],"tier":2,"feel":"A soft mushroom with a cap full of tiny air pockets. Biting into one makes it collapse with a little puff."},
+	"Crystalcorn":{"icon":"✦","texture":"res://textures/Ingredients/Crystalcorn.png","color":Color("#efc748"),"tags":["sweet","salty","dry","seed"],"tier":2,"feel":"A hard, glassy kernel that cracks apart with a surprisingly sweet crunch."},
+	"Brinepod":{"icon":"◒","texture":"res://textures/Ingredients/Brinepod.png","color":Color("#4aa7b8"),"tags":["salty","sour","juicy","seed"],"tier":3,"feel":"A soft pod swollen with salty water. Bite too hard and most of it won't end up in your mouth."},
+	"Sparkfruit":{"icon":"⚡","texture":"res://textures/Ingredients/Sparkfruit.png","color":Color("#e8d833"),"tags":["sour","spicy","juicy","fruit"],"tier":3,"feel":"A prickly fruit that builds up a small electric charge as it ripens. Tingly on the tongue."},
+	"Oldroot":{"icon":"⬣","texture":"res://textures/Ingredients/Oldroot.png","color":Color("#69717a"),"tags":["bitter","earthy","savory","hard","root"],"tier":3,"feel":"An incredibly tough root that can bend without breaking. Most Quiblets prefer to gnaw on it slowly."},
+	"Glowcap":{"icon":"✺","texture":"res://textures/Ingredients/Glowcap.png","color":Color("#72c98b"),"tags":["savory","salty","soft","fungus"],"tier":3,"feel":"A tender mushroom with a cap that gives off a faint green glow."},
+	"Frostberry":{"icon":"❄","texture":"res://textures/Ingredients/FrostBerry.png","color":Color("#8bd9e8"),"tags":["sweet","sour","soft","fruit"],"tier":3,"feel":"A tiny berry that's always cold to the touch. Its frozen skin gives way with a sharp little crunch."},
+	"Sunplum":{"icon":"☀","texture":"res://textures/Ingredients/SunPlum.png","color":Color("#ed9346"),"tags":["sweet","sour","juicy","fruit","spicy"],"tier":4,"feel":"A juicy plum that stays pleasantly warm from the sun. Its flesh gets sweeter as it heats up."},
+	"Puckerpear":{"icon":"◆","texture":"res://textures/Ingredients/Puckerpear.png","color":Color("#c7bc45"),"tags":["bitter","sour","spicy","juicy","fruit"],"tier":4,"feel":"A juicy pear with a bitter bite, a sour kick, and a spicy finish."},
+	"Twinplum":{"icon":"●","texture":"res://textures/Ingredients/Twinplum.png","color":Color("#a16aca"),"tags":["sweet","sour","juicy","fruit"],"tier":4,"feel":"Two juicy plums joined at the stem, one sweet and the other sharply sour."},
+	"Splitcap":{"icon":"♠","texture":"res://textures/Ingredients/Splitcap.png","color":Color("#869e55"),"tags":["bitter","sour","hard","plant"],"tier":4,"feel":"A hard plant with a split crown and an intensely sour, bitter taste."},
+	"Mudtruffle":{"icon":"♣","texture":"res://textures/Ingredients/Mudtruffle.png","color":Color("#927055"),"tags":["earthy","savory","salty","soft","fungus"],"tier":4,"feel":"A soft truffle found in rich mud, packed with earthy, savory flavor."},
+	"Crinkleberry":{"icon":"●","texture":"res://textures/Ingredients/CrinkleBerry.png","color":Color("#d26891"),"tags":["sweet","spicy","soft","fruit"],"tier":4,"feel":"A soft, wrinkled berry whose sweetness gives way to a warm spicy tingle."}
 }
 
 # Stage level at which each ingredient tier drops at full weight. Below that the
@@ -1266,12 +1455,14 @@ const INGREDIENTS := {
 const INGREDIENT_TIER_LEVELS:=[0,6,14,24]
 const INGREDIENT_TIER_RAMP:=6.0
 const INGREDIENT_TIER_FLOOR:=.04
+const INGREDIENT_TIER_WEIGHTS:=[1.0,1.0,1.0,.05]
 
 static func ingredient_drop_weight(ingredient_name:String,stage_level:int)->float:
 	var tier:=clampi(int(INGREDIENTS[ingredient_name].get("tier",1)),1,INGREDIENT_TIER_LEVELS.size())
 	var full_level:int=INGREDIENT_TIER_LEVELS[tier-1]
-	if stage_level>=full_level:return 1.0
-	return lerpf(INGREDIENT_TIER_FLOOR,1.0,clampf((stage_level-(full_level-INGREDIENT_TIER_RAMP))/INGREDIENT_TIER_RAMP,0.0,1.0))
+	var rarity_weight:float=INGREDIENT_TIER_WEIGHTS[tier-1]
+	if stage_level>=full_level:return rarity_weight
+	return rarity_weight*lerpf(INGREDIENT_TIER_FLOOR,1.0,clampf((stage_level-(full_level-INGREDIENT_TIER_RAMP))/INGREDIENT_TIER_RAMP,0.0,1.0))
 
 static func roll_ingredient(stage_level:int,candidates:Array=[],rng:RandomNumberGenerator=null)->String:
 	var names:Array=candidates if not candidates.is_empty() else INGREDIENTS.keys()
@@ -1307,8 +1498,7 @@ static func reward_sparkle_level(reward:Dictionary)->int:
 const MOVE_TRAINING_BASE_CHANCE:=5.0
 const MOVE_TRAINING_MAX_CHANCE:=95.0
 const MOVE_TRAINING_HELPER_CHANCE:={"species":25.0,"family":20.0,"type":12.0,"none":5.0}
-const EXP_TRAINING_SHARE:=.30
-const EXP_TRAINING_HELPER_MULTIPLIER:={"species":1.75,"family":1.5,"type":1.2,"none":1.0}
+const EXP_TRAINING_RELATIONSHIP_FACTORS:={"species":.92,"family":.89,"type":.85,"none":.80}
 # Preservation chance per added ingredient: rarity tier × compatibility with the helper.
 const PRESERVATION_CHANCE:={1:{"poor":2.5,"neutral":5.0,"match":10.0},2:{"poor":5.0,"neutral":10.0,"match":20.0},3:{"poor":7.5,"neutral":15.0,"match":30.0},4:{"poor":10.0,"neutral":20.0,"match":40.0}}
 # Later learnset entries are rarer: each step down the learnset multiplies the pick weight by this.
@@ -1369,10 +1559,24 @@ static func move_training_chance(trainee:Dictionary,helpers:Array)->float:
 		if helper is Dictionary and not helper.is_empty():chance+=float(MOVE_TRAINING_HELPER_CHANCE[quiblet_relationship(trainee,helper)])
 	return clampf(chance,0.0,MOVE_TRAINING_MAX_CHANCE)
 
+# Each helper uses the unchanged starting trainee level. Existing XP-bar progress
+# is preserved by grant_training_exp, not subtracted from this reward.
+static func exp_training_helper_reward(trainee:Dictionary,helper:Dictionary)->int:
+	var trainee_level:=maxi(1,int(trainee.level));var helper_level:=maxi(1,int(helper.level))
+	var factor:=float(EXP_TRAINING_RELATIONSHIP_FACTORS[quiblet_relationship(trainee,helper)])
+	var effective_target:=float(helper_level)*factor
+	if float(trainee_level)<effective_target:
+		var target_level:=float(trainee_level)+.90*(effective_target-float(trainee_level))
+		var whole_level:=floori(target_level);var reward:=0.0
+		for level in range(trainee_level,whole_level):reward+=exp_to_level(level)
+		reward+=(target_level-float(whole_level))*exp_to_level(whole_level)
+		return roundi(reward)
+	return roundi(float(exp_to_level(trainee_level))*3.0*factor*(float(helper_level)/float(trainee_level)))
+
 static func exp_training_reward(trainee:Dictionary,helpers:Array)->int:
 	var total:=0
-	for helper in helpers:
-		if helper is Dictionary and not helper.is_empty():total+=roundi(float(total_exp(helper))*EXP_TRAINING_SHARE*float(EXP_TRAINING_HELPER_MULTIPLIER[quiblet_relationship(trainee,helper)]))
+	for helper in helpers.slice(0,4):
+		if helper is Dictionary and not helper.is_empty():total+=exp_training_helper_reward(trainee,helper)
 	return total
 
 static func retrain_pool(q:Dictionary)->Array:
@@ -1459,24 +1663,24 @@ const SPICE_RECIPES := [
 const SPICE_QUALITIES := ["basic","good","great","special"]
 
 const RECIPES := [
-	{"name":"Plain Stew","need":{},"priority":0,"desc":"A simple mixed stew with a broad general pool.","pool":[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19],"attracts":"any Quiblet","color":Color("#b98c64")},
-	{"name":"Rock Bottom Broth","need":{"earthy":2,"hard":2},"priority":10,"desc":"A dense mineral broth for Stone and rocky Quiblets.","pool":[3,4,10,11],"attracts":"sturdy, rocky Quiblets","color":Color("#777c86")},
-	{"name":"Hot Stuff","need":{"spicy":2,"dry":2},"priority":10,"desc":"A fiery stew for heat-loving Quiblets.","pool":[6,7],"attracts":"Fire-type Quiblets","color":Color("#df6246")},
-	{"name":"Deep Dish","need":{"salty":2,"juicy":3},"priority":10,"desc":"A briny, juicy dish for Water and aquatic Quiblets.","pool":[0,1],"attracts":"Water-type Quiblets","color":Color("#55abc7")},
-	{"name":"Shock Stock","need":{"sour":2,"seed":2},"priority":10,"desc":"A crackling stock that draws Electric Quiblets.","pool":[6],"attracts":"sparky orange Quiblets","color":Color("#e1c53c")},
-	{"name":"Food for Thought","need":{"bitter":2,"soft":2},"priority":10,"desc":"A curious dish favored by Psychic Quiblets.","pool":[8,9],"attracts":"thoughtful Psychic-type Quiblets","color":Color("#9a78c7")},
-	{"name":"Garden Variety","need":{"leaf":2,"soft":2},"priority":10,"desc":"A green stew for Plant and leafy Quiblets.","pool":[2,3,4,5],"attracts":"Green-type Quiblets","color":Color("#69a45e")},
-	{"name":"Midnight Snack","need":{"bitter":3,"fungus":2},"priority":20,"desc":"A dark, earthy meal for nocturnal and shadowy Quiblets.","pool":[4,7,15],"attracts":"dark, nocturnal Quiblets","color":Color("#625a83")},
-	{"name":"Heavy Helping","need":{"hard":3,"savory":2},"priority":20,"desc":"A weighty meal for large, bulky, tanky Quiblets.","pool":[1,3,7,11,12],"attracts":"big, bulky Quiblets","color":Color("#8c735e")},
-	{"name":"Light Bite","need":{"soft":3,"juicy":2},"priority":20,"desc":"A light dish for small, nimble Quiblets.","pool":[0,2,6,13,18],"attracts":"small, nimble Quiblets","color":Color("#76c7b0")},
-	{"name":"Punch Drunk","need":{"spicy":2,"hard":2},"priority":25,"desc":"A forceful stew for melee and aggressive Quiblets.","pool":[4,6,7,10],"attracts":"aggressive melee Quiblets","color":Color("#cf7041")},
-	{"name":"Long Shot","need":{"dry":3,"seed":2},"priority":25,"desc":"A crisp seed stew for ranged Quiblets.","pool":[0,1,2,3,6,7,14,15,16,17],"attracts":"long-range Quiblets","color":Color("#6e9bc5")},
-	{"name":"Comfort Food","need":{"sweet":3,"soft":2},"priority":25,"desc":"A soothing meal for healing and support-oriented Quiblets.","pool":[5,13,18,19],"attracts":"healing, supportive Quiblets","color":Color("#d49b9f")},
-	{"name":"Woodland Medley","need":{"fungus":2,"leaf":1,"earthy":1},"priority":15,"desc":"A forest medley enjoyed by woodland Quiblets across types.","pool":[2,3,4,5,15],"attracts":"woodland Quiblets","color":Color("#638b58")},
-	{"name":"Peak Cuisine","need":{"root":3,"hard":3},"priority":15,"desc":"A sturdy dish for mountain, cave, and highland Quiblets.","pool":[1,3,7,10,11,17],"attracts":"mountain and cave Quiblets","color":Color("#7c818c")},
-	{"name":"Coastal Catch","need":{"salty":2,"juicy":2},"priority":15,"desc":"A shore-inspired dish broader than a purely aquatic stew.","pool":[0,1,2,3,16],"attracts":"shoreline Quiblets","color":Color("#4fa7a6")},
-	{"name":"Fancy Feast","need":{"sweet":2,"sour":2,"juicy":2},"priority":30,"desc":"An elaborate dish that attracts unusual and rare Quiblets.","pool":[1,5,7,14,17,19],"attracts":"rare and unusual Quiblets","color":Color("#c17fc4")},
-	{"name":"Mystery Meat","need":{"spicy":1,"salty":1,"bitter":1,"savory":1},"priority":30,"desc":"A strange mixed dish with an unpredictable, weird pool.","pool":[0,1,2,3,4,5,6,7,14,15,16,18,19],"attracts":"unpredictable Quiblets","color":Color("#826177")}
+	{"name":"Plain Stew","need":{},"priority":0,"desc":"A simple mixed stew with a broad general pool.","pool":[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27],"attracts":"any Quiblet","color":Color("#b98c64")},
+	{"name":"Rock Bottom Broth","need":{"earthy":4,"hard":3},"priority":1017,"desc":"A dense mineral broth for Stone and rocky Quiblets.","pool":[3,4,10,11,21],"attracts":"sturdy, rocky Quiblets","color":Color("#777c86")},
+	{"name":"Hot Stuff","need":{"spicy":4,"dry":2},"priority":1016,"desc":"A fiery stew for heat-loving Quiblets.","pool":[6,7],"attracts":"Fire-type Quiblets","color":Color("#df6246")},
+	{"name":"Deep Dish","need":{"juicy":3,"savory":2},"priority":1015,"desc":"A briny, juicy dish for Water and aquatic Quiblets.","pool":[0,1],"attracts":"Water-type Quiblets","color":Color("#55abc7")},
+	{"name":"Shock Stock","need":{"sour":3,"seed":3,"dry":2},"priority":1014,"desc":"A crackling stock that draws Electric Quiblets.","pool":[24,25,26,27],"attracts":"Electric-type Quiblets","color":Color("#e1c53c")},
+	{"name":"Food for Thought","need":{"bitter":4,"soft":3},"priority":1013,"desc":"A curious dish favored by Psychic Quiblets.","pool":[8,9],"attracts":"thoughtful Psychic-type Quiblets","color":Color("#9a78c7")},
+	{"name":"Garden Variety","need":{"plant":2,"leaf":2},"priority":1012,"desc":"A green stew for Plant and leafy Quiblets.","pool":[2,3,4,5],"attracts":"Green-type Quiblets","color":Color("#69a45e")},
+	{"name":"Midnight Snack","need":{"bitter":4,"fungus":3},"priority":2011,"desc":"A dark, earthy meal for nocturnal and shadowy Quiblets.","pool":[4,7,15,20,22,23],"attracts":"dark, nocturnal Quiblets","color":Color("#625a83")},
+	{"name":"Heavy Helping","need":{"hard":4,"savory":3},"priority":2010,"desc":"A weighty meal for large, bulky, tanky Quiblets.","pool":[1,3,7,11,12,20,21,24,26],"attracts":"big, bulky Quiblets","color":Color("#8c735e")},
+	{"name":"Light Bite","need":{"soft":3,"juicy":2},"priority":2009,"desc":"A light dish for small, nimble Quiblets.","pool":[0,2,6,13,18,25],"attracts":"small, nimble Quiblets","color":Color("#76c7b0")},
+	{"name":"Punch Drunk","need":{"spicy":3,"hard":2},"priority":2508,"desc":"A forceful stew for melee and aggressive Quiblets.","pool":[4,6,7,10,20,21,24,25,26],"attracts":"aggressive melee Quiblets","color":Color("#cf7041")},
+	{"name":"Long Shot","need":{"dry":4,"seed":3},"priority":2507,"desc":"A crisp seed stew for ranged Quiblets.","pool":[0,1,2,3,6,7,14,15,16,17,27],"attracts":"long-range Quiblets","color":Color("#6e9bc5")},
+	{"name":"Comfort Food","need":{"sweet":4,"soft":4},"priority":2506,"desc":"A soothing meal for healing and support-oriented Quiblets.","pool":[5,13,18,19],"attracts":"healing, supportive Quiblets","color":Color("#d49b9f")},
+	{"name":"Woodland Medley","need":{"fungus":3,"leaf":2,"earthy":2},"priority":1505,"desc":"A forest medley enjoyed by woodland Quiblets across types.","pool":[2,3,4,5,15,20,22,23],"attracts":"woodland Quiblets","color":Color("#638b58")},
+	{"name":"Peak Cuisine","need":{"root":4,"hard":4},"priority":1504,"desc":"A sturdy dish for mountain, cave, and highland Quiblets.","pool":[1,3,7,10,11,17,21],"attracts":"mountain and cave Quiblets","color":Color("#7c818c")},
+	{"name":"Coastal Catch","need":{"salty":4,"juicy":3},"priority":1503,"desc":"A shore-inspired dish broader than a purely aquatic stew.","pool":[0,1,2,3,16],"attracts":"shoreline Quiblets","color":Color("#4fa7a6")},
+	{"name":"Fancy Feast","need":{"sweet":4,"sour":4,"juicy":3},"priority":3002,"desc":"An elaborate dish that attracts unusual and rare Quiblets.","pool":[1,5,7,14,17,19,22,23,27],"attracts":"rare and unusual Quiblets","color":Color("#c17fc4")},
+	{"name":"Mystery Meat","need":{"spicy":3,"salty":2,"bitter":2,"savory":2},"priority":3001,"desc":"A strange mixed dish with an unpredictable, weird pool.","pool":[0,1,2,3,4,5,6,7,14,15,16,18,19,20,21,22,23,24,25,26,27],"attracts":"unpredictable Quiblets","color":Color("#826177")}
 ]
 
 static func species(index: int) -> Dictionary:
@@ -1640,18 +1844,25 @@ static func tags_for_ingredients(items: Dictionary) -> Dictionary:
 	return tags
 
 static func choose_recipe(items: Dictionary) -> Dictionary:
-	var tags := tags_for_ingredients(items)
-	var best:Dictionary=RECIPES[0];var best_score:=-1
+	var ingredient_count:=0
+	for ingredient_name in items:
+		if INGREDIENTS.has(ingredient_name):ingredient_count+=maxi(0,int(items[ingredient_name]))
+	if ingredient_count!=5:return RECIPES[0]
+	var tags:=tags_for_ingredients(items)
+	var best:Dictionary=RECIPES[0]
+	var best_specificity:=-1;var best_excess:=2147483647;var best_priority:=-1
 	for recipe in RECIPES:
-		if recipe.need.is_empty(): continue
-		var matches := true
+		if recipe.need.is_empty():continue
+		var matches:=true;var specificity:=0;var excess:=0
 		for tag in recipe.need:
-			if int(tags.get(tag, 0)) < int(recipe.need[tag]): matches = false
-		if matches:
-			var specificity:=0
-			for amount in recipe.need.values():specificity+=int(amount)
-			var score:=specificity*100+int(recipe.get("priority",0))
-			if score>best_score:best=recipe;best_score=score
+			var required:=int(recipe.need[tag]);var actual:=int(tags.get(tag,0))
+			if actual<required:matches=false;break
+			specificity+=required;excess+=actual-required
+		if not matches:continue
+		# Compare each criterion separately so priority can never override fit.
+		var priority:=int(recipe.priority)
+		if specificity>best_specificity or (specificity==best_specificity and (excess<best_excess or (excess==best_excess and priority>best_priority))):
+			best=recipe;best_specificity=specificity;best_excess=excess;best_priority=priority
 	return best
 
 static func choose_spice(items:Array[String])->Dictionary:

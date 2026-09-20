@@ -10,11 +10,20 @@ var accent_material: StandardMaterial3D
 var floating_pivot:Node3D
 var floating_center:=Vector3.ZERO
 var floating_time:=0.0
+var species_move_name:=""
+var species_move_time:=0.0
+var species_move_delay:=0.0
+var gas_body:Node3D
+var gas_rest_position:=Vector3.ZERO
+var gas_rest_scale:=Vector3.ONE
+var gas_center:=Vector3.ZERO
+var gas_time:=0.0
+var gas_spread:=1.0
 
 func setup(index: int, is_enemy := false, model_scale := 1.0) -> void:
 	species_index = index
 	enemy = is_enemy
-	scale = Vector3.ONE * model_scale * SIZE_MULTIPLIER
+	scale = Vector3.ONE * model_scale * SIZE_MULTIPLIER * float(GameData.species(index).get("visual_scale",1.0))
 	build_model()
 
 func animate_walking(phase:float,bounce:float,tilt:=0.0)->void:
@@ -25,7 +34,8 @@ func animate_walking(phase:float,bounce:float,tilt:=0.0)->void:
 
 func material(color: Color, roughness := 0.82) -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = color
+	mat.albedo_color = saturated(color, model_saturation())
+	apply_model_glow(mat)
 	mat.roughness = roughness
 	return mat
 
@@ -62,6 +72,8 @@ func build_model() -> void:
 	# procedural toy body; load and auto-fit it to the same scale.
 	if s.has("model") and ResourceLoader.exists(str(s.model)):
 		build_imported_model(str(s.model),float(s.get("model_yaw",IMPORTED_MODEL_YAW)),float(s.get("model_hover",0.0)));return
+	if s.shape=="pitcher":build_pitcher();return
+	if s.shape=="pillbug":build_pillbug();return
 	var dark := material(GameData.COLORS.ink, 0.55)
 	var white := material(Color.WHITE, 0.45)
 	# Chunky low-poly body.
@@ -136,6 +148,60 @@ func build_model() -> void:
 	sphere(Vector3(-.48,.64,.5),Vector3(.13,.08,.05),material(Color(s.accent,.8)))
 	sphere(Vector3(.48,.64,.5),Vector3(.13,.08,.05),material(Color(s.accent,.8)))
 
+func build_pitcher()->void:
+	var dark:=material(Color("#403544"));var liquid:=material(Color("#996bb3"))
+	sphere(Vector3(0,.25,0),Vector3(.95,.42,.95),body_material)
+	for x in [-.3,.3]:sphere(Vector3(x,.08,.15),Vector3(.28,.18,.4),accent_material)
+	for i in 12:
+		var angle:=TAU*i/12.0
+		box(Vector3(sin(angle)*.53,.65,cos(angle)*.53),Vector3(.32,.85,.2),body_material,Vector3(0,angle,0))
+	var pool:=CylinderMesh.new();pool.top_radius=.47;pool.bottom_radius=.47;pool.height=.04;pool.radial_segments=16
+	mesh_part(pool,Vector3(0,.78,0),liquid)
+	var rim:=TorusMesh.new();rim.inner_radius=.46;rim.outer_radius=.7;rim.rings=16;rim.ring_segments=6
+	mesh_part(rim,Vector3(0,1.06,0),accent_material)
+	var lid:=box(Vector3(0,1.38,-.46),Vector3(.95,.12,.65),body_material,Vector3(-.7,0,0));lid.name="PitcherLid"
+	for side in [-1,1]:
+		box(Vector3(side*.7,.4,-.1),Vector3(.6,.12,.32),body_material,Vector3(0,side*.35,side*.3))
+		sphere(Vector3(side*.25,.8,.64),Vector3(.14,.18,.08),dark)
+		sphere(Vector3(side*.25-.02,.84,.685),Vector3(.04,.05,.02),material(Color.WHITE))
+
+func build_pillbug()->void:
+	var dark:=material(Color("#403d38"))
+	sphere(Vector3(0,.35,0),Vector3(1.1,.55,1.45),dark)
+	for i in 5:
+		var z:float=-.56+i*.27;var width:=1.1-.18*absf(i-2)
+		sphere(Vector3(0,.52,z),Vector3(width,.72,.32),body_material if i%2==0 else accent_material)
+	for side in [-1,1]:
+		for z in [-.42,0.0,.42]:box(Vector3(side*.53,.12,z),Vector3(.32,.16,.16),accent_material,Vector3(0,side*.35,0))
+		sphere(Vector3(side*.22,.43,.76),Vector3(.13,.15,.08),dark)
+		box(Vector3(side*.26,.64,.8),Vector3(.07,.3,.07),accent_material,Vector3(.3,0,side*-.3))
+	var body:=Node3D.new();body.name="PillbugBody"
+	var parts:=get_children();add_child(body)
+	for part in parts:remove_child(part);body.add_child(part)
+	var curled:=sphere(Vector3(0,.62,0),Vector3(1.24,1.24,1.24),body_material);curled.name="CurledShell";curled.visible=false
+	for i in 5:
+		var ring:=TorusMesh.new();ring.inner_radius=.56;ring.outer_radius=.62;ring.rings=12;ring.ring_segments=4
+		var band:=mesh_part(ring,Vector3.ZERO,accent_material);remove_child(band);curled.add_child(band);band.rotation.x=PI*.5;band.rotation.y=i*PI/5.0
+
+func animate_species_move(move_name:String,time:float,delay:float)->void:
+	species_move_name=move_name;species_move_time=time;species_move_delay=delay
+	if is_instance_valid(gas_body):
+		gas_spread=1.0
+		if move_name=="Miasmum":gas_spread=lerpf(1.0,1.5,minf(time/.5,1.0))
+		elif move_name in ["Fume Shot","Pressure Cloud"]:gas_spread=1.0-.25*sin(clampf(time/.45,0,1)*PI)
+	var lid:=get_node_or_null("PitcherLid")
+	if lid!=null:
+		lid.rotation.x=-.7
+		if move_name in ["Gulp","Lid Smack"]:lid.rotation.x=-.7+sin(minf(time/.25,1.0)*PI)*1.5
+	if move_name=="Pound":position.y=sin(clampf(time/maxf(delay,.01),0,1)*PI)*2.8
+	var body:=get_node_or_null("PillbugBody")
+	if body!=null:
+		var curled:bool=move_name in ["Rollout","Rolling Smash"] or (move_name=="Unfurl" and time<delay)
+		var actor:=get_parent()
+		if actor is QuibletActor3D and actor.statuses.has("shield"):curled=true
+		body.visible=not curled;get_node("CurledShell").visible=curled
+		get_node("CurledShell").rotation.x=time*10.0 if move_name in ["Rollout","Rolling Smash"] else 0.0
+
 # Imported glTF models are authored facing a different way than the procedural
 # bodies (+Z forward); rotate them so they line up with everything else.
 const IMPORTED_MODEL_YAW := PI / 2.0  # counter-clockwise 90° (viewed from above)
@@ -158,6 +224,8 @@ func build_imported_model(path: String, yaw := IMPORTED_MODEL_YAW, hover := 0.0)
 		inst.position = Vector3(-placed.x, -box.position.y * factor, -placed.z)
 	# Keep floating species above their ground anchor in camp, combat and reveals.
 	inst.position.y+=hover
+	if str(GameData.species(species_index).name)=="Miasmum":
+		gas_body=inst;gas_rest_position=inst.position;gas_rest_scale=inst.scale;gas_center=inst.transform*box.get_center()
 	restore_imported_colors(inst)
 	if GameData.species(species_index).get("model_corner_roll",false):
 		# Roll around the body centre rather than the feet, leaving navigation,
@@ -169,6 +237,10 @@ func build_imported_model(path: String, yaw := IMPORTED_MODEL_YAW, hover := 0.0)
 		update_floating_pose(0.0)
 
 func _process(delta:float)->void:
+	if is_instance_valid(gas_body):
+		gas_time+=delta;gas_body.scale=gas_rest_scale*gas_spread
+		gas_body.position=gas_center+(gas_rest_position-gas_center)*gas_spread+Vector3.UP*sin(gas_time*1.4)*.12
+	if GameData.species(species_index).shape=="pillbug" and get_parent() is QuibletActor3D :animate_species_move(species_move_name,species_move_time,species_move_delay)
 	if not is_instance_valid(floating_pivot):return
 	floating_time+=delta;update_floating_pose(floating_time)
 
@@ -181,14 +253,19 @@ func update_floating_pose(time:float)->void:
 	floating_pivot.rotation=Vector3(tilt*sin(angle),0.0,-tilt*cos(angle))
 	floating_pivot.position=floating_center+Vector3.UP*sin(time*TAU/6.0)*.25
 
-# Models authored in Blender carry punchy, saturated albedo. The camp's soft,
-# cool blue ambient washes that colour out to muddy pastels, so imported models
-# arrive looking dull compared to the source. Re-seat each surface with a small
-# self-emission of its own albedo (and a touch more saturation) so the authored
-# colour survives the wash — scoped to imported models so procedural bodies,
-# which were tuned to this exact lighting, are left untouched.
-const IMPORTED_EMISSION := 0.32   # fraction of albedo emitted back as self-colour
-const IMPORTED_SATURATION := 1.18 # gentle saturation lift on the base albedo
+# Soften chromatic colours consistently across imported and procedural Quiblets.
+# A small amount of self-emission keeps colours visible in shade.
+const MODEL_SATURATION := 1.0
+const MODEL_EMISSION := 0.12
+
+func apply_model_glow(mat:StandardMaterial3D)->void:
+	var strength:=float(GameData.species(species_index).get("model_emission",MODEL_EMISSION))
+	mat.emission_enabled=strength>0.0
+	mat.emission=mat.albedo_color
+	mat.emission_energy_multiplier=strength
+
+func model_saturation()->float:
+	return float(GameData.species(species_index).get("model_saturation",MODEL_SATURATION))
 
 func restore_imported_colors(inst: Node3D) -> void:
 	# Purely a rendering tweak; the headless dummy rasterizer has no real material
@@ -201,14 +278,11 @@ func restore_imported_colors(inst: Node3D) -> void:
 			var src := mesh.surface_get_material(s)
 			if not (src is StandardMaterial3D):continue
 			var m: StandardMaterial3D = (src as StandardMaterial3D).duplicate()
-			m.albedo_color = saturated(m.albedo_color, IMPORTED_SATURATION)
-			m.emission_enabled = true
-			m.emission = m.albedo_color
-			m.emission_energy_multiplier = IMPORTED_EMISSION
+			m.albedo_color = saturated(m.albedo_color, model_saturation())
+			apply_model_glow(m)
 			mi.set_surface_override_material(s, m)
 
-# Push a colour away from grey by `amount` (1.0 = unchanged) while keeping value,
-# so pure blacks/whites stay put and only chromatic surfaces get the lift.
+# Adjust distance from grey (1.0 = unchanged), preserving black, white and alpha.
 func saturated(c: Color, amount: float) -> Color:
 	var grey := (c.r + c.g + c.b) / 3.0
 	return Color(

@@ -64,7 +64,7 @@ func setup(q: Dictionary, is_enemy := false, level_boost := 0, team_slot := -1, 
 	max_hp=GameData.max_hp(data)*(float(scaling.get("hp",.68)) if enemy else 1.0);current_hp=max_hp;attack=GameData.attack(data);damage_multiplier=float(scaling.get("damage",.58)) if enemy else 1.0
 	attack_range=clampf(float(GameData.species(int(data.species)).range)/35.0,2.0,6.2)
 	bonus_totals=GameData.quiblet_bonus_totals(data)
-	speed=(2.4+minf(.9,attack_range*.1))*(1.0+bonus_value("speed"))
+	speed=(2.4+minf(.9,attack_range*.1))*(1.0+bonus_value("speed"))*float(GameData.species(int(data.species)).get("speed_multiplier",1.0))
 	move_cooldowns.resize(data.moves.size())
 	move_cooldown_totals.resize(data.moves.size())
 	for i in move_cooldowns.size():
@@ -124,7 +124,7 @@ func process_actor_physics(delta: float) -> void:
 		var remaining:=horizontal_distance(global_position,desired_point)
 		# The last point counts as reached when it is close and progress has stopped
 		# (teammates crowding the same spot keep each other from the exact point).
-		if remaining<(.35 if command_path.is_empty() else .6) or (command_path.is_empty() and remaining<1.6 and stuck_timer>.45):
+		if (remaining<(.35 if command_path.is_empty() else .6) and next_path_segment_clear()) or (command_path.is_empty() and remaining<1.6 and stuck_timer>.45):
 			if command_path.is_empty():has_command=false;stuck_timer=0.0
 			else:desired_point=clamp_point(command_path.pop_front())
 		return
@@ -142,6 +142,14 @@ func process_actor_physics(delta: float) -> void:
 		var away:Vector3=global_position-target.global_position;away.y=0;move_toward_point(clamp_point(global_position+away.normalized()*2.3),delta)
 	else:
 		velocity=velocity.move_toward(Vector3.ZERO,10*delta);move_and_slide();try_use_best_move(distance)
+
+# Do not cut a bend early when that would walk into its inside wall or bank.
+func next_path_segment_clear()->bool:
+	if command_path.is_empty():return true
+	var world:=get_parent()
+	if not world.has_method("line_walkable"):return true
+	var next:Vector3=command_path[0]
+	return world.line_walkable(Vector2(position.x,position.z),Vector2(next.x,next.z),floats_over_water())
 
 func move_toward_point(point: Vector3, delta: float, steer:=true) -> void:
 	var flat:=point-global_position;flat.y=0;var direction:=flat.normalized()
@@ -167,7 +175,13 @@ func move_toward_point(point: Vector3, delta: float, steer:=true) -> void:
 	# and snapping back across its goal every frame.
 	var arrival:=clampf(flat.length()/.9,.4,1.0)
 	var before:=global_position
-	velocity=(direction+separation*.7).normalized()*current_speed()*arrival;velocity.y=0;move_and_slide();global_position=clamp_point(global_position)
+	var desired_velocity:Vector3=(direction+separation*.7).normalized()*current_speed()*arrival
+	if statuses.has("slippery"):
+		var skid:float=sin(float(statuses.slippery.time)*8.0)*.65
+		desired_velocity=desired_velocity.rotated(Vector3.UP,skid)
+		velocity=velocity.lerp(desired_velocity,minf(1.0,delta*1.4))
+	else:velocity=desired_velocity
+	velocity.y=0;move_and_slide();global_position=clamp_point(global_position)
 	face_direction(velocity,delta)
 	track_progress(before,delta)
 
@@ -175,6 +189,7 @@ func move_toward_point(point: Vector3, delta: float, steer:=true) -> void:
 # air-current Tailwind speeds it up.
 func current_speed()->float:
 	var result:=speed
+	if statuses.has("grounded"):result*=.2
 	if statuses.has("slow"):result*=maxf(.15,1.0-float(statuses.slow.amount))
 	if statuses.has("hasten"):result*=1.0+float(statuses.hasten.amount)
 	return result
@@ -207,6 +222,10 @@ func try_use_best_move(distance: float) -> void:
 			if current_hp/max_hp<.48:use_move(i,target);return
 		elif distance<=float(move.range)/35.0*pow(1.38,stone_count(entry,"reach")):use_move(i,target);return
 
+# Player input activates immediately; only cooldowns and knockout block it.
+func request_move(index:int,new_target:QuibletActor3D)->void:
+	_execute_move(index,new_target,1.0,false,[],false,false,Vector3.INF,true)
+
 func use_move(index:int,new_target:QuibletActor3D)->void:
 	if index<0 or index>=data.moves.size() or move_cooldowns[index]>0:return
 	_execute_move(index,new_target,1.0,false,[],false)
@@ -216,9 +235,9 @@ func use_move(index:int,new_target:QuibletActor3D)->void:
 # fallback_aim: where a forced follow-up lands when its target has died and no
 # enemy is within reach, so an Echo of an area move falls on the same spot
 # instead of vanishing (or flying across the map to a far-off set).
-func _execute_move(index:int,new_target:QuibletActor3D,effectiveness:float,ignore_cooldown:bool,visited:Array,is_echo:bool,forced:bool=false,fallback_aim:Vector3=Vector3.INF)->void:
+func _execute_move(index:int,new_target:QuibletActor3D,effectiveness:float,ignore_cooldown:bool,visited:Array,is_echo:bool,forced:bool=false,fallback_aim:Vector3=Vector3.INF,manual:=false)->void:
 	if current_hp<=0:return
-	if not forced and (actions_locked() or motion_lock>0):return
+	if not forced and not manual and (actions_locked() or motion_lock>0):return
 	if index<0 or index>=data.moves.size():return
 	if visited.has(index) and not is_echo:return
 	var chain_visited:=visited.duplicate()
@@ -228,14 +247,14 @@ func _execute_move(index:int,new_target:QuibletActor3D,effectiveness:float,ignor
 	# Record the move so an ally's Copycat can replay it (never record Copycat itself).
 	if not forced and not is_echo and entry.name!="Copycat":last_move_name=entry.name;last_move_time=Time.get_ticks_msec()/1000.0
 	if not ignore_cooldown and move_cooldowns[index]>0:return
-	if profile.has("low_hp") and current_hp/max_hp>float(profile.low_hp):return
+	if enemy and profile.has("low_hp") and current_hp/max_hp>float(profile.low_hp):return
 	if profile.mode=="combust" and (not is_instance_valid(new_target) or not new_target.statuses.has("burn")):return
-	if profile.mode=="dash" and movement_locked() and not forced:return
-	var needs_target:bool=profile.get("anchor","")=="target" or profile.mode=="combust"
+	if profile.mode in ["dash","maneuver","contact"] and movement_locked() and not forced and not manual:return
+	var needs_target:bool=profile.get("anchor","")=="target" or profile.mode in ["combust","contact","maneuver"]
 	if needs_target and (not is_instance_valid(new_target) or new_target.current_hp<=0):
 		new_target=nearest_live_enemy() if not forced else null
-		if not is_instance_valid(new_target) and not (forced and fallback_aim!=Vector3.INF):return
-	if needs_target and not forced and horizontal_distance(global_position,new_target.global_position)>float(move.range)/35.0*pow(1.38,stone_count(entry,"reach"))+.5:return
+		if not is_instance_valid(new_target) and not manual and not (forced and fallback_aim!=Vector3.INF):return
+	if needs_target and not forced and not manual and horizontal_distance(global_position,new_target.global_position)>float(move.range)/35.0*pow(1.38,stone_count(entry,"reach"))+.5:return
 	if not ignore_cooldown:
 		var cooldown_multiplier:=pow(1.28,stone_count(entry,"heavy"))*pow(.72,stone_count(entry,"rush"))*pow(1.35,stone_count(entry,"echo"))*maxf(.1,1.0-bonus_value("cooldown"))
 		move_cooldowns[index]=float(move.cooldown)*cooldown_multiplier
@@ -243,6 +262,12 @@ func _execute_move(index:int,new_target:QuibletActor3D,effectiveness:float,ignor
 	var strength:float=effectiveness*pow(1.35,stone_count(entry,"heavy"))
 	var cast=MOVE_CAST.new()
 	cast.setup(self,entry,new_target,strength,is_echo)
+	if manual:
+		cast.profile["delay"]=0.0
+		# Avoid two casts steering the same body in conflicting directions.
+		if cast.profile.mode in ["dash","contact","maneuver"]:
+			for active in get_parent().get_children():
+				if active.get_script()==MOVE_CAST and active.source()==self and active.profile.mode in ["dash","contact","maneuver"]:active.finish(false)
 	if forced and not is_instance_valid(new_target) and fallback_aim!=Vector3.INF:cast.set_aim(fallback_aim)
 	var target_reference:WeakRef=weakref(new_target) if is_instance_valid(new_target) else null
 	var generation:=cast_epoch;var aim_point:Vector3=cast.aim
@@ -325,7 +350,7 @@ func apply_force(hit_target:QuibletActor3D,entry:Dictionary,base_distance:float)
 	if away.length()>.01:hit_target.position=hit_target.clamp_point(hit_target.position+away.normalized()*distance)
 
 func bonus_value(stat:String)->float:
-	return float(bonus_totals.get(stat,0.0))
+	return float(bonus_totals.get(stat,0.0))+(float(statuses.grounded.amount) if stat=="knockback" and statuses.has("grounded") else 0.0)+(float(GameData.species(int(data.species)).get("knockback_resistance",0.0)) if stat=="knockback" else 0.0)
 
 func receive_shared_heal(amount:float)->void:
 	if current_hp>0:current_hp=minf(max_hp,current_hp+maxf(0,amount)*(1.0+bonus_value("healing")))
@@ -369,7 +394,7 @@ func begin_knockout()->void:
 
 func revive_from_knockout()->void:
 	if not knocked_out:return
-	knocked_out=false;current_hp=max_hp*.5;revive_time=0.0;model.scale=Vector3.ONE*.78*QuibletModel3D.SIZE_MULTIPLIER
+	knocked_out=false;current_hp=max_hp*.5;revive_time=0.0;model.scale=Vector3.ONE*.78*QuibletModel3D.SIZE_MULTIPLIER*float(GameData.species(int(data.species)).get("visual_scale",1.0))
 	if is_instance_valid(team_ring):team_ring.visible=true
 	var tween:=create_tween();tween.set_parallel(true);tween.tween_property(model,"rotation:x",0.0,.24).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT);tween.tween_property(model,"position:y",.35,.14);tween.tween_property(model,"scale",Vector3.ONE*1.08,.18)
 	tween.set_parallel(false);tween.tween_property(model,"position:y",0.0,.12);tween.parallel().tween_property(model,"scale",Vector3.ONE,.12);tween.tween_callback(func():revived.emit(self))
@@ -404,10 +429,12 @@ func horizontal_distance(a:Vector3,b:Vector3)->float:
 # Status timers use physics time, so pausing freezes effects and cooldowns alike.
 func add_status(kind:String,seconds:float,amount:float,from_actor:QuibletActor3D=null,drain:float=0.0)->void:
 	if current_hp<=0:return
+	if kind in ["paralyzed","stun"] and statuses.has("grounded"):
+		seconds*=.1
 	if kind=="shield":amount=max_hp*amount
 	if kind=="bubble":amount=max_hp*.12*amount
 	var previous:Dictionary=statuses.get(kind,{})
-	statuses[kind]={"time":maxf(seconds,float(previous.get("time",0))),"total":seconds,"amount":maxf(amount,float(previous.get("amount",0))),"source":weakref(from_actor) if is_instance_valid(from_actor) else null,"drain":drain}
+	statuses[kind]={"time":maxf(seconds,float(previous.get("time",0))),"total":seconds,"amount":maxf(amount,float(previous.get("amount",0))),"source":weakref(from_actor) if is_instance_valid(from_actor) else null,"drain":drain,"age":float(previous.get("age",0.0)),"next_disrupt":float(previous.get("next_disrupt",.8))}
 
 func update_statuses(delta:float)->void:
 	for kind in statuses.keys():
@@ -419,22 +446,27 @@ func update_statuses(delta:float)->void:
 		if kind in ["burn","leech","poison"]:
 			var actual:=take_damage(float(status.amount)*active_time,from_actor,false)
 			if is_instance_valid(from_actor):from_actor.receive_shared_heal(actual*(float(status.drain)+(.5 if kind=="leech" else 0.0)))
+		elif kind=="nauseated":
+			status.age+=active_time
+			if status.age>=status.next_disrupt:
+				status.next_disrupt+=.8
+				if randf()<.45:add_status("stun",.25,1.0,from_actor)
 		elif kind=="cocoon":receive_shared_heal(max_hp*float(status.amount)*active_time)
 		status.time-=delta
 		if status.time<=0:statuses.erase(kind)
 	if is_instance_valid(model) and current_hp>0:
-		model.scale=Vector3.ONE*.82*QuibletModel3D.SIZE_MULTIPLIER*(float(statuses.growth.amount) if statuses.has("growth") else 1.0)*model_stretch
+		model.scale=Vector3.ONE*.82*QuibletModel3D.SIZE_MULTIPLIER*float(GameData.species(int(data.species)).get("visual_scale",1.0))*(float(statuses.growth.amount) if statuses.has("growth") else 1.0)*model_stretch
 		model.position.y=(sin(PI*(1.0-float(statuses.launch.time)/float(statuses.launch.total)))*float(statuses.launch.amount) if statuses.has("launch") else 0.0)+model_lift
 	update_status_visual()
 
 func actions_locked()->bool:
-	return statuses.has("cocoon") or statuses.has("stun") or statuses.has("bubble") or statuses.has("launch")
+	return statuses.has("paralyzed") or statuses.has("cocoon") or statuses.has("stun") or statuses.has("bubble") or statuses.has("launch")
 
 func movement_locked()->bool:
 	return actions_locked() or statuses.has("root")
 
 func cleanse()->void:
-	for kind in ["burn","leech","root","stun","bubble","smoke","poison","slow","confuse","defense_down","weaken"]:statuses.erase(kind)
+	for kind in ["burn","leech","root","stun","bubble","smoke","poison","slow","confuse","defense_down","weaken","nauseated","slippery","contaminated","paralyzed"]:statuses.erase(kind)
 
 func accepts_hit_from(attacker:QuibletActor3D)->bool:
 	var miss:=0.0
@@ -443,6 +475,7 @@ func accepts_hit_from(attacker:QuibletActor3D)->bool:
 	# A confused (or scared) attacker's own strikes often go wide.
 	if is_instance_valid(attacker) and attacker.statuses.has("confuse"):miss=maxf(miss,minf(.9,float(attacker.statuses.confuse.amount)))
 	if bonus_value("evasion")>0.0:miss=1-(1-miss)*(1-minf(1.0,bonus_value("evasion")))
+	if is_instance_valid(attacker) and attacker.statuses.has("nauseated"):miss=maxf(miss,float(attacker.statuses.nauseated.amount))
 	return randf()>=miss
 
 func displace(offset:Vector3)->void:
@@ -467,7 +500,7 @@ func update_status_visual()->void:
 		status_visual.material_override=mat
 	status_visual.visible=not statuses.is_empty() and current_hp>0
 	var tint:=Color(.7,.7,.7,.3)
-	for kind in ["burn","leech","root","stun","smoke","evade","thorns","cocoon","bubble","shield","empower","poison","slow","confuse","defense_down","taunt","haste","hasten","weaken"]:
+	for kind in ["burn","leech","root","stun","smoke","evade","thorns","cocoon","bubble","shield","empower","poison","slow","confuse","defense_down","taunt","haste","hasten","weaken","nauseated","slippery","contaminated","paralyzed"]:
 		if not statuses.has(kind):continue
 		match kind:
 			"burn":tint=Color(1,.25,.03,.45)

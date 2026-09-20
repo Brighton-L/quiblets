@@ -24,7 +24,7 @@ func setup(kind: String, first_index: int, second_index: int, accepted_type: Str
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 
 func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
-	if not data is Dictionary or locked:
+	if not data is Dictionary or locked or data.get("fitted",false):
 		return false
 	# An empty Move Stone slot dragged from another move lands on any of this move's slots.
 	if data.get("kind", "") == "move_slot":

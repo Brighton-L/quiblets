@@ -71,7 +71,7 @@ func _draw()->void:
 		else:draw_arc(center,pulse_radius,0,TAU,40,Color(1,1,1,(1.0-progress)*.9),3.0)
 
 func display_tint_ratio(cooldown:float=-1.0,total:float=-1.0)->float:
-	if not is_instance_valid(actor) or actor.current_hp<=0.0 or actor.actions_locked() or actor.motion_lock>0:return 1.0
+	if not is_instance_valid(actor) or actor.current_hp<=0.0:return 1.0
 	if cooldown<0.0:cooldown=actor.move_cooldowns[move_index]
 	if total<0.0:total=actor.move_cooldown_totals[move_index]
 	return clampf(cooldown/total,0.0,1.0) if cooldown>0.0 and total>0.0 else 0.0

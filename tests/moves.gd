@@ -45,7 +45,8 @@ func run()->void:
 	for move_name in GameData.MOVES:
 		fixture();var p:Dictionary=BEHAVIORS.profile(move_name)
 		user.current_hp=2000;ally.current_hp=2000
-		if p.mode=="mine":victim.position.x=1
+		if p.mode=="mine" or move_name=="Poison Coat":victim.position.x=1
+		if move_name=="Slick Escape":victim.position.x=.5
 		if p.mode=="cleanse":user.add_status("burn",4,2,victim)
 		if p.mode=="combust":victim.add_status("burn",4,2,user)
 		var effect=cast(move_name)
@@ -54,11 +55,12 @@ func run()->void:
 		if p.mode=="buff":check((ally if p.get("ally",false) else user).statuses.has(p.status),move_name+" did not grant its specific buff")
 		elif p.mode=="cleanse":check(not user.statuses.has("burn"),move_name+" did not cleanse")
 		elif p.mode in ["heal","heal_field"]:check(user.current_hp>2000 and ally.current_hp>2000,move_name+" did not heal both user and nearby ally")
+		elif p.get("no_damage",false) and p.mode=="dash":check(absf(user.position.x)>1 and victim.current_hp==10000,move_name+" should reposition without damage")
 		elif p.get("no_damage",false):check(is_equal_approx(victim.current_hp,10000.0) and (victim.statuses.has(p.get("status","")) or victim.retreating),move_name+" should apply its effect without dealing damage")
 		else:check(victim.current_hp<10000,move_name+" did not apply damage through its delivery mechanic")
-		if p.has("status") and p.mode!="buff" and p.status!="leech":check(victim.statuses.has(p.status),move_name+" did not apply "+p.status)
+		if p.has("status") and p.mode!="buff" and p.status!="leech" and not p.has("status_chance"):check(victim.statuses.has(p.status),move_name+" did not apply "+p.status)
 		if p.has("burn"):check(victim.statuses.has("burn"),move_name+" did not apply Burn")
-		if p.mode=="dash":check(user.position.x>1,move_name+" did not move the user")
+		if p.mode=="dash":check(absf(user.position.x)>(.25 if p.get("stop_on_hit",false) else 1.0),move_name+" did not move the user")
 	# Every compatible modifier is also exercised against every move. This
 	# catches profile paths that would otherwise only run after equipping stones.
 	for name in GameData.MOVES:
@@ -115,7 +117,7 @@ func run()->void:
 	fixture();user.attack=100;victim.current_hp=10000;user.add_status("empower",8,1.5,ally);user.data.moves=[{"name":"Mind Jab","slots":6,"stones":[]}];user.move_cooldowns=[0.0];user.move_cooldown_totals=[0.0];user.use_move(0,victim);advance(.5);check(10000.0-victim.current_hp>base_loss*1.4,"Empower raises the empowered Quiblet's outgoing damage")
 	# New status mechanics: poison ticks, slow/hasten alter speed, confuse makes
 	# the attacker miss, defense_down raises damage taken, and team buffs spread.
-	fixture();cast("Poison Spit");advance(.3);check(victim.statuses.has("poison"),"Poison Spit did not poison");var poison_hp:=victim.current_hp;advance(.6);check(victim.current_hp<poison_hp,"Poison did not deal damage over time")
+	fixture();var spit=cast("Poison Spit");spit.profile.poison_chance=1.0;advance(.3);check(victim.statuses.has("poison"),"Poison Spit did not poison");var poison_hp:=victim.current_hp;advance(.6);check(victim.current_hp<poison_hp,"Poison did not deal damage over time")
 	fixture();var base_speed:float=user.speed;user.add_status("slow",3,.5);check(user.current_speed()<base_speed,"Slow did not reduce movement speed");user.statuses.erase("slow");user.add_status("hasten",3,.4);check(user.current_speed()>base_speed,"Tailwind hasten did not raise movement speed")
 	fixture();user.add_status("confuse",3,.9);var confused_misses:=0
 	for i in 400:

@@ -1,4 +1,8 @@
 extends "res://scripts/expedition_3d.gd"
+const WILD_BERRY_REGROW_SECONDS:=180.0
+var wild_berry_regrowth:Dictionary={}
+var camp_berry_patches:Dictionary={}
+
 # A compact, fixed meadow using the expedition's terrain, water and bridge style.
 # No encounter generation or full-map connectivity searches run in camp.
 func stream_x(z:float)->float:return -9.0+sin(maxf(z,-13.0)*.22)*1.1
@@ -66,7 +70,12 @@ func build()->void:
 			occupied.append(point)
 			if attempt%4==0:
 				var patch:=Node3D.new();patch.name="CampBerryGarden";patch.position=Vector3(point.x,camp_height(point),point.y);patch.set_meta("camp_obstacle_radius",.9);add_child(patch)
-				build_berry_patch_shape(patch,["Bumbleberry","Dewmelon","Sunplum","Curlcap"][cluster%4])
+				var ingredient:String=["Bumbleberry","Dewmelon","Sunplum","Curlcap"][cluster%4]
+				build_berry_patch_shape(patch,ingredient)
+				var patch_id:="%d:%d"%[int(point.x),int(point.y)]
+				patch.set_meta("ingredient",ingredient);camp_berry_patches[patch_id]=patch
+				var body:=StaticBody3D.new();body.name="HarvestHitbox";body.collision_layer=2;body.collision_mask=0;body.set_meta("camp_berry_patch",patch_id);patch.add_child(body)
+				var collision:=CollisionShape3D.new();var shape:=BoxShape3D.new();shape.size=Vector3(1.5,1.5,1.5);collision.shape=shape;collision.position.y=.55;body.add_child(collision)
 			else:
 				var kind:String=["tree","bush","boulder","big_mushroom","bush"][attempt%5]
 				var prop:=ExpeditionProp3D.new();prop.setup(kind,Vector2i(point),biome,1,rng);prop.bears_fruit=false;prop.set_process(false);prop.position.y=camp_height(point);add_child(prop)
@@ -81,7 +90,22 @@ func build()->void:
 	set_process(true)
 
 func _process(delta:float)->void:
-	elapsed+=delta;update_waterfall_bubbles()
+	elapsed+=delta;update_waterfall_bubbles();refresh_wild_berries()
 
 func flight_height_at(point:Vector2)->float:
 	return maxf(0.0,camp_height(point))
+
+func refresh_wild_berries(now:float=Time.get_unix_time_from_system())->void:
+	for patch_id in camp_berry_patches:
+		var patch:Node3D=camp_berry_patches[patch_id]
+		var ready:=now>=float(wild_berry_regrowth.get(patch_id,0.0))
+		patch.visible=ready
+		patch.get_node("HarvestHitbox").collision_layer=2 if ready else 0
+
+func harvest_wild_berry(patch_id:String,now:float=Time.get_unix_time_from_system())->String:
+	if not camp_berry_patches.has(patch_id) or now<float(wild_berry_regrowth.get(patch_id,0.0)):return ""
+	var patch:Node3D=camp_berry_patches[patch_id]
+	var ingredient:=str(patch.get_meta("ingredient"))
+	wild_berry_regrowth[patch_id]=now+WILD_BERRY_REGROW_SECONDS*int(GameData.INGREDIENTS[ingredient].tier)
+	refresh_wild_berries(now)
+	return ingredient

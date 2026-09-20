@@ -7,6 +7,7 @@ func _initialize():call_deferred("run")
 func run():
  var game=load("res://main.tscn").instantiate();root.add_child(game);await process_frame
  check(game.save_access_blocked(),"Tests must not touch saves")
+ check(GameData.OPTIONAL_AREA_HOSTS=={16:1,17:5,18:9,19:13},"Optional discoveries should be spaced across areas 2, 6, 10 and 14")
  check(GameData.EXPEDITION_AREAS.size()==20,"Expected 16 main and four optional regions")
  check(game.visible_map_areas().size()==16,"Optional areas should start hidden")
  check(not game.is_area_level_unlocked(16,0),"Hidden optional levels must be inaccessible")
@@ -22,7 +23,7 @@ func run():
  check(game.area_progress.size()==20 and game.area_progress[3]==4,"Existing progression must be preserved when adding optional areas")
  check(game.discovered_optional_areas==[16] and game.is_area_level_unlocked(16,0),"Discovery must round trip in memory")
  check(game.content.find_child("RegionButton16",true,false)!=null,"Discovered region must appear")
- var exp:=Expedition3D.new();root.add_child(exp);exp.set_process(false);exp.stage_area_index=2;exp.stage_node_index=0;exp.stage_level=2;exp.build_level()
+ var exp:=Expedition3D.new();root.add_child(exp);exp.set_process(false);exp.stage_area_index=5;exp.stage_node_index=0;exp.stage_level=2;exp.build_level()
  check(exp.hidden_area_index==17 and is_instance_valid(exp.hidden_entrance),"Host region needs a discoverable entrance")
  var actor:=QuibletActor3D.new();actor.setup(GameData.make_quiblet(0,5));exp.place_actor(actor);actor.set_physics_process(false);exp.team.append(actor)
  actor.position=exp.hidden_entrance.position;exp.update_hidden_discovery()

@@ -3,7 +3,7 @@ extends Node3D
 
 # A continuous sculpted landmass; regions are color/landform zones, not islands.
 const MAP_SCALE:=1.65
-const CENTERS:=[Vector2(-16,9),Vector2(-10,10),Vector2(-10,3),Vector2(-17,2),Vector2(-18,-5),Vector2(-12,-7),Vector2(-7,-3),Vector2(-6,-11),Vector2(1,-11),Vector2(7,-13),Vector2(12,-7),Vector2(18,-4),Vector2(15,3),Vector2(19,10),Vector2(11,11),Vector2(7,4),Vector2(-7,8),Vector2(-12,5),Vector2(-19,0),Vector2(-10,-4)]
+const CENTERS:=[Vector2(-16,9),Vector2(-10,10),Vector2(-10,3),Vector2(-17,2),Vector2(-18,-5),Vector2(-12,-7),Vector2(-7,-3),Vector2(-6,-11),Vector2(1,-11),Vector2(7,-13),Vector2(12,-7),Vector2(18,-4),Vector2(15,3),Vector2(19,10),Vector2(11,11),Vector2(7,4),Vector2(-7,8),Vector2(-15,-11),Vector2(10,-17),Vector2(23,7)]
 const LAND_LINKS:=[Vector2i(0,1),Vector2i(1,2),Vector2i(2,3),Vector2i(3,4),Vector2i(4,5),Vector2i(5,6),Vector2i(6,7),Vector2i(7,8),Vector2i(8,9),Vector2i(9,10),Vector2i(10,11),Vector2i(11,12),Vector2i(12,13),Vector2i(13,14),Vector2i(14,15),Vector2i(2,6),Vector2i(6,8),Vector2i(10,15)]
 const PLATEAU_HEIGHTS:=[.65,.5,.45,1.5,.4,.8,1.2,2.1,.8,2.0,.65,1.15,.9,1.7,.85,1.15,.7,.4,1.3,.8]
 # Broad, notched sections interlock around a large southern bay. These outlines
@@ -54,32 +54,32 @@ func coastline(point:Vector2)->float:
  return coast
 
 func height_at(point:Vector2)->float:
- var index:=region_at(point);var b:Dictionary=biomes[index]
+ return height_for_region(point,region_at(point),coastline(point))
+
+func height_for_region(point:Vector2,index:int,coast:float)->float:
+ var b:Dictionary=biomes[index]
  var h:float=PLATEAU_HEIGHTS[index]+float(b.get("relief",.5))*.22*sin(point.x*.48)*cos(point.y*.43)
  if b.landform in ["ridges","ravine","looming"]:h+=.65*smoothstep(.35,.85,absf(sin(point.x*.35+point.y*.19)))
  if b.landform=="basin":h+=clampf(point.distance_to(center(index))*.09,0,.5)
- return lerpf(-.55,h,smoothstep(-.06,.18,coastline(point)))
+ return lerpf(-.55,h,smoothstep(-.06,.18,coast))
 
 func setup(regions:Array[int])->void:
  visible_regions=regions.duplicate()
  for i in GameData.EXPEDITION_AREAS.size():biomes.append(GameData.expedition_biome(i))
  var st:=SurfaceTool.new();st.begin(Mesh.PRIMITIVE_TRIANGLES)
  var step:=.45
+ # Shared grid vertices are evaluated once, not once per triangle corner.
+ var samples:Dictionary={}
  for x in range(-90,93):
   for z in range(-70,66):
-   var p:=Vector2(x,z)*step
-   if coastline(p)<-.05:continue
-   for offset in [Vector2.ZERO,Vector2(step,0),Vector2(0,step),Vector2(step,0),Vector2(step,step),Vector2(0,step)]:
-    var point:Vector2=p+offset;var b:Dictionary=biomes[region_at(point)];var h:=height_at(point)
-    var color:Color=b.ground
-    var grain:=.03*sin(point.x*13.0)*cos(point.y*11.0)
-    color=color.lightened(grain) if grain>0 else color.darkened(-grain)
-    if h>1.5:color=color.lerp(b.cliff,clampf((h-1.5)*.3,0,.65))
-    if coastline(point)<.1:color=color.lerp(b.path,.6)
-    # Miniature meandering waterways give the overview its regional character.
-    var creek:=absf(sin(point.x*.65+sin(point.y*.6)))
-    if int(b.rivers)>0 and creek<.035*float(b.river_width) and coastline(point)>.12:color=b.water_color;h-=.06
-    st.set_color(color.srgb_to_linear());st.add_vertex(Vector3(point.x,h,point.y))
+   var cell:=Vector2i(x,z)
+   if not samples.has(cell):samples[cell]=terrain_sample(Vector2(cell)*step)
+   if float(samples[cell].coast)<-.05:continue
+   for offset in [Vector2i.ZERO,Vector2i.RIGHT,Vector2i.DOWN,Vector2i.RIGHT,Vector2i.ONE,Vector2i.DOWN]:
+    var vertex:Vector2i=cell+offset
+    if not samples.has(vertex):samples[vertex]=terrain_sample(Vector2(vertex)*step)
+    var sample:Dictionary=samples[vertex]
+    st.set_color(sample.color);st.add_vertex(sample.position)
  st.generate_normals();var land:=MeshInstance3D.new();land.name="ContinuousIsland";land.mesh=st.commit()
  var mat:=StandardMaterial3D.new();mat.vertex_color_use_as_albedo=true;mat.roughness=1;land.material_override=mat;add_child(land)
  var sea:=MeshInstance3D.new();var plane:=PlaneMesh.new();plane.size=Vector2(400,400);sea.mesh=plane;sea.position.y=-.56
@@ -94,8 +94,19 @@ func setup(regions:Array[int])->void:
    if coastline(point)<.12 or region_at(point)!=index:continue
    var kinds:Array=b.decor;var kind:String=kinds[rng.randi_range(0,kinds.size()-1)]
    var prop:=ExpeditionProp3D.new();prop.setup("boulder" if kind=="rock" else kind,Vector2i.ZERO,b,1,rng);prop.bears_fruit=false
-   prop.scale=Vector3.ONE*rng.randf_range(.28,.43);prop.position=Vector3(point.x,height_at(point),point.y);add_child(prop);planted+=1
+   prop.scale=Vector3.ONE*rng.randf_range(.35,.54);prop.position=Vector3(point.x,height_at(point),point.y);add_child(prop);planted+=1
    prop.set_meta("map_scenery",true)
+
+func terrain_sample(point:Vector2)->Dictionary:
+ var index:=region_at(point);var b:Dictionary=biomes[index];var coast:=coastline(point)
+ var h:=height_for_region(point,index,coast);var color:Color=b.ground
+ var grain:=.03*sin(point.x*13.0)*cos(point.y*11.0)
+ color=color.lightened(grain) if grain>0 else color.darkened(-grain)
+ if h>1.5:color=color.lerp(b.cliff,clampf((h-1.5)*.3,0,.65))
+ if coast<.1:color=color.lerp(b.path,.6)
+ var creek:=absf(sin(point.x*.65+sin(point.y*.6)))
+ if int(b.rivers)>0 and creek<.035*float(b.river_width) and coast>.12:color=b.water_color;h-=.06
+ return {"coast":coast,"color":color.srgb_to_linear(),"position":Vector3(point.x,h,point.y)}
 
 func add_progression_trail()->void:
  var st:=SurfaceTool.new();st.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -114,4 +125,11 @@ func add_progression_trail()->void:
  var mat:=StandardMaterial3D.new();mat.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED;mat.cull_mode=BaseMaterial3D.CULL_DISABLED;mat.albedo_color=Color("#f7e2b1");dots.material_override=mat;add_child(dots)
 
 func add_wandering_team(team:Array,areas:Array[int])->void:
- var wanderers:=preload("res://scripts/region_map_wanderers.gd").new();wanderers.name="MapTeam";add_child(wanderers);wanderers.setup(team,self,areas);add_progression_trail()
+ var signature:Array=[areas.duplicate()]
+ for member in team:signature.append([str(member.get("uid","")),int(member.species)])
+ if get_meta("team_signature",[])==signature and has_node("MapTeam"):return
+ set_meta("team_signature",signature)
+ var old:=get_node_or_null("MapTeam")
+ if old!=null:remove_child(old);old.queue_free()
+ var wanderers:=preload("res://scripts/region_map_wanderers.gd").new();wanderers.name="MapTeam";add_child(wanderers);wanderers.setup(team,self,areas)
+ if not has_node("AreaProgressionTrail"):add_progression_trail()

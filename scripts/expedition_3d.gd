@@ -339,15 +339,21 @@ func carve_rivers(rng:RandomNumberGenerator)->void:
 		for along in range(start-(WATERFALL_REACH if falls else 1),finish+1):positions.append(along)
 		if reverse:positions.reverse()
 		var join_remaining:=-1
+		var previous_cross:=0;var has_previous_row:=false
 		for along in positions:
 			var cross:=roundi(clampf(source+bends.get_noise_1d(float(along))*bend_size,low,high))
 			var row:Array[Vector2i]=[];var touches_river:=false
-			for w in width:
-				var cell:=Vector2i(along,cross+w) if horizontal else Vector2i(cross+w,along)
+			# Sweep between row centres at bends so even a one-cell creek has
+			# a full shared edge instead of touching only at a dry corner.
+			var cross_start:=mini(cross,previous_cross) if has_previous_row else cross
+			var cross_end:=maxi(cross,previous_cross)+width if has_previous_row else cross+width
+			for across in range(cross_start,cross_end):
+				var cell:=Vector2i(along,across) if horizontal else Vector2i(across,along)
 				row.append(cell)
 				if rivers.has(cell):touches_river=true
 				if falls and along<start:source_cells.append(cell)
 			cells.append_array(row)
+			previous_cross=cross;has_previous_row=true
 			# Tributaries merge into existing water instead of crossing the whole
 			# island. Extend through the confluence to avoid a pinched dry seam.
 			if river_index>=2 and touches_river and along>=start and along<finish and join_remaining<0:join_remaining=2
@@ -809,7 +815,12 @@ func build_terrain(rng:RandomNumberGenerator)->void:
 				h=waterfall_source_height(point)
 			elif kind==1:
 				var depth:float=-float(terrain_heights.get(cell,-RIVER_DEPTH))
-				h-=depth*smoothstep(0.0,RIVER_RAMP,float(water_edge[index]))
+				if (rivers.has(cell) or spanned_cells.has(cell)) and int(biome.get("river_width",3))<=3:
+					# A wide bank ramp fills a skinny creek with land. Reach a fixed
+					# submerged bed at the first interior sample, including at bends;
+					# hills and rolling ground must not lift this bed above the water.
+					h=lerpf(h,-depth,smoothstep(0.0,1.0/float(TERRAIN_SUBDIV),float(water_edge[index])))
+				else:h-=depth*smoothstep(0.0,RIVER_RAMP,float(water_edge[index]))
 			elif kind==2:
 				var half:float=maxf(HILL_MIN_HALF,float(ridge[index]))
 				var rise:=smoothstep(0.0,minf(HILL_RAMP,half),float(hill_edge[index]))
@@ -1551,8 +1562,8 @@ func cloud_blocks_camera(node:Node3D,important_points:Variant=null)->bool:
 	return false
 
 func update_clouds(delta:float)->void:
-	if clouds.is_empty():return
 	var important_points:=cloud_important_points()
+	update_tree_fades(delta,important_points)
 	for cloud in clouds:
 		var node:Node3D=cloud.node
 		if not is_instance_valid(node):continue
@@ -1562,6 +1573,24 @@ func update_clouds(delta:float)->void:
 		var target:=CLOUD_BLOCKED_OPACITY if cloud_blocks_camera(node,important_points) else 1.0
 		cloud.opacity=move_toward(float(cloud.opacity),target,(1.0-CLOUD_BLOCKED_OPACITY)*delta/CLOUD_FADE_SECONDS)
 		var material:StandardMaterial3D=cloud.material;material.albedo_color=Color(1,1,1,float(cloud.opacity))
+
+func update_tree_fades(delta:float,important_points:PackedVector3Array)->void:
+	if not is_instance_valid(camera):return
+	for prop in props:
+		if not is_instance_valid(prop) or prop.kind!="tree" or prop.shattered:continue
+		var blocked:=false
+		var bounds:AABB=prop.global_transform*prop.get_meta("cloud_target_bounds",AABB())
+		for point in important_points:
+			# A tree must not fade merely because its own harvestable crown is a target.
+			if bounds.grow(.05).has_point(point):continue
+			var origin:=camera.project_ray_origin(camera.unproject_position(point))
+			if bounds.intersects_segment(origin,point)==null:continue
+			for part in prop.parts:
+				var inverse:Transform3D=part.global_transform.affine_inverse()
+				if part.get_aabb().intersects_segment(inverse*origin,inverse*point)!=null:blocked=true;break
+			if blocked:break
+		for part in prop.parts:
+			part.transparency=move_toward(part.transparency,.2 if blocked else 0.0,.2*delta/CLOUD_FADE_SECONDS)
 
 func build_multimesh(node_name:String,mesh:Mesh,entries:Array[Dictionary])->MultiMeshInstance3D:
 	var multimesh:=MultiMesh.new();multimesh.transform_format=MultiMesh.TRANSFORM_3D;multimesh.use_colors=true;multimesh.use_custom_data=entries.any(func(entry):return entry.has("custom"));multimesh.mesh=mesh;multimesh.instance_count=entries.size()
@@ -1677,7 +1706,7 @@ func add_bush(pos:Vector3)->void:
 # team can tell from a distance what a patch is likely to give. Any resource can
 # grow anywhere; Berry Groves lean toward the four berries (GROVE_BERRY_SHARE of
 # their patches) while regular and Boss levels roll from the whole list.
-const BERRY_INGREDIENTS:=["Bumbleberry","Dewmelon","Frostberry","Sunplum"]
+const BERRY_INGREDIENTS:=["Bumbleberry","Dewmelon","Frostberry","Sunplum","Crinkleberry"]
 const GROVE_BERRY_SHARE:=.6
 func add_berry_patch(pos:Vector3)->void:
 	var grove:=is_grove()
@@ -1712,7 +1741,7 @@ func plant_leaf(patch:Node3D,pos:Vector3,angle:float,length:=.35)->void:
 func build_resource_plant_base(patch:Node3D,ingredient:String)->void:
 	var green:Color=GameData.COLORS.leaf_dark
 	match ingredient:
-		"Bumbleberry":
+		"Bumbleberry","Crinkleberry":
 			for side in [-1.0,1.0]:
 				plant_stem(patch,Vector3(0,0,0),Vector3(side*.3,.62,.06),.035,green)
 				for i in 3:
@@ -1725,13 +1754,13 @@ func build_resource_plant_base(patch:Node3D,ingredient:String)->void:
 		"Frostberry":
 			for i in 7:
 				var a:=i*TAU/7.0;plant_leaf(patch,Vector3(cos(a)*.25,.04,sin(a)*.25),a,.24)
-		"Sunplum","Sparkfruit":
+		"Sunplum","Sparkfruit","Puckerpear","Twinplum":
 			plant_stem(patch,Vector3.ZERO,Vector3(0,.85,0),.05,Color("#755238"))
 			for i in 5:
 				var a:=i*TAU/5.0;var tip:=Vector3(cos(a)*.4,.65+float(i%2)*.2,sin(a)*.4)
 				plant_stem(patch,Vector3(0,.5,0),tip,.025,green);plant_leaf(patch,tip,a,.28)
 				berry_orb(patch,tip-Vector3(0,.10,0),.13,GameData.INGREDIENTS[ingredient].color)
-		"Curlcap","Puffshroom","Glowcap":
+		"Curlcap","Puffshroom","Glowcap","Mudtruffle":
 			for i in 3:
 				var pos:=Vector3(-.32+i*.29,.01,.25);plant_stem(patch,pos,pos+Vector3(0,.18,0),.028,GameData.COLORS.cream);berry_orb(patch,pos+Vector3(0,.2,0),.13,GameData.INGREDIENTS[ingredient].color,0.0,.45)
 		_:
@@ -1782,6 +1811,20 @@ func build_berry_patch_shape(patch:Node3D,ingredient:String)->void:
 			plant_box(patch,Vector3(0,.12,0),Vector3(.8,.14,.14),color,Vector3(0,.5,.2));plant_box(patch,Vector3(0,.16,0),Vector3(.7,.12,.12),color,Vector3(0,-.9,-.25));berry_orb(patch,Vector3(0,.08,0),.18,soil,0.0,.5)
 		"Glowcap":  # a taller mushroom with a glowing green cap
 			plant_box(patch,Vector3(0,.28,0),Vector3(.12,.56,.12),GameData.COLORS.cream);berry_orb(patch,Vector3(0,.6,0),.28,color,.7,.5)
+		"Puckerpear":
+			berry_orb(patch,Vector3(0,.25,0),.26,color);berry_orb(patch,Vector3(0,.52,0),.15,color);plant_stem(patch,Vector3(0,.62,0),Vector3(.06,.8,0),.03,dark_leaf)
+		"Twinplum":
+			for side in [-1,1]:
+				berry_orb(patch,Vector3(side*.19,.3,0),.23,color.lightened(.15 if side==1 else 0.0));plant_stem(patch,Vector3(side*.19,.5,0),Vector3(0,.75,0),.025,dark_leaf)
+		"Splitcap":
+			plant_stem(patch,Vector3.ZERO,Vector3(0,.5,0),.08,dark_leaf)
+			for side in [-1,1]:plant_box(patch,Vector3(side*.18,.57,0),Vector3(.26,.22,.4),color,Vector3(0,0,side*.3))
+		"Mudtruffle":
+			for i in 3:berry_orb(patch,Vector3(-.25+i*.25,.1,.12*(i%2)),.19,color.lightened(i*.06),0.0,.7)
+		"Crinkleberry":
+			for i in 7:
+				var angle:=i*TAU/7.0;berry_orb(patch,Vector3(cos(angle)*.18,.22,sin(angle)*.18),.12,color.lightened(.08*(i%2)))
+
 		_:
 			berry_orb(patch,Vector3(-.2,.22,0),.22,color);berry_orb(patch,Vector3(.2,.26,.12),.22,color)
 
@@ -1997,9 +2040,14 @@ func find_path(from:Vector2,to:Vector2,flying:=false)->Array[Vector3]:
 	var parents:={start_cell:start_cell};var frontier:Array[Vector2i]=[start_cell];var head:=0
 	while head<frontier.size() and not parents.has(goal_cell):
 		var cell:Vector2i=frontier[head];head+=1
-		for offset in [Vector2i(1,0),Vector2i(-1,0),Vector2i(0,1),Vector2i(0,-1)]:
+		for offset in [Vector2i(1,0),Vector2i(-1,0),Vector2i(0,1),Vector2i(0,-1),Vector2i(1,1),Vector2i(1,-1),Vector2i(-1,1),Vector2i(-1,-1)]:
 			var next:Vector2i=cell+offset
-			if navigation_cell_open(next,flying) and not parents.has(next):parents[next]=cell;frontier.append(next)
+			if not navigation_cell_open(next,flying) or parents.has(next):continue
+			# Diagonal travel is allowed only with room on both sides of the
+			# corner, so routes cannot squeeze between touching walls or banks.
+			if offset.x!=0 and offset.y!=0:
+				if not navigation_cell_open(cell+Vector2i(offset.x,0),flying) or not navigation_cell_open(cell+Vector2i(0,offset.y),flying):continue
+			parents[next]=cell;frontier.append(next)
 	if not parents.has(goal_cell):return []
 	var cells:Array[Vector2]=[];var cursor:=goal_cell
 	while cursor!=start_cell:cells.push_front(Vector2(cursor));cursor=parents[cursor]
@@ -2424,7 +2472,7 @@ func manual_move(actor:QuibletActor3D,index:int)->void:
 	if ended:return
 	if is_instance_valid(actor) and actor.current_hp>0:
 		var new_target:=nearest(actor,enemies)
-		actor.use_move(index,new_target)
+		actor.request_move(index,new_target)
 
 func command_team(point:Vector3,from_player:=true)->void:
 	if from_player:advance_index=-1

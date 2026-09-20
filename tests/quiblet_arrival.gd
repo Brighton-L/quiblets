@@ -22,6 +22,10 @@ func run()->void:
 	assert(not is_instance_valid(game.arrival_sequence),"Returning from menus must not collect stew")
 	game.open_cooking_pot();await process_frame;await process_frame
 	assert(game.screen=="quiblet_arrival" and is_instance_valid(game.arrival_sequence))
+	var stew_deadline:=Time.get_ticks_msec()+5000
+	while not game.arrival_sequence.can_continue and Time.get_ticks_msec()<stew_deadline:await process_frame
+	assert(game.arrival_sequence.revealing_stew and game.arrival_sequence.can_continue)
+	game.arrival_sequence.advance();await create_timer(.9).timeout
 	assert(game.arrival_sequence.visitors.size()==2,"All visitors must enter together")
 	var second_actor:Node3D=game.arrival_sequence.visitors[1].actor
 	var second_start:Vector3=second_actor.position

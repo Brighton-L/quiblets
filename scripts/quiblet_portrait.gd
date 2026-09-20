@@ -30,6 +30,23 @@ func _draw() -> void:
 		var box: float = r * 2.7
 		draw_texture_rect(icon, Rect2(center - Vector2(box, box) * 0.5 + Vector2(0, -r * 0.12), Vector2(box, box)), false)
 		return
+	if s.shape=="pitcher":
+		draw_ellipse(center+Vector2(0,r*.2),r*.8,r*.8,c)
+		draw_ellipse(center+Vector2(0,-r*.45),r*1.1,r*.55,a)
+		draw_ellipse(center+Vector2(0,-r*.45),r*.8,r*.35,Color("#47394d"))
+		draw_ellipse(center+Vector2(0,-r*.35),r*.62,r*.18,Color("#996bb3"))
+		draw_ellipse(center+Vector2(0,-r*1.05),r*.65,r*.2,c)
+		for side in [-1,1]:
+			draw_circle(center+Vector2(side*r*.36,r*.3),r*.11,GameData.COLORS.ink)
+			draw_ellipse(center+Vector2(side*r*.4,r*.92),r*.23,r*.12,a)
+		return
+	if s.shape=="pillbug":
+		for side in [-1,1]:
+			for i in 3:draw_line(center+Vector2(side*r*.65,(i-1)*r*.5),center+Vector2(side*r*1.05,(i-1)*r*.6),a,3.0)
+		draw_ellipse(center,r*.85,r,c)
+		for i in 4:draw_arc(center+Vector2(0,(i-2)*r*.32),r*.75,.15,PI-.15,16,a,3.0)
+		for side in [-1,1]:draw_circle(center+Vector2(side*r*.28,r*.64),r*.11,GameData.COLORS.ink)
+		return
 	# Species silhouettes.
 	match s.shape:
 		"ears":

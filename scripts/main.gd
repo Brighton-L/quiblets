@@ -16,9 +16,14 @@ const SPICE_MIX_MAX:=5
 const UNLOCK_RING_SCRIPT:=preload("res://scripts/unlock_progress_ring.gd")
 const REWARD_SPARKLES_SCRIPT:=preload("res://scripts/reward_sparkles.gd")
 
+var camp_berry_regrowth:Dictionary={}
+var garden_plots:Array=[{},{},{},{}]
+var garden=preload("res://scripts/camp_garden.gd").new()
+
 var roster: Array = []
 var team_indices: Array[int] = [0]
-var ingredients := {"Bumbleberry":0,"Emberpepper":0,"Dewmelon":0,"Knobroot":0,"Curlcap":0,"Stonebean":0,"Honeybulb":0,"Bitterleaf":0,"Puffshroom":0,"Crystalcorn":0,"Brinepod":0,"Sparkfruit":0,"Oldroot":0,"Glowcap":0,"Frostberry":0,"Sunplum":0}
+var team_presets:Array=[]
+var ingredients := {"Bumbleberry":0,"Emberpepper":0,"Dewmelon":0,"Knobroot":0,"Curlcap":0,"Stonebean":0,"Honeybulb":0,"Bitterleaf":0,"Puffshroom":0,"Crystalcorn":0,"Brinepod":0,"Sparkfruit":0,"Oldroot":0,"Glowcap":0,"Frostberry":0,"Sunplum":0,"Puckerpear":0,"Twinplum":0,"Splitcap":0,"Mudtruffle":0,"Crinkleberry":0}
 var special_items := {"Health Charm":0,"Attack Charm":0,"Memory Fruit":0,"Move Crystal":0,"Echo Crystal":0,"Growth Fruit":0,"Bountiful Berry":0,"Empty Leftover Jar":0,"Fortune Charm":0,"Challenger's Charm":0,"Treasure Key":0,"Prodigy Fruit":0,"Combiner Charm":0}
 var leftovers := {}
 var known_recipes: Array[String] = []
@@ -80,7 +85,7 @@ var pot_preview: Label
 var difficulty_level := 8
 const AREAS_PER_PAGE:=3
 const SPECIAL_ITEM_ICONS:={"Health Charm":"❤️","Attack Charm":"🗡️","Memory Fruit":"🧠","Move Crystal":"💠","Echo Crystal":"🔮","Growth Fruit":"🌱","Bountiful Berry":"🫐","Empty Leftover Jar":"🫙","Fortune Charm":"🍀","Challenger's Charm":"🔥","Treasure Key":"🔑","Prodigy Fruit":"⭐","Combiner Charm":"🔗"}
-const SPECIAL_ITEM_DESCRIPTIONS:={"Health Charm":"Equip for +6.5% max HP. Removable from the Quiblet equipment menu.","Attack Charm":"Equip for +6% Attack. Removable from the Quiblet equipment menu.","Memory Fruit":"Restore an individually remembered move.","Move Crystal":"Add one Move Stone slot (max 8).","Echo Crystal":"Copy a fitted Move Stone.","Growth Fruit":"Catch up toward the current team level.","Bountiful Berry":"Attract 2–5 lower-level arrivals.","Empty Leftover Jar":"Collects leftovers from the next finished stew.","Fortune Charm":"Harder run; improved rare loot chance.","Challenger's Charm":"Harder run; much more ordinary progress.","Treasure Key":"Opens marked expedition caches.","Prodigy Fruit":"Next milestone grants both outcomes.","Combiner Charm":"Insert into the Combiner to fuse Power Stones. One charm is consumed per combination."}
+const SPECIAL_ITEM_DESCRIPTIONS:={"Health Charm":"Equip for +6.5% max HP. Removable from the Quiblet equipment menu.","Attack Charm":"Equip for +6% Attack. Removable from the Quiblet equipment menu.","Memory Fruit":"Restore an individually remembered move.","Move Crystal":"Add one Move Stone slot (max 8).","Echo Crystal":"Copy any owned Move Stone into your inventory.","Growth Fruit":"Catch up toward the current team level.","Bountiful Berry":"Attract 2–5 lower-level arrivals.","Empty Leftover Jar":"Collects leftovers from the next finished stew.","Fortune Charm":"Harder run; improved rare loot chance.","Challenger's Charm":"Harder run; much more ordinary progress.","Treasure Key":"Opens marked expedition caches.","Prodigy Fruit":"Next milestone grants both outcomes.","Combiner Charm":"Insert into the Combiner to fuse Power Stones. One charm is consumed per combination."}
 const MUSIC_FADE_SECONDS:=1.2
 const MUSIC_SILENCE_DB:=-80.0
 const COOKING_MUSIC_FADE_OUT_SECONDS:=.18
@@ -97,7 +102,7 @@ var area_progress:Array[int]=[]
 var discovered_optional_areas:Array[int]=[]
 var map_view_initialized:=false
 var map_pan:=Vector2.ZERO
-var map_zoom:=1.0
+var map_zoom:=.8
 var map_dragging:=false
 var map_drag_start:=Vector2.ZERO
 var map_drag_last:=Vector2.ZERO
@@ -159,6 +164,7 @@ const MOVE_SLOT_MARKERS := {
 }
 
 func _ready() -> void:
+	add_child(garden);garden.game=self
 	seed(40281)
 	# Tests and previews are isolated automatically, even if --no-save is omitted.
 	persistence_enabled=not save_access_blocked()
@@ -194,10 +200,14 @@ func _exit_tree()->void:
 	save_game()
 
 func save_data()->Dictionary:
+	clean_team_presets()
 	return {
 		"version":3,
+		"garden_plots":garden_plots.duplicate(true),
+		"camp_berry_regrowth":camp_berry_regrowth.duplicate(),
 		"roster":roster.duplicate(true),
 		"team_indices":team_indices.duplicate(),
+		"team_presets":team_presets.duplicate(true),
 		"ingredients":ingredients.duplicate(true),
 		"unlocked_ingredients":unlocked_ingredients.duplicate(),
 		"special_items":special_items.duplicate(true),
@@ -260,6 +270,19 @@ func load_game(force:=false)->bool:
 	return not roster.is_empty()
 
 func apply_save_data(data:Dictionary)->void:
+	camp_berry_regrowth={}
+	var saved_berries=data.get("camp_berry_regrowth",{})
+	if saved_berries is Dictionary:
+		for key in saved_berries:
+			if saved_berries[key] is float or saved_berries[key] is int:camp_berry_regrowth[str(key)]=maxf(0.0,float(saved_berries[key]))
+	garden_plots=[{},{},{},{}]
+	var saved_plots=data.get("garden_plots",[])
+	if saved_plots is Array:
+		for i in mini(4,saved_plots.size()):
+			var plot=saved_plots[i]
+			if plot is Dictionary and GameData.INGREDIENTS.has(str(plot.get("ingredient",""))):
+				var required:=clampi(int(plot.get("required",2)),2,6)
+				garden_plots[i]={"ingredient":str(plot.ingredient),"required":required,"remaining":clampi(int(plot.get("remaining",required)),0,required),"yield":clampi(int(plot.get("yield",2)),2,11)}
 	var loaded_roster=data.get("roster",[])
 	if loaded_roster is Array:
 		roster.clear()
@@ -272,6 +295,8 @@ func apply_save_data(data:Dictionary)->void:
 			q.species=species_index;q.level=maxi(1,int(q.level));q.exp=maxi(0,int(q.exp))
 			ensure_quiblet_equipment(q)
 			roster.append(q)
+	team_presets=data.get("team_presets",[]).duplicate(true) if data.get("team_presets",[]) is Array else []
+	clean_team_presets()
 	var saved_ingredients=data.get("ingredients",{})
 	merge_saved_counts(ingredients,saved_ingredients)
 	if saved_ingredients is Dictionary:
@@ -530,9 +555,14 @@ func show_camp() -> void:
 	screen = "camp"
 	clear_content()
 	transition_to_base_camp_music()
+	build_camp_shortcuts()
+	var expedition_button:=add_button(content,"EXPEDITIONS  ›",Vector2(995,620),Vector2(255,72),func():show_map(),"gold")
+	expedition_button.add_theme_font_size_override("font_size",20)
+
+func build_camp_shortcuts()->void:
 	var resources_button:=add_button(content,"🎒  RESOURCES",Vector2(26,26),Vector2(220,62),func():show_resources(),"leaf")
 	resources_button.add_theme_font_size_override("font_size",17)
-	# The active team sits in one compact row along the bottom center of camp.
+	# Shared by base camp and the expedition island screen.
 	var panel_width:float=team_indices.size()*109.0+130.0
 	var team_panel := panel(Rect2((1280.0-panel_width)/2.0,584,panel_width,124),Color("#f4fbf6e8"),18);team_panel.name="CampTeamPanel";content.add_child(team_panel)
 	label(team_panel,"%d / 5"%team_indices.size(),Vector2(panel_width-54,4),12,GameData.COLORS.muted,false,HORIZONTAL_ALIGNMENT_CENTER,42)
@@ -547,8 +577,12 @@ func show_camp() -> void:
 		label(slot,"Lv. %d"%q.level,Vector2(4,3),9,GameData.COLORS.muted,false,HORIZONTAL_ALIGNMENT_CENTER,94)
 		var p := QuibletPortrait.new(); p.position=Vector2(26,18); p.size=Vector2(50,50); p.setup(int(q.species)); slot.add_child(p)
 		label(slot,GameData.display_name(q),Vector2(4,70),11,GameData.COLORS.ink,true,HORIZONTAL_ALIGNMENT_CENTER,94)
-	var expedition_button:=add_button(content,"EXPEDITIONS  ›",Vector2(995,620),Vector2(255,72),func():show_map(),"gold")
-	expedition_button.add_theme_font_size_override("font_size",20)
+		var info_button:=Button.new();info_button.name="TeamQuibletInfo%d"%i;info_button.flat=true;info_button.size=slot.size;info_button.mouse_default_cursor_shape=Control.CURSOR_POINTING_HAND
+		info_button.tooltip_text="View %s"%GameData.display_name(q);slot.add_child(info_button)
+		info_button.pressed.connect(open_team_quiblet_info.bind(team_indices[i]))
+
+func open_team_quiblet_info(roster_index:int)->void:
+	selected_roster=roster_index;show_quiblet_edit()
 
 func open_cooking_pot()->void:
 	# A sealed pot cannot be opened until its expedition timer has finished.
@@ -563,6 +597,7 @@ func show_all_quiblets() -> void:
 	screen="all_quiblets";clear_content();add_menu_backdrop()
 	var team_section:=panel(Rect2(28,68,560,624),Color("#f5faf7f2"),18);content.add_child(team_section);team_section.name="TeamSection"
 	label(team_section,team_composition_text(),Vector2(18,10),17,GameData.COLORS.ink,true,HORIZONTAL_ALIGNMENT_CENTER,524)
+	build_team_preset_buttons(team_section)
 	build_team_preview(team_section)
 	for slot_index in 5:
 		build_team_drop_slot(team_section,slot_index,Vector2(12+slot_index*107,498))
@@ -572,7 +607,7 @@ func show_all_quiblets() -> void:
 
 func add_menu_backdrop(color:Color=Color("#e9f3ec"))->ColorRect:
 	# Full-screen menus hide the camp diorama behind a flat backdrop.
-	var backdrop:=ColorRect.new();backdrop.name="MenuBackdrop";backdrop.color=color;backdrop.position=Vector2.ZERO;backdrop.size=Vector2(1280,720);backdrop.mouse_filter=Control.MOUSE_FILTER_IGNORE;content.add_child(backdrop);return backdrop
+	var backdrop:=ColorRect.new();backdrop.name="MenuBackdrop";backdrop.color=color;backdrop.mouse_filter=Control.MOUSE_FILTER_IGNORE;content.add_child(backdrop);backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT);return backdrop
 
 func build_quiblet_side_panels(with_training_button:bool)->void:
 	var info_section:=panel(Rect2(699,68,460,189),Color("#fffdf7"),18);content.add_child(info_section);info_section.name="QuibletInfo"
@@ -599,16 +634,82 @@ func toggle_evolution_pause()->void:
 	match screen:
 		"team":show_team()
 		"training":show_training()
+		"edit_quiblet":show_quiblet_edit()
 		_:show_all_quiblets()
 
+func clean_team_presets()->void:
+	team_presets.resize(5)
+	for i in 5:
+		var source:Dictionary=team_presets[i] if team_presets[i] is Dictionary else {}
+		var members:Array=[]
+		var saved_members=source.get("members",[])
+		if saved_members is Array:
+			for uid in saved_members:
+				if members.size()<5 and find_roster_index(str(uid))>=0 and not members.has(str(uid)):members.append(str(uid))
+		team_presets[i]={"name":str(source.get("name","")).strip_edges().left(32),"members":members}
+
+func team_preset_name(index:int)->String:
+	return str(team_presets[index].name) if not str(team_presets[index].name).is_empty() else "Preset %d"%(index+1)
+
+func build_team_preset_buttons(parent:Control)->void:
+	clean_team_presets()
+	for i in 5:
+		var button:=add_button(parent,team_preset_name(i),Vector2(18+i*106,42),Vector2(100,36),show_team_preset.bind(i),"plain")
+		button.name="TeamPreset%d"%i;button.add_theme_font_size_override("font_size",12);button.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS;button.clip_text=true;button.tooltip_text=team_preset_name(i)
+
+func save_team_preset(index:int)->void:
+	clean_team_presets()
+	team_presets[index].members=team_indices.map(func(member):return str(roster[member].uid))
+	show_all_quiblets();show_team_preset(index)
+
+func reset_team_preset(index:int)->void:
+	team_presets[index]={"name":"","members":[]}
+	show_all_quiblets();show_team_preset(index)
+
+func confirm_reset_team_preset(index:int)->void:
+	if content.has_node("ResetPresetConfirmation"):return
+	var shade:=ColorRect.new();shade.name="ResetPresetConfirmation";shade.color=Color(0,0,0,.55);shade.z_index=110;shade.mouse_filter=Control.MOUSE_FILTER_STOP;content.add_child(shade);shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var menu:=panel(Rect2(390,240,500,240),Color("#f5faf7"),18);shade.add_child(menu)
+	label(menu,"RESET PRESET?",Vector2(24,24),24,GameData.COLORS.ink,true,HORIZONTAL_ALIGNMENT_CENTER,452)
+	label(menu,"Clear the saved team and name for %s? Your current team will stay the same."%team_preset_name(index),Vector2(24,78),16,GameData.COLORS.ink,false,HORIZONTAL_ALIGNMENT_CENTER,452)
+	add_button(menu,"CANCEL",Vector2(24,170),Vector2(216,44),shade.queue_free,"plain")
+	add_button(menu,"RESET PRESET",Vector2(260,170),Vector2(216,44),reset_team_preset.bind(index),"coral")
+
+func apply_team_preset(index:int)->void:
+	clean_team_presets()
+	if team_presets[index].members.is_empty():return
+	team_indices.clear()
+	for uid in team_presets[index].members:team_indices.append(find_roster_index(uid))
+	selected_team_slot=0;show_all_quiblets()
+
+func show_team_preset(index:int)->void:
+	clean_team_presets()
+	var old:=content.get_node_or_null("TeamPresetOverlay")
+	if old!=null:content.remove_child(old);old.queue_free()
+	var shade:=ColorRect.new();shade.name="TeamPresetOverlay";shade.color=Color(.06,.12,.1,.65);shade.z_index=100;content.add_child(shade);shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var menu:=panel(Rect2(380,190,520,340),Color("#f5faf7"),18);shade.add_child(menu)
+	label(menu,"TEAM PRESET %d"%(index+1),Vector2(24,20),22,GameData.COLORS.ink,true)
+	var name_input:=LineEdit.new();name_input.name="PresetName";name_input.position=Vector2(24,68);name_input.size=Vector2(472,44);name_input.max_length=32;name_input.placeholder_text="Preset %d"%(index+1);name_input.text=str(team_presets[index].name);menu.add_child(name_input)
+	name_input.text_changed.connect(func(value):
+		team_presets[index].name=value.strip_edges()
+		var button:=content.find_child("TeamPreset%d"%index,true,false) as Button
+		if button!=null:button.text=team_preset_name(index);button.tooltip_text=button.text)
+	var names:Array=[]
+	for uid in team_presets[index].members:names.append(GameData.display_name(roster[find_roster_index(uid)]))
+	label(menu,"Empty slot" if names.is_empty() else ", ".join(names),Vector2(24,128),15,GameData.COLORS.muted,false,HORIZONTAL_ALIGNMENT_LEFT,472)
+	add_button(menu,"SAVE CURRENT TEAM TO SLOT",Vector2(24,198),Vector2(472,44),save_team_preset.bind(index),"leaf")
+	var apply:=add_button(menu,"APPLY TEAM",Vector2(24,258),Vector2(172,44),apply_team_preset.bind(index),"gold");apply.disabled=names.is_empty()
+	add_button(menu,"RESET PRESET",Vector2(206,258),Vector2(178,44),confirm_reset_team_preset.bind(index),"coral").name="ResetTeamPreset"
+	add_button(menu,"CLOSE",Vector2(394,258),Vector2(102,44),shade.queue_free,"plain")
+
 func build_team_preview(parent:Control)->void:
-	var frame:=panel(Rect2(18,42,524,430),Color("#dcefe4"),14);parent.add_child(frame);frame.clip_contents=true
+	var frame:=panel(Rect2(18,88,524,384),Color("#dcefe4"),14);parent.add_child(frame);frame.clip_contents=true
 	var container:=SubViewportContainer.new();container.name="TeamPreview3D";container.position=Vector2.ZERO;container.size=frame.size;container.stretch=true;container.mouse_filter=Control.MOUSE_FILTER_IGNORE;frame.add_child(container)
-	var viewport:=SubViewport.new();viewport.size=Vector2i(524,430);viewport.transparent_bg=false;viewport.own_world_3d=true;viewport.render_target_update_mode=SubViewport.UPDATE_ALWAYS;container.add_child(viewport)
+	var viewport:=SubViewport.new();viewport.size=Vector2i(524,384);viewport.transparent_bg=false;viewport.own_world_3d=true;viewport.render_target_update_mode=SubViewport.UPDATE_ALWAYS;container.add_child(viewport)
 	var environment:=WorldEnvironment.new();var env:=Environment.new();env.background_mode=Environment.BG_COLOR;env.background_color=Color("#cfeeff");env.ambient_light_source=Environment.AMBIENT_SOURCE_COLOR;env.ambient_light_color=Color("#e2f5ff");env.ambient_light_energy=STAGE_AMBIENT_ENERGY;environment.environment=env;viewport.add_child(environment)
 	var light:=DirectionalLight3D.new();light.rotation_degrees=Vector3(-52,-35,0);light.light_color=Color("#fff0c8");light.light_energy=STAGE_SUN_ENERGY;viewport.add_child(light)
 	var stage:=Node3D.new();stage.name="FormationStage";viewport.add_child(stage)
-	var landscape:=preload("res://scripts/camp_terrain.gd").new();landscape.name="TeamPreviewTerrain";stage.add_child(landscape);landscape.build();landscape.scale=Vector3.ONE*.65
+	var landscape:=preload("res://scripts/team_preview_terrain.gd").new();landscape.name="TeamPreviewTerrain";stage.add_child(landscape);landscape.build();landscape.scale=Vector3.ONE*.65
 	team_preview_models.clear()
 	var positions:=[Vector3(0,0,-1.15),Vector3(-1.8,0,.05),Vector3(1.8,0,.05),Vector3(-.9,0,1.5),Vector3(.9,0,1.5)]
 	for slot_index in team_indices.size():
@@ -649,6 +750,7 @@ func build_roster_card(parent:Control,roster_index:int)->void:
 	var style:=StyleBoxFlat.new();style.bg_color=Color(TEAM_SLOT_COLORS[team_slot],.72) if on_team else Color.WHITE;style.border_color=TEAM_SLOT_COLORS[team_slot].darkened(.15) if on_team else Color("#b9bec4");style.set_border_width_all(2);style.set_corner_radius_all(14);card.add_theme_stylebox_override("panel",style);parent.add_child(card)
 	var q:Dictionary=roster[roster_index];var portrait:=QuibletPortrait.new();portrait.position=Vector2(8,3);portrait.size=Vector2(88,78);portrait.setup(int(q.species),1.0);portrait.mouse_filter=Control.MOUSE_FILTER_IGNORE;card.add_child(portrait)
 	label(card,"Lv. %d"%int(q.level),Vector2(4,81),11,GameData.COLORS.ink,true,HORIZONTAL_ALIGNMENT_CENTER,96)
+	card.portrait_rect=Rect2(portrait.position,portrait.size)
 	card.setup(roster_index,roster_index==selection_pulse_roster);card.chosen.connect(select_roster_quiblet)
 
 func select_roster_quiblet(index:int)->void:
@@ -792,10 +894,10 @@ func charm_slot_accepts(index:int,type:String)->bool:
 	return index>=0 and index<9 and type in ["Health","Attack"] and (index>=6 or type==("Health" if index<3 else "Attack"))
 
 func charm_inventory_data(type:String)->Dictionary:
-	return {"kind":"charm","charm_type":type,"display_name":type+" Charm","texture":"res://textures/UI/"+type+"Charm.png"}
+	return {"kind":"charm","charm_type":type,"display_name":type+" Charm","texture":"res://textures/SpecialItems/"+type+"Charm.png"}
 
 func add_charm_icon(parent:Control,type:String,pos:Vector2,icon_size:Vector2)->TextureRect:
-	var icon:=TextureRect.new();icon.name="CharmIcon";icon.texture=load("res://textures/UI/"+type+"Charm.png");icon.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;icon.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;icon.position=pos;icon.size=icon_size;icon.mouse_filter=Control.MOUSE_FILTER_IGNORE;parent.add_child(icon)
+	var icon:=TextureRect.new();icon.name="CharmIcon";icon.texture=load("res://textures/SpecialItems/"+type+"Charm.png");icon.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;icon.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;icon.position=pos;icon.size=icon_size;icon.mouse_filter=Control.MOUSE_FILTER_IGNORE;parent.add_child(icon)
 	return icon
 
 var connector_tile_cache:Dictionary={}
@@ -868,7 +970,11 @@ func show_quiblet_edit()->void:
 	var left:=Control.new();left.position=Vector2(28,68);left.size=Vector2(620,624);content.add_child(left)
 	var compact_info:=panel(Rect2(0,0,620,146),Color("#fffdf7"),18);left.add_child(compact_info);build_quiblet_info(compact_info,q,false)
 	compact_info.position.y=14;compact_info.scale=Vector2.ONE*.8
-	add_button(left,"CANCEL" if recycling_stones else "RECYCLE",Vector2(508,44),Vector2(112,56),show_power_stone_recycler,"coral").name="OpenPowerStoneRecycler"
+	var paused:bool=bool(q.get("evolution_paused",false))
+	var evolution_toggle:=add_button(left,"EVOLUTION\nPAUSED" if paused else "PAUSE\nEVOLUTION",Vector2(508,0),Vector2(112,52),toggle_evolution_pause,"gold" if paused else "plain")
+	evolution_toggle.name="EvolutionToggle";evolution_toggle.add_theme_font_size_override("font_size",12)
+	evolution_toggle.tooltip_text="Evolution is paused. Click to allow evolution at a future level-up." if paused else "Click to prevent this Quiblet from evolving."
+	add_button(left,"CANCEL" if recycling_stones else "RECYCLE",Vector2(508,60),Vector2(112,56),show_power_stone_recycler,"coral").name="OpenPowerStoneRecycler"
 	var equipment_scroll:=ScrollContainer.new();equipment_scroll.name="EquipmentScroll";equipment_scroll.position=Vector2(0,160);equipment_scroll.size=Vector2(620,464);equipment_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;left.add_child(equipment_scroll)
 	var equipment_menu:=panel(Rect2(0,0,604,464),Color("#5f5f5f"),16);equipment_scroll.add_child(equipment_menu);equipment_menu.name="StoneEquipmentMenu";equipment_menu.custom_minimum_size=Vector2(604,464)
 	var move_position:=Vector2(20,4)
@@ -893,6 +999,7 @@ func show_quiblet_edit()->void:
 	add_button(equipment_menu,"AUTO SET",Vector2(actions_x,actions_y),Vector2(210,32),auto_set_power_stones,"gold").name="AutoSetPowerStones"
 	add_button(equipment_menu,"REMOVE ALL",Vector2(actions_x,actions_y+40),Vector2(210,32),remove_all_power_stones,"plain").name="RemoveAllPowerStones"
 	var right:=panel(Rect2(668,68,584,624),Color("#f6f8f6"),18);content.add_child(right);right.name="StoneInventory"
+	if team_indices.has(selected_roster):build_team_info_shortcuts()
 	build_stone_detail(right)
 	var separator:=HSeparator.new();separator.position=Vector2(16,200);separator.size=Vector2(552,2);right.add_child(separator)
 	build_equipment_inventory(right)
@@ -900,6 +1007,15 @@ func show_quiblet_edit()->void:
 		for slot in content.find_children("*","TextureRect",true,false):
 			if slot is EquipmentDropSlot:slot.locked=true
 		for name in ["AutoSetPowerStones","RemoveAllPowerStones"]:content.find_child(name,true,false).disabled=true
+
+func build_team_info_shortcuts()->void:
+	var row:=HBoxContainer.new();row.name="TeamInfoShortcuts";row.position=Vector2(668,8);row.add_theme_constant_override("separation",10);content.add_child(row)
+	for roster_index in team_indices:
+		if roster_index==selected_roster:continue
+		var q:Dictionary=roster[roster_index]
+		var button:=Button.new();button.name="TeamInfo%d"%roster_index;button.custom_minimum_size=Vector2(52,52);button.tooltip_text=GameData.display_name(q);button.mouse_default_cursor_shape=Control.CURSOR_POINTING_HAND;row.add_child(button)
+		var portrait:=QuibletPortrait.new();portrait.position=Vector2(4,4);portrait.size=Vector2(44,44);portrait.mouse_filter=Control.MOUSE_FILTER_IGNORE;portrait.setup(int(q.species));button.add_child(portrait)
+		button.pressed.connect(open_team_quiblet_info.bind(roster_index))
 
 func build_edit_move_cluster(parent:Control,entry:Dictionary,move_index:int,pos:Vector2)->void:
 	var icon:=MOVE_ICON_SCRIPT.new();icon.name="EditableMoveIcon%d"%move_index;icon.position=pos;icon.size=Vector2(54,54);icon.setup(str(entry.name),move_index);icon.selected.connect(func(_move_name):show_move_info(entry));icon.move_dropped.connect(swap_quiblet_moves);icon.move_slot_dropped.connect(transfer_move_slot);parent.add_child(icon)
@@ -1037,6 +1153,9 @@ func build_stone_detail(parent:Control)->void:
 		var info:Dictionary=GameData.stone_info(str(data.effect));var icon:=TextureRect.new();icon.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;icon.custom_minimum_size=Vector2.ZERO;icon.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;icon.texture=load(info.texture);icon.position=Vector2(20,54);icon.size=Vector2(50,50);parent.add_child(icon)
 		var description:=RichTextLabel.new();description.name="StoneDetailDescription";description.text=str(info.desc);description.position=Vector2(82,53);description.size=Vector2(parent.size.x-102,96);description.custom_minimum_size=Vector2.ZERO;description.fit_content=false;description.scroll_active=false;description.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;description.add_theme_font_size_override("normal_font_size",11);description.add_theme_color_override("default_color",GameData.COLORS.ink);parent.add_child(description)
 
+	if data.get("fitted",false) and data.kind!="power_stone":
+		label(parent,"Fitted on %s. Take it off the Quiblet to use it elsewhere."%str(data.owner),Vector2(18,153),11,GameData.COLORS.berry,true,HORIZONTAL_ALIGNMENT_CENTER,int(parent.size.x-36)).name="FittedStoneNote"
+
 # Every owned Power Stone, unfitted and fitted alike, in one order: Health before
 # Attack, then stronger first. Fitted entries carry their owner and never an
 # inventory index, so lists draw them darker with the owner's portrait and
@@ -1062,6 +1181,36 @@ func fitted_power_stone_data(stone:Dictionary,roster_index:int,slot_index:int)->
 	data.merge({"fitted":true,"roster_index":roster_index,"slot_index":slot_index,"owner":GameData.display_name(roster[roster_index]),"species":int(roster[roster_index].species)},true)
 	return data
 
+func fitted_equipment_data(data:Dictionary,roster_index:int,slot_index:int,move_index:=-1)->Dictionary:
+	var fitted:=data.duplicate(true)
+	fitted.erase("inventory_index");fitted.erase("copy_index")
+	fitted.merge({"fitted":true,"roster_index":roster_index,"slot_index":slot_index,"move_index":move_index,"owner":GameData.display_name(roster[roster_index]),"species":int(roster[roster_index].species)},true)
+	return fitted
+
+func all_move_stone_entries()->Array:
+	var entries:Array=[]
+	for stone in GameData.MOVE_STONES:
+		for copy_index in int(move_stone_inventory.get(stone.effect,0)):entries.append({"kind":"move_stone","effect":str(stone.effect),"count":1,"copy_index":copy_index,"display_name":str(stone.name)})
+	for roster_index in roster.size():
+		for move_index in roster[roster_index].moves.size():
+			var move:Dictionary=roster[roster_index].moves[move_index]
+			for slot_index in move.stones.size():
+				var effect:=GameData.stone_effect(str(move.stones[slot_index]))
+				if effect.is_empty():continue
+				entries.append(fitted_equipment_data({"kind":"move_stone","effect":effect,"count":1,"display_name":str(GameData.stone_info(effect).name)},roster_index,slot_index,move_index))
+	return entries
+
+func all_charm_entries()->Array:
+	var entries:Array=[]
+	for type in ["Health","Attack"]:
+		for copy in int(special_items.get(type+" Charm",0)):entries.append(charm_inventory_data(type))
+	for roster_index in roster.size():
+		var q:Dictionary=roster[roster_index];ensure_charm_slots(q)
+		for slot_index in q.charm_slots.size():
+			var type:=str(q.charm_slots[slot_index])
+			if type in ["Health","Attack"]:entries.append(fitted_equipment_data(charm_inventory_data(type),roster_index,slot_index))
+	return entries
+
 const STONE_GRID_COLUMNS:=4
 const STONE_GRID_GAP:=10
 const STONE_GRID_WIDTH:=352
@@ -1074,14 +1223,10 @@ func stone_card_size()->Vector2:
 func build_equipment_inventory(parent:Control)->void:
 	var entries:Array=[]
 	var tabs:Array=["Health","Attack"] if recycling_stones else ["Health","Attack","Moves"]
-	if not recycling_stones and int(special_items.get("Health Charm",0))+int(special_items.get("Attack Charm",0))>0:tabs.append("Charms")
+	if not recycling_stones and not all_charm_entries().is_empty():tabs.append("Charms")
 	if stone_inventory_tab not in tabs:stone_inventory_tab="Health"
-	if stone_inventory_tab=="Charms":
-		for type in ["Health","Attack"]:
-			for copy in int(special_items.get(type+" Charm",0)):entries.append(charm_inventory_data(type))
-	elif stone_inventory_tab=="Moves":
-		for stone in GameData.MOVE_STONES:
-			for copy_index in int(move_stone_inventory.get(stone.effect,0)):entries.append({"kind":"move_stone","effect":str(stone.effect),"count":1,"copy_index":copy_index,"display_name":str(stone.name)})
+	if stone_inventory_tab=="Charms":entries=all_charm_entries()
+	elif stone_inventory_tab=="Moves":entries=all_move_stone_entries()
 	else:entries=all_power_stone_entries().filter(func(stone):return stone.stone_type==stone_inventory_tab)
 	var width:=parent.size.x-32.0;var columns:=maxi(4,int((width+STONE_GRID_GAP)/84.0));var per_page:=columns*4
 	for i in tabs.size():
@@ -1104,15 +1249,18 @@ func add_stone_inventory_card(parent:Control,data:Dictionary)->void:
 		var mark:=label(card,"✓",Vector2(card_size.x-22,0),18,GameData.COLORS.leaf_dark,true,HORIZONTAL_ALIGNMENT_CENTER,22);mark.size.y=24;mark.mouse_filter=Control.MOUSE_FILTER_IGNORE;mark.z_index=1
 
 	if data.kind=="charm":
-		add_charm_icon(card,str(data.charm_type),Vector2((card_size.x-64)*.5,5),Vector2(64,64))
+		var icon:=add_charm_icon(card,str(data.charm_type),Vector2((card_size.x-64)*.5,5),Vector2(64,64))
+		if fitted:decorate_fitted_stone_card(card,icon,data)
 	elif data.kind=="power_stone":
 		var icon:=add_power_stone_icon(card,data,Vector2((card_size.x-64)*.5,5),Vector2(64,64))
 		if fitted:decorate_fitted_stone_card(card,icon,data)
 	else:
 		var info:Dictionary=GameData.stone_info(str(data.effect));var icon:=TextureRect.new();icon.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;icon.custom_minimum_size=Vector2.ZERO;icon.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;icon.texture=load(info.texture);icon.position=Vector2((card_size.x-56)*.5,9);icon.size=Vector2(56,56);icon.clip_contents=true;icon.mouse_filter=Control.MOUSE_FILTER_IGNORE;card.add_child(icon)
+		if fitted:decorate_fitted_stone_card(card,icon,data)
 
 # A fitted stone's card: the stone art darkened and the owner's portrait in the top-right corner.
 func decorate_fitted_stone_card(card:Control,icon:Control,data:Dictionary)->void:
+	card.tooltip_text="Fitted on %s"%str(data.get("owner",""))
 	icon.modulate=Color(.5,.5,.55);icon.name="FittedStoneIcon"
 	var badge:=Panel.new();badge.name="FittedOwnerBadge";var style:=StyleBoxFlat.new();style.bg_color=Color("#fffdf7");style.border_color=Color("#b9c1bc");style.set_border_width_all(1);style.set_corner_radius_all(12);badge.add_theme_stylebox_override("panel",style);badge.size=Vector2(24,24);badge.position=Vector2(card.size.x-26,2);badge.mouse_filter=Control.MOUSE_FILTER_IGNORE;badge.tooltip_text="Fitted on %s"%str(data.get("owner",""));card.add_child(badge)
 	var portrait:=QuibletPortrait.new();portrait.position=Vector2(1,1);portrait.size=Vector2(22,22);portrait.setup(int(data.get("species",0)),1.4);portrait.mouse_filter=Control.MOUSE_FILTER_IGNORE;badge.add_child(portrait)
@@ -1209,6 +1357,7 @@ func show_recycling_results(rewards:Dictionary)->void:
 	var done:=add_button(menu,"DONE",Vector2(170,458),Vector2(280,54),shade.queue_free,"leaf");done.name="CloseRecyclingResults";done.grab_focus()
 
 func equip_stone_from_inventory(kind:String,primary_index:int,secondary_index:int,data:Dictionary)->void:
+	if data.get("fitted",false):return
 	var q:Dictionary=roster[selected_roster];ensure_quiblet_equipment(q)
 	if kind=="charm":
 		var type:=str(data.get("charm_type",""));var item:=type+" Charm"
@@ -1532,23 +1681,23 @@ func detach_fitted_stone(move_index:int,stone_index:int)->String:
 	return GameData.stone_effect(value)
 
 func show_resources() -> void:
-	screen="inventory"; clear_content(); make_topbar("RESOURCES & TREASURE","Everything you own is visible without needing an empty cooking pot.",true)
+	screen="inventory"; clear_content(); add_menu_backdrop(); make_topbar("RESOURCES & TREASURE","Everything you own is visible without needing an empty cooking pot.",true)
 	# A shared info panel on top shows whichever resource or special item was clicked.
 	var info_panel:=panel(Rect2(30,112,1220,100),Color("#fffaf0"),16);info_panel.clip_contents=true;info_panel.name="ResourceInfo";content.add_child(info_panel)
 	build_resource_info(info_panel)
 	# Ingredients: the same drag-card grid used by Cooking and the Spice Workshop.
-	var ing_panel:=panel(Rect2(30,222,1220,222),Color("#fffaf0"),18);content.add_child(ing_panel)
+	var ing_panel:=panel(Rect2(30,222,560,455),Color("#fffaf0"),18);content.add_child(ing_panel)
 	label(ing_panel,"INGREDIENTS",Vector2(22,14),18,GameData.COLORS.ink,true)
-	add_button(ing_panel,"SPICE WORKSHOP",Vector2(892,10),Vector2(154,42),func():show_spice_workshop(),"gold")
-	add_button(ing_panel,"GO TO COOKING",Vector2(1054,10),Vector2(154,42),show_cooking,"leaf")
-	var ing_grid:=GridContainer.new();ing_grid.name="ResourceIngredientGrid";ing_grid.position=Vector2(16,60);ing_grid.columns=16;ing_grid.add_theme_constant_override("h_separation",8);ing_grid.add_theme_constant_override("v_separation",8);ing_panel.add_child(ing_grid)
+	add_button(ing_panel,"SPICE WORKSHOP",Vector2(20,380),Vector2(154,42),func():show_spice_workshop(),"gold")
+	add_button(ing_panel,"GO TO COOKING",Vector2(370,380),Vector2(154,42),show_cooking,"leaf")
+	var ing_grid:=GridContainer.new();ing_grid.name="ResourceIngredientGrid";ing_grid.position=Vector2(16,60);ing_grid.columns=7;ing_grid.add_theme_constant_override("h_separation",8);ing_grid.add_theme_constant_override("v_separation",8);ing_panel.add_child(ing_grid)
 	for ingredient_name in GameData.INGREDIENTS:
 		var card:=IngredientDragCard.new();ing_grid.add_child(card);card.setup(self,ingredient_name,unlocked_ingredients.has(ingredient_name),1)
 	# Special items and leftover jars: the same compact cards, clicked for their info.
-	var sp_panel:=panel(Rect2(30,454,1220,223),Color("#f7f3ff"),18);content.add_child(sp_panel)
+	var sp_panel:=panel(Rect2(610,222,640,455),Color("#f7f3ff"),18);content.add_child(sp_panel)
 	label(sp_panel,"SPECIAL ITEMS",Vector2(22,14),18,GameData.COLORS.ink,true)
-	var workshop_button:=add_button(sp_panel,"STONE WORKSHOP  •  combine, revitalize, convert, reforge",Vector2(700,10),Vector2(508,42),func():show_stone_workshop(),"gold");workshop_button.name="OpenStoneWorkshop"
-	var sp_grid:=GridContainer.new();sp_grid.name="ResourceSpecialGrid";sp_grid.position=Vector2(16,60);sp_grid.columns=16;sp_grid.add_theme_constant_override("h_separation",8);sp_grid.add_theme_constant_override("v_separation",8);sp_panel.add_child(sp_grid)
+	var workshop_button:=add_button(sp_panel,"STONE WORKSHOP",Vector2(370,10),Vector2(248,42),func():show_stone_workshop(),"gold");workshop_button.name="OpenStoneWorkshop"
+	var sp_grid:=GridContainer.new();sp_grid.name="ResourceSpecialGrid";sp_grid.position=Vector2(16,60);sp_grid.columns=8;sp_grid.add_theme_constant_override("h_separation",8);sp_grid.add_theme_constant_override("v_separation",8);sp_panel.add_child(sp_grid)
 	for recipe in GameData.RECIPES:
 		var stored:int=int(leftovers.get(recipe.name,0))
 		if stored>0:add_resource_item_card(sp_grid,"Leftover:%s"%recipe.name,"🫙",stored,recipe.color)
@@ -1575,8 +1724,7 @@ func build_resource_info(parent:Control)->void:
 		return
 	if special_items.has(selected_resource_item):
 		var item:String=selected_resource_item
-		if item in ["Health Charm","Attack Charm"]:add_charm_icon(parent,item.trim_suffix(" Charm"),Vector2(20,12),Vector2(52,52))
-		else:label(parent,str(SPECIAL_ITEM_ICONS.get(item,"✨")),Vector2(20,18),34,GameData.COLORS.berry)
+		add_special_item_icon(parent,item,Vector2(20,12),Vector2(52,52))
 		label(parent,item,Vector2(84,12),19,GameData.COLORS.ink,true)
 		var hint:String=("  •  "+SPECIAL_ITEM_USAGE[item]) if SPECIAL_ITEM_USAGE.has(item) else ""
 		label(parent,str(SPECIAL_ITEM_DESCRIPTIONS.get(item,""))+hint,Vector2(84,44),13,GameData.COLORS.muted,false,HORIZONTAL_ALIGNMENT_LEFT,940)
@@ -1588,14 +1736,23 @@ func build_resource_info(parent:Control)->void:
 
 # One compact, clickable Resources card (icon over a count), styled like the
 # ingredient cards; clicking it shows the item's details in the info panel.
+func special_item_texture(item:String)->Texture2D:
+	var path:="res://textures/SpecialItems/"+item.replace(" ","").replace("'","")+".png"
+	return load(path) if ResourceLoader.exists(path) else null
+
+func add_special_item_icon(parent:Node,item:String,pos:Vector2,icon_size:Vector2)->Control:
+	var texture:=special_item_texture(item)
+	if texture==null:return label(parent,str(SPECIAL_ITEM_ICONS.get(item,"✨")),pos,30,GameData.COLORS.berry,false,HORIZONTAL_ALIGNMENT_CENTER,int(icon_size.x))
+	var icon:=TextureRect.new();icon.name="SpecialItemIcon";icon.texture=texture;icon.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;icon.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;icon.position=pos;icon.size=icon_size;icon.mouse_filter=Control.MOUSE_FILTER_IGNORE;parent.add_child(icon);return icon
+
 func add_resource_item_card(grid:Control,id:String,emoji:String,count:int,color:Color)->void:
 	var selected:bool=(selected_resource_item==id)
 	var card:=Button.new();card.name=("ResourceLeftoverCard_" if id.begins_with("Leftover:") else "ResourceItemCard_")+id;card.custom_minimum_size=Vector2(67,82)
 	var box:=StyleBoxFlat.new();box.bg_color=Color.WHITE if count>0 else Color("#ededed");box.set_corner_radius_all(12);box.border_color=GameData.COLORS.gold if selected else color;box.set_border_width_all(3 if selected else 2)
 	for state in ["normal","hover","pressed","focus"]:card.add_theme_stylebox_override(state,box)
 	var emoji_label:=Label.new();emoji_label.text=emoji;emoji_label.position=Vector2(0,8);emoji_label.size=Vector2(67,42);emoji_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER;emoji_label.vertical_alignment=VERTICAL_ALIGNMENT_CENTER;emoji_label.add_theme_font_size_override("font_size",26);emoji_label.mouse_filter=Control.MOUSE_FILTER_IGNORE;card.add_child(emoji_label)
-	if id in ["Health Charm","Attack Charm"]:
-		emoji_label.hide();add_charm_icon(card,id.trim_suffix(" Charm"),Vector2(10,4),Vector2(48,48))
+	if special_item_texture(id)!=null:
+		emoji_label.hide();add_special_item_icon(card,id,Vector2(10,4),Vector2(48,48))
 	var count_label:=Label.new();count_label.text=str(count);count_label.position=Vector2(0,54);count_label.size=Vector2(67,20);count_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER;count_label.add_theme_font_size_override("font_size",14);count_label.add_theme_color_override("font_color",GameData.COLORS.ink if count>0 else GameData.COLORS.muted);count_label.mouse_filter=Control.MOUSE_FILTER_IGNORE;card.add_child(count_label)
 	card.pressed.connect(func(picked=id):select_resource_item(picked))
 	grid.add_child(card)
@@ -1605,7 +1762,7 @@ func show_spice_workshop()->void:
 	var workbench:=panel(Rect2(30,112,560,565),Color("#fffaf0"),18);content.add_child(workbench)
 	var clear_bowl:=add_button(workbench,"REMOVE ALL",Vector2(424,12),Vector2(116,38),func():clear_spice_mix(true);show_spice_workshop(),"plain");clear_bowl.name="ClearSpiceBowl";clear_bowl.disabled=spice_mix.is_empty()
 	for i in SPICE_MIX_MAX:
-		var slot:=SPICE_MIX_SLOT_SCRIPT.new();slot.name="SpiceMixSlot%d"%i;slot.position=Vector2(20+i*106,64);slot.size=Vector2(100,112);workbench.add_child(slot);slot.setup(self,i,spice_mix[i] if i<spice_mix.size() else "")
+		var slot:=SPICE_MIX_SLOT_SCRIPT.new();slot.name="SpiceMixSlot%d"%i;slot.position=Vector2(96+i*76,88);slot.size=Vector2(64,64);workbench.add_child(slot);slot.setup(self,i,spice_mix[i] if i<spice_mix.size() else "")
 	var result:=GameData.choose_spice(spice_mix) if not spice_mix.is_empty() else {};var quality:=GameData.spice_quality(spice_mix) if not spice_mix.is_empty() else "basic"
 	var preview:=panel(Rect2(20,192,520,104),spice_quality_color(quality).lightened(.68) if not result.is_empty() else Color("#eeeeea"),14);preview.name="SpicePreview";workbench.add_child(preview)
 	if result.is_empty():
@@ -1621,15 +1778,15 @@ func show_spice_workshop()->void:
 		label(info_panel,"INGREDIENT INFO",Vector2(17,13),15,GameData.COLORS.ink,true);label(info_panel,"Click any unlocked resource below to learn about it.",Vector2(17,46),13,GameData.COLORS.muted)
 	else:
 		var selected_info:Dictionary=GameData.INGREDIENTS[selected_cooking_ingredient];var selected_icon:=add_ingredient_icon(info_panel,selected_info,Vector2(14,12),Vector2(48,66),38);selected_icon.name="SelectedIngredientIcon";label(info_panel,selected_cooking_ingredient,Vector2(73,8),18,GameData.COLORS.ink,true);label(info_panel,ingredient_tag_text(selected_info),Vector2(73,36),13,Color.BLACK);label(info_panel,selected_info.feel,Vector2(73,61),11,GameData.COLORS.muted,false,HORIZONTAL_ALIGNMENT_LEFT,549)
-	# Draggable resource catalogue (tall enough to hold the two full rows of cards).
-	var catalogue:=panel(Rect2(610,220,640,222),Color("#f7f7f7"),16);content.add_child(catalogue)
+	# Draggable resource catalogue (tall enough to hold the three full rows of cards).
+	var catalogue:=panel(Rect2(610,220,640,256),Color("#f7f7f7"),16);content.add_child(catalogue)
 	label(catalogue,"RESOURCES",Vector2(18,12),15,GameData.COLORS.ink,true)
-	var ingredient_grid:=GridContainer.new();ingredient_grid.name="SpiceIngredientGrid";ingredient_grid.position=Vector2(14,38);ingredient_grid.size=Vector2(612,150);ingredient_grid.columns=8;ingredient_grid.add_theme_constant_override("h_separation",8);ingredient_grid.add_theme_constant_override("v_separation",8);catalogue.add_child(ingredient_grid)
+	var ingredient_grid:=GridContainer.new();ingredient_grid.name="SpiceIngredientGrid";ingredient_grid.position=Vector2(14,38);ingredient_grid.columns=7;ingredient_grid.add_theme_constant_override("h_separation",8);ingredient_grid.add_theme_constant_override("v_separation",8);catalogue.add_child(ingredient_grid)
 	for ingredient_name in GameData.INGREDIENTS:
-		var card:=IngredientDragCard.new();card.custom_minimum_size=Vector2(67,82);ingredient_grid.add_child(card);card.setup(self,ingredient_name,unlocked_ingredients.has(ingredient_name),1)
-	var guide:=panel(Rect2(610,450,640,240),Color("#f4f7fb"),18);guide.name="OwnedSpices";content.add_child(guide)
+		var card:=IngredientDragCard.new();card.custom_minimum_size=Vector2(67,82);ingredient_grid.add_child(card);card.setup(self,ingredient_name,unlocked_ingredients.has(ingredient_name),1,62)
+	var guide:=panel(Rect2(610,488,640,202),Color("#f4f7fb"),18);guide.name="OwnedSpices";content.add_child(guide)
 	label(guide,"YOUR SPICES",Vector2(18,12),15,GameData.COLORS.ink,true)
-	var scroll:=ScrollContainer.new();scroll.position=Vector2(14,42);scroll.size=Vector2(612,180);guide.add_child(scroll)
+	var scroll:=ScrollContainer.new();scroll.position=Vector2(14,42);scroll.size=Vector2(612,146);guide.add_child(scroll)
 	var grid:=GridContainer.new();grid.columns=8;grid.add_theme_constant_override("h_separation",8);grid.add_theme_constant_override("v_separation",8);scroll.add_child(grid)
 	for spice_name in GameData.SPICES:
 		for quality_name in GameData.SPICE_QUALITIES:
@@ -1744,24 +1901,16 @@ func show_cooking() -> void:
 		start_text="%d EXPEDITION%s LEFT"%[remaining,"" if remaining==1 else "S"]
 	var start:=add_button(content,start_text,Vector2(128,612),Vector2(340,62),request_start_cooking,"gold");start.disabled=total<5 or not pending_stew.is_empty();start.add_theme_font_size_override("font_size",18)
 	# Quick pot actions: fill empty slots with random ingredients, or clear everything.
-	var autofill:=add_button(content,"AUTO SET",Vector2(478,612),Vector2(140,29),auto_fill_pot,"leaf");autofill.name="AutoFillPot";autofill.disabled=not pending_stew.is_empty()
+	var autofill:=add_button(content,"RANDOM SET",Vector2(478,612),Vector2(140,29),auto_fill_pot,"leaf");autofill.name="AutoFillPot";autofill.disabled=not pending_stew.is_empty()
 	var clear_pot:=add_button(content,"REMOVE ALL",Vector2(478,645),Vector2(140,29),func():clear_all_cooking_slots(true);show_cooking(),"plain");clear_pot.name="ClearCookingPot";clear_pot.disabled=not pending_stew.is_empty() or not cooking_has_placed_items()
 	# Recipe browser: one stew at a time, stepped with the up/down arrows; the
 	# stew's number sits in the top-left, and undiscovered stews show "???".
 	var recipes_panel:=panel(Rect2(624,18,626,148),Color("#f4f7fb"),16);recipes_panel.name="RecipeBrowser";content.add_child(recipes_panel)
 	cooking_recipe_index=wrapi(cooking_recipe_index,0,GameData.RECIPES.size())
 	var shown_recipe:Dictionary=GameData.RECIPES[cooking_recipe_index];var discovered:bool=shown_recipe.name=="Plain Stew" or known_recipes.has(shown_recipe.name)
-	label(recipes_panel,"#%d"%(cooking_recipe_index+1),Vector2(14,10),12,GameData.COLORS.muted,true,HORIZONTAL_ALIGNMENT_LEFT,40).name="RecipeNumber"
-	label(recipes_panel,str(shown_recipe.name) if discovered else "???",Vector2(52,6),18,shown_recipe.color if discovered else GameData.COLORS.muted,true,HORIZONTAL_ALIGNMENT_LEFT,510).name="RecipeName"
-	label(recipes_panel,"REQUIRES",Vector2(18,42),10,GameData.COLORS.muted,true,HORIZONTAL_ALIGNMENT_LEFT,270)
-	label(recipes_panel,requirement_text(shown_recipe.need) if discovered else "???",Vector2(18,58),12,GameData.COLORS.ink,false,HORIZONTAL_ALIGNMENT_LEFT,272).name="RecipeRequires"
-	label(recipes_panel,"ATTRACTS",Vector2(300,42),10,GameData.COLORS.muted,true,HORIZONTAL_ALIGNMENT_LEFT,270)
-	var attraction:=RichTextLabel.new();attraction.name="RecipeAttracts";attraction.position=Vector2(300,58);attraction.size=Vector2(270,48);attraction.text=recipe_attracts_text(shown_recipe) if discovered else "???";attraction.add_theme_font_size_override("normal_font_size",12);attraction.add_theme_color_override("default_color",GameData.COLORS.ink);recipes_panel.add_child(attraction)
-	label(recipes_panel,str(shown_recipe.desc) if discovered else "Discover this stew by cooking the right combination.",Vector2(18,112),11,GameData.COLORS.muted,false,HORIZONTAL_ALIGNMENT_LEFT,552).name="RecipeDescription"
-	add_button(recipes_panel,"▲",Vector2(578,22),Vector2(36,36),func():step_cooking_recipe(-1),"plain").name="RecipePrevious"
-	add_button(recipes_panel,"▼",Vector2(578,90),Vector2(36,36),func():step_cooking_recipe(1),"plain").name="RecipeNext"
+	build_recipe_card(recipes_panel,shown_recipe,discovered,cooking_recipe_index,true)
 	# Selected ingredient information.
-	var info_panel:=panel(Rect2(624,181,626,98),Color("#fffaf0"),14);info_panel.clip_contents=true;info_panel.name="CookingItemInfo";content.add_child(info_panel)
+	var info_panel:=panel(Rect2(624,170,626,92),Color("#fffaf0"),14);info_panel.clip_contents=true;info_panel.name="CookingItemInfo";content.add_child(info_panel)
 	if not selected_cooking_item.is_empty():
 		if selected_cooking_item.kind=="spice":
 			var spice_name:=str(selected_cooking_item.name);var quality:=str(selected_cooking_item.quality);var spice_info:Dictionary=GameData.SPICES.get(spice_name,{})
@@ -1779,28 +1928,44 @@ func show_cooking() -> void:
 	else:
 		var selected_info:Dictionary=GameData.INGREDIENTS[selected_cooking_ingredient];var selected_icon:=add_ingredient_icon(info_panel,selected_info,Vector2(14,12),Vector2(48,66),38);selected_icon.name="SelectedIngredientIcon";label(info_panel,selected_cooking_ingredient,Vector2(73,8),18,GameData.COLORS.ink,true);label(info_panel,ingredient_tag_text(selected_info),Vector2(73,36),13,Color.BLACK);label(info_panel,selected_info.feel,Vector2(73,61),11,GameData.COLORS.muted,false,HORIZONTAL_ALIGNMENT_LEFT,535)
 	# Ingredient, spice, and special-item sources.
-	var resources_panel:=panel(Rect2(624,291,626,395),Color("#f7f7f7"),16);content.add_child(resources_panel)
+	var resources_panel:=panel(Rect2(624,270,626,422),Color("#f7f7f7"),16);content.add_child(resources_panel)
 	var keys:=GameData.INGREDIENTS.keys()
-	var ingredient_grid:=GridContainer.new();ingredient_grid.name="CookingIngredientGrid";ingredient_grid.position=Vector2(12,10);ingredient_grid.size=Vector2(602,172);ingredient_grid.columns=8;ingredient_grid.add_theme_constant_override("h_separation",8);ingredient_grid.add_theme_constant_override("v_separation",8);resources_panel.add_child(ingredient_grid)
+	var ingredient_grid:=GridContainer.new();ingredient_grid.name="CookingIngredientGrid";ingredient_grid.position=Vector2(12,10);ingredient_grid.columns=7;ingredient_grid.add_theme_constant_override("h_separation",8);ingredient_grid.add_theme_constant_override("v_separation",8);resources_panel.add_child(ingredient_grid)
 	for i in keys.size():
-		var name:String=keys[i];var card:=IngredientDragCard.new();card.custom_minimum_size=Vector2(67,82);ingredient_grid.add_child(card);card.setup(self,name,unlocked_ingredients.has(name))
-	var separator_one:=ColorRect.new();separator_one.color=Color("#c9cdd2");separator_one.position=Vector2(15,188);separator_one.size=Vector2(596,2);separator_one.mouse_filter=Control.MOUSE_FILTER_IGNORE;resources_panel.add_child(separator_one)
-	var spice_scroll:=ScrollContainer.new();spice_scroll.position=Vector2(12,198);spice_scroll.size=Vector2(602,84);resources_panel.add_child(spice_scroll)
+		var name:String=keys[i];var card:=IngredientDragCard.new();card.custom_minimum_size=Vector2(67,82);ingredient_grid.add_child(card);card.setup(self,name,unlocked_ingredients.has(name),3,62)
+	var separator_one:=ColorRect.new();separator_one.color=Color("#c9cdd2");separator_one.position=Vector2(15,218);separator_one.size=Vector2(596,2);separator_one.mouse_filter=Control.MOUSE_FILTER_IGNORE;resources_panel.add_child(separator_one)
+	var spice_scroll:=ScrollContainer.new();spice_scroll.position=Vector2(12,228);spice_scroll.size=Vector2(602,84);resources_panel.add_child(spice_scroll)
 	var spice_row:=HBoxContainer.new();spice_row.add_theme_constant_override("separation",7);spice_scroll.add_child(spice_row)
 	for spice_name in GameData.SPICES:
 		for spice_quality in GameData.SPICE_QUALITIES:
 			var count:=int(spice_inventory[spice_name][spice_quality])
 			if count<=0:continue
 			var spice_info:Dictionary=GameData.SPICES[spice_name];var card:=CookingItemCard.new();card.custom_minimum_size=Vector2(67,66);card.chosen.connect(select_cooking_source);spice_row.add_child(card);card.setup(spice_info.icon,spice_name,spice_quality.capitalize(),count,spice_quality_color(spice_quality),{"kind":"spice","name":spice_name,"quality":spice_quality,"label":spice_name})
-	var separator_two:=ColorRect.new();separator_two.color=Color("#c9cdd2");separator_two.position=Vector2(15,287);separator_two.size=Vector2(596,2);separator_two.mouse_filter=Control.MOUSE_FILTER_IGNORE;resources_panel.add_child(separator_two)
-	var special_card_x:=14.0
+	var separator_two:=ColorRect.new();separator_two.color=Color("#c9cdd2");separator_two.position=Vector2(15,318);separator_two.size=Vector2(596,2);separator_two.mouse_filter=Control.MOUSE_FILTER_IGNORE;resources_panel.add_child(separator_two)
+	var special_scroll:=ScrollContainer.new();special_scroll.name="CookingSpecialScroll";special_scroll.position=Vector2(12,330);special_scroll.size=Vector2(602,84);special_scroll.vertical_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;resources_panel.add_child(special_scroll)
+	var special_row:=HBoxContainer.new();special_row.name="CookingSpecialRow";special_row.add_theme_constant_override("separation",8);special_scroll.add_child(special_row)
 	if int(special_items["Bountiful Berry"])>0:
-		var bountiful_card:=CookingItemCard.new();bountiful_card.name="BountifulBerryCard";bountiful_card.position=Vector2(special_card_x,301);bountiful_card.size=Vector2(67,66);resources_panel.add_child(bountiful_card);bountiful_card.chosen.connect(select_cooking_source);bountiful_card.setup("🫐","Bountiful Berry","2–5 arrivals",int(special_items["Bountiful Berry"]),GameData.COLORS.berry,{"kind":"special","id":"Bountiful Berry","label":"Bountiful Berry"});special_card_x+=75
+		var bountiful_card:=CookingItemCard.new();bountiful_card.name="BountifulBerryCard";bountiful_card.custom_minimum_size=Vector2(67,66);special_row.add_child(bountiful_card);bountiful_card.chosen.connect(select_cooking_source);bountiful_card.setup("🫐","Bountiful Berry","2–5 arrivals",int(special_items["Bountiful Berry"]),GameData.COLORS.berry,{"kind":"special","id":"Bountiful Berry","label":"Bountiful Berry"})
 	if int(special_items["Empty Leftover Jar"])>0:
-		var empty_jar_card:=CookingItemCard.new();empty_jar_card.name="EmptyLeftoverJarCard";empty_jar_card.position=Vector2(special_card_x,301);empty_jar_card.size=Vector2(67,66);resources_panel.add_child(empty_jar_card);empty_jar_card.chosen.connect(select_cooking_source);empty_jar_card.setup("🫙","Empty Leftover Jar","collects leftovers",int(special_items["Empty Leftover Jar"]),GameData.COLORS.gold,{"kind":"special","id":"Empty Leftover Jar","label":"Empty Leftover Jar"});special_card_x+=75
-	if total>0 and int(leftovers.get(recipe.name,0))>0:
-		var leftover_card:=CookingItemCard.new();leftover_card.name="MatchingLeftoversCard";leftover_card.position=Vector2(special_card_x,301);leftover_card.size=Vector2(67,66);resources_panel.add_child(leftover_card);leftover_card.chosen.connect(select_cooking_source);leftover_card.setup("🫙",recipe.name+" Leftovers","improves matching stew",int(leftovers[recipe.name]),recipe.color,{"kind":"special","id":"Leftovers:"+str(recipe.name),"label":"Leftovers"})
+		var empty_jar_card:=CookingItemCard.new();empty_jar_card.name="EmptyLeftoverJarCard";empty_jar_card.custom_minimum_size=Vector2(67,66);special_row.add_child(empty_jar_card);empty_jar_card.chosen.connect(select_cooking_source);empty_jar_card.setup("🫙","Empty Leftover Jar","collects leftovers",int(special_items["Empty Leftover Jar"]),GameData.COLORS.gold,{"kind":"special","id":"Empty Leftover Jar","label":"Empty Leftover Jar"})
+	for leftover_recipe in GameData.RECIPES:
+		var count:=int(leftovers.get(leftover_recipe.name,0))
+		if count<=0:continue
+		var leftover_card:=CookingItemCard.new();leftover_card.name="LeftoversCard%d"%GameData.RECIPES.find(leftover_recipe);leftover_card.custom_minimum_size=Vector2(67,66);special_row.add_child(leftover_card);leftover_card.chosen.connect(select_cooking_source)
+		leftover_card.setup("🫙",leftover_recipe.name+" Leftovers","improves matching stew",count,leftover_recipe.color,{"kind":"special","id":"Leftovers:"+str(leftover_recipe.name),"label":leftover_recipe.name+" Leftovers"})
 	add_back_button(content,BACK_BUTTON_POSITION,func():request_leave_cooking(show_camp))
+
+func build_recipe_card(parent:Control,shown_recipe:Dictionary,discovered:bool,recipe_index:int,with_arrows:=false)->void:
+	label(parent,"#%d"%(recipe_index+1),Vector2(14,10),12,GameData.COLORS.muted,true,HORIZONTAL_ALIGNMENT_LEFT,40).name="RecipeNumber"
+	label(parent,str(shown_recipe.name) if discovered else "???",Vector2(52,6),18,shown_recipe.color if discovered else GameData.COLORS.muted,true,HORIZONTAL_ALIGNMENT_LEFT,510).name="RecipeName"
+	label(parent,"REQUIRES",Vector2(18,42),10,GameData.COLORS.muted,true,HORIZONTAL_ALIGNMENT_LEFT,270)
+	label(parent,requirement_text(shown_recipe.need) if discovered else "???",Vector2(18,58),12,GameData.COLORS.ink,false,HORIZONTAL_ALIGNMENT_LEFT,272).name="RecipeRequires"
+	label(parent,"ATTRACTS",Vector2(300,42),10,GameData.COLORS.muted,true,HORIZONTAL_ALIGNMENT_LEFT,270)
+	var attraction:=RichTextLabel.new();attraction.name="RecipeAttracts";attraction.position=Vector2(300,58);attraction.size=Vector2(270,48);attraction.text=recipe_attracts_text(shown_recipe) if discovered else "???";attraction.add_theme_font_size_override("normal_font_size",12);attraction.add_theme_color_override("default_color",GameData.COLORS.ink);parent.add_child(attraction)
+	label(parent,str(shown_recipe.desc) if discovered else "Discover this stew by cooking the right combination.",Vector2(18,112),11,GameData.COLORS.muted,false,HORIZONTAL_ALIGNMENT_LEFT,552).name="RecipeDescription"
+	if with_arrows:
+		add_button(parent,"▲",Vector2(578,22),Vector2(36,36),func():step_cooking_recipe(-1),"plain").name="RecipePrevious"
+		add_button(parent,"▼",Vector2(578,90),Vector2(36,36),func():step_cooking_recipe(1),"plain").name="RecipeNext"
 
 func step_cooking_recipe(direction:int)->void:
 	cooking_recipe_index=wrapi(cooking_recipe_index+direction,0,GameData.RECIPES.size());show_cooking()
@@ -2006,7 +2171,7 @@ func inspect_equipment(kind:String,primary_index:int,secondary_index:int)->void:
 	if selected_roster<0 or selected_roster>=roster.size():return
 	var q:Dictionary=roster[selected_roster];ensure_quiblet_equipment(q)
 	if kind=="charm":
-		if primary_index>=0 and primary_index<9 and not str(q.charm_slots[primary_index]).is_empty():select_inventory_stone(charm_inventory_data(str(q.charm_slots[primary_index])))
+		if primary_index>=0 and primary_index<9 and not str(q.charm_slots[primary_index]).is_empty():select_inventory_stone(fitted_equipment_data(charm_inventory_data(str(q.charm_slots[primary_index])),selected_roster,primary_index))
 		return
 	if kind=="power":
 		if primary_index<0 or primary_index>=q.power_slot_stones.size() or q.power_slot_stones[primary_index].is_empty():return
@@ -2017,7 +2182,7 @@ func inspect_equipment(kind:String,primary_index:int,secondary_index:int)->void:
 		if secondary_index<0 or secondary_index>=entry.stones.size():return
 		var effect:=GameData.stone_effect(str(entry.stones[secondary_index]))
 		if effect.is_empty():return
-		select_inventory_stone({"kind":"move_stone","effect":effect,"count":int(move_stone_inventory.get(effect,0)),"display_name":str(GameData.stone_info(effect).name),"inventory_index":-1})
+		select_inventory_stone(fitted_equipment_data({"kind":"move_stone","effect":effect,"count":1,"display_name":str(GameData.stone_info(effect).name)},selected_roster,secondary_index,primary_index))
 
 func ingredient_quality_points()->float:
 	var total_points:=0.0
@@ -2120,6 +2285,7 @@ func cook()->void:
 	var recipe:=GameData.choose_recipe(pot)
 	use_bountiful=special_slots.has("Bountiful Berry");empty_leftover_jar_used=special_slots.has("Empty Leftover Jar");leftover_boost=special_slots.has("Leftovers:"+str(recipe.name))
 	var stew_score:=calculate_stew_score(recipe);var quality:=quality_from_score(stew_score)
+	var new_recipe:bool=not known_recipes.has(recipe.name) and recipe.name!="Plain Stew"
 	if not known_recipes.has(recipe.name):known_recipes.append(recipe.name)
 	var leftovers_received:=1 if leftover_boost or empty_leftover_jar_used else 0
 	var recruits:=randi_range(2,5) if use_bountiful else 1
@@ -2139,7 +2305,7 @@ func cook()->void:
 		if randf()<stone_chance:q.power_stones.append(GameData.make_power_stone(["Health","Attack"].pick_random(),GameData.power_stone_tier_for_level(level),["Move wait −4%"]))
 		arrivals.append(q);arrived_species.append(species_index);new_names.append(GameData.display_name(q)+" Lv.%d"%level)
 	var required:=quality_expeditions_required(quality)
-	pending_stew={"recipe":recipe.name,"quality":quality,"score":stew_score,"arrivals":arrivals,"arrival_names":new_names,"arrival_species":arrived_species,"leftovers":leftovers_received,"boosted":leftover_boost,"expeditions_required":required,"expeditions_remaining":required}
+	pending_stew={"recipe":recipe.name,"new_recipe":new_recipe,"quality":quality,"score":stew_score,"arrivals":arrivals,"arrival_names":new_names,"arrival_species":arrived_species,"leftovers":leftovers_received,"boosted":leftover_boost,"expeditions_required":required,"expeditions_remaining":required}
 	play_started_cooking_music()
 	clear_all_cooking_slots(false);leftover_boost=false;empty_leftover_jar_used=false;use_bountiful=false
 	# Straight back to camp, where the lid drops onto the pot.
@@ -2152,7 +2318,7 @@ func advance_pending_stew()->bool:
 	if int(pending_stew.expeditions_remaining)>0:return false
 	for arrival in pending_stew.arrivals:roster.append(arrival)
 	if int(pending_stew.leftovers)>0:leftovers[pending_stew.recipe]=int(leftovers.get(pending_stew.recipe,0))+int(pending_stew.leftovers)
-	completed_stew_result={"recipe":pending_stew.recipe,"quality":pending_stew.quality,"score":pending_stew.score,"arrivals":pending_stew.arrival_names.duplicate(),"arrival_species":pending_stew.arrival_species.duplicate(),"arrival_uids":pending_stew.arrivals.map(func(q):return str(q.uid)),"leftovers":pending_stew.leftovers,"boosted":pending_stew.boosted}
+	completed_stew_result={"recipe":pending_stew.recipe,"new_recipe":bool(pending_stew.get("new_recipe",false)),"quality":pending_stew.quality,"score":pending_stew.score,"arrivals":pending_stew.arrival_names.duplicate(),"arrival_species":pending_stew.arrival_species.duplicate(),"arrival_uids":pending_stew.arrivals.map(func(q):return str(q.uid)),"leftovers":pending_stew.leftovers,"boosted":pending_stew.boosted}
 	pending_stew.clear()
 	return true
 
@@ -2236,7 +2402,7 @@ func recycle_leftover(recipe:Dictionary)->void:
 	var recovered:=randi_range(LEFTOVER_RECYCLE_RANGE.x,LEFTOVER_RECYCLE_RANGE.y)
 	var rewards:={}
 	for i in recovered:
-		var ingredient:String=eligible.pick_random();grant_ingredient(ingredient,1);rewards[ingredient]=int(rewards.get(ingredient,0))+1
+		var ingredient:String=GameData.roll_ingredient(highest_reached_stage_level(),eligible);grant_ingredient(ingredient,1);rewards[ingredient]=int(rewards.get(ingredient,0))+1
 	if screen=="inventory":show_resources()
 	else:show_recipes()
 	show_recycling_results(rewards)
@@ -2266,17 +2432,37 @@ func build_training_section(parent:Control)->void:
 	else:
 		label(parent,"TRAINEE",Vector2(18,54),12,GameData.COLORS.berry,true,HORIZONTAL_ALIGNMENT_CENTER,524)
 		build_training_slot(parent,"trainee",0,Vector2(232,70),Vector2(96,108))
+		if training_trainee>=0:build_training_exp_preview(parent)
 	# Four helpers in a row, with the two food sockets stacked beside them.
 	label(parent,"HELPERS (CONSUMED)",Vector2(18,236),12,GameData.COLORS.leaf_dark,true,HORIZONTAL_ALIGNMENT_CENTER,416)
 	for i in 4:build_training_slot(parent,"helper",i,Vector2(18+i*104,252),Vector2(96,84))
 	label(parent,"FOOD",Vector2(446,236),12,GameData.COLORS.gold.darkened(.25),true,HORIZONTAL_ALIGNMENT_CENTER,96)
 	for i in 2:build_training_slot(parent,"food",i,Vector2(446,252+i*44),Vector2(96,40))
-	var tray:=panel(Rect2(18,344,524,165),Color("#ffffffb0"),12);parent.add_child(tray);tray.name="TrainingIngredientTray"
-	var grid:=GridContainer.new();grid.name="TrainingIngredientGrid";grid.position=Vector2(2,5);grid.columns=8;grid.scale=Vector2.ONE*.9;grid.add_theme_constant_override("h_separation",6);grid.add_theme_constant_override("v_separation",8);tray.add_child(grid)
+	var tray:=panel(Rect2(18,344,524,188),Color("#ffffffb0"),12);parent.add_child(tray);tray.name="TrainingIngredientTray"
+	var grid:=GridContainer.new();grid.name="TrainingIngredientGrid";grid.position=Vector2(9,5);grid.columns=7;grid.add_theme_constant_override("h_separation",6);grid.add_theme_constant_override("v_separation",6);tray.add_child(grid)
 	for ingredient_name in GameData.INGREDIENTS:
-		var card:=IngredientDragCard.new();card.custom_minimum_size=Vector2(67,82);grid.add_child(card);card.setup(self,ingredient_name,unlocked_ingredients.has(ingredient_name),1)
-	var summary:=label(parent,training_summary_text(),Vector2(24,514),12,GameData.COLORS.ink,false,HORIZONTAL_ALIGNMENT_CENTER,512);summary.name="TrainingSummary"
-	var train_button:=add_button(parent,"TRAIN",Vector2(170,566),Vector2(220,54),request_training,"gold");train_button.name="TrainButton";train_button.add_theme_font_size_override("font_size",18)
+		var card:=IngredientDragCard.new();card.custom_minimum_size=Vector2(67,82);grid.add_child(card);card.setup(self,ingredient_name,unlocked_ingredients.has(ingredient_name),1,54)
+	var summary:=label(parent,training_summary_text(),Vector2(24,538),12,GameData.COLORS.ink,false,HORIZONTAL_ALIGNMENT_CENTER,512);summary.name="TrainingSummary"
+	var train_button:=add_button(parent,"TRAIN",Vector2(170,576),Vector2(220,42),request_training,"gold");train_button.name="TrainButton";train_button.add_theme_font_size_override("font_size",18)
+
+# Preview only arithmetic: no evolution, milestones, randomness or roster changes.
+func training_exp_preview()->Dictionary:
+	if training_trainee<0 or training_trainee>=roster.size():return {}
+	var trainee:Dictionary=roster[training_trainee]
+	var level:=int(trainee.level);var exp:=int(trainee.exp)+GameData.exp_training_reward(trainee,training_helper_dicts())
+	while exp>=GameData.exp_to_level(level):
+		exp-=GameData.exp_to_level(level);level+=1
+	return {"level":level,"exp":exp}
+
+func build_training_exp_preview(parent:Control)->void:
+	var before:Dictionary=roster[training_trainee];var after:=training_exp_preview()
+	for index in 2:
+		var state:Dictionary=before if index==0 else after
+		var x:=40.0 if index==0 else 310.0
+		var prefix:="TrainingBefore" if index==0 else "TrainingAfter"
+		label(parent,("NOW" if index==0 else "AFTER TRAINING")+"  •  Lv. %d"%int(state.level),Vector2(x,186),12,GameData.COLORS.ink,true,HORIZONTAL_ALIGNMENT_CENTER,210).name=prefix+"Level"
+		var bar:=ProgressBar.new();bar.name=prefix+"XP";bar.position=Vector2(x,210);bar.size=Vector2(210,12);bar.max_value=GameData.exp_to_level(int(state.level));bar.value=int(state.exp);bar.show_percentage=false;bar.tooltip_text="%d / %d XP"%[int(state.exp),int(bar.max_value)];parent.add_child(bar);style_quiblet_xp_bar(bar)
+	label(parent,"→",Vector2(260,192),23,GameData.COLORS.leaf_dark,true,HORIZONTAL_ALIGNMENT_CENTER,40)
 
 func build_training_slot(parent:Control,role:String,index:int,pos:Vector2,slot_size:Vector2)->void:
 	var slot:=TRAINING_SLOT_SCRIPT.new();slot.name="TraineeSlot" if role=="trainee" else ("HelperSlot%d"%index if role=="helper" else "FoodSlot%d"%index);slot.position=pos;slot.size=slot_size
@@ -2297,7 +2483,7 @@ func build_training_slot(parent:Control,role:String,index:int,pos:Vector2,slot_s
 		label(slot,GameData.display_name(q),Vector2(4,56 if compact else 72),10,GameData.COLORS.ink,true,HORIZONTAL_ALIGNMENT_CENTER,88)
 		if role=="helper" and training_trainee>=0:
 			var relationship:=GameData.quiblet_relationship(roster[training_trainee],q)
-			var contribution:String="+%d%%"%int(GameData.MOVE_TRAINING_HELPER_CHANCE[relationship]) if training_mode=="move" else "×%.2f"%float(GameData.EXP_TRAINING_HELPER_MULTIPLIER[relationship])
+			var contribution:String="+%d%%"%int(GameData.MOVE_TRAINING_HELPER_CHANCE[relationship]) if training_mode=="move" else "×%.2f"%float(GameData.EXP_TRAINING_RELATIONSHIP_FACTORS[relationship])
 			label(slot,contribution,Vector2(4,70 if compact else 88),9,GameData.COLORS.leaf_dark,true,HORIZONTAL_ALIGNMENT_CENTER,88)
 	else:label(slot,"DROP HERE",Vector2(4,36 if slot_size.y<108 else 45),9,GameData.COLORS.muted,true,HORIZONTAL_ALIGNMENT_CENTER,88)
 
@@ -2401,15 +2587,15 @@ func training_ingredient_available(ingredient_name:String)->bool:
 
 func training_helper_dicts()->Array:
 	var helpers:Array=[]
-	for roster_index in training_helpers:
-		if roster_index>=0 and roster_index<roster.size():helpers.append(roster[roster_index])
+	for roster_index in training_helper_indices():
+		helpers.append(roster[roster_index])
 	return helpers
 
 func validate_training_slots()->void:
 	if training_trainee>=roster.size():training_trainee=-1
 	if training_trainee<0 or training_move>=roster[training_trainee].moves.size():training_move=-1
 	for i in 4:
-		if training_helpers[i]>=roster.size() or training_helpers[i]==training_trainee:training_helpers[i]=-1
+		if training_helpers[i]>=roster.size() or training_helpers[i]==training_trainee or team_indices.has(training_helpers[i]):training_helpers[i]=-1
 	for i in training_foods.size():
 		if not training_foods[i].is_empty() and int(ingredients.get(training_foods[i],0))<training_foods.count(training_foods[i]):training_foods[i]=""
 
@@ -2426,7 +2612,7 @@ func can_assign_training(role:String,index:int,data:Dictionary)->bool:
 		return int(ingredients.get(food_name,0))>reserved
 	var roster_index:=int(data.get("roster_index",-1))
 	if roster_index<0 or roster_index>=roster.size():return false
-	return role=="trainee" or (role=="helper" and index>=0 and index<4)
+	return role=="trainee" or (role=="helper" and index>=0 and index<4 and not team_indices.has(roster_index))
 
 func assign_training_slot(role:String,index:int,data:Dictionary)->void:
 	if not can_assign_training(role,index,data):return
@@ -2464,13 +2650,15 @@ func training_summary_text()->String:
 		if GameData.retrain_pool(trainee).is_empty():return "%s already knows every move it can learn."%trainee_name
 		if training_move<0:return "Click one of %s's moves to retrain."%trainee_name
 		return "Retraining %s: %d%% success chance\n%s"%[str(trainee.moves[training_move].name),roundi(GameData.move_training_chance(trainee,helpers)),preserve_line]
-	return "%s would gain %d EXP.\n%s"%[trainee_name,GameData.exp_training_reward(trainee,helpers),preserve_line]
+	return preserve_line
 
 func training_roll()->float:
 	return training_rng.randf() if training_rng!=null else randf()
 
 # "" when training can run with the current slots, otherwise the reason it cannot.
 func training_problem()->String:
+	for helper in training_helpers:
+		if helper>=0 and team_indices.has(helper):return "Remove team members from the helper slots before training."
 	if training_trainee<0 or training_trainee>=roster.size():return "Drag a Quiblet into the trainee slot first."
 	var trainee:Dictionary=roster[training_trainee];var trainee_name:=GameData.display_name(trainee)
 	if training_helper_indices().is_empty():return "Add at least one helper."
@@ -2481,7 +2669,7 @@ func training_problem()->String:
 func training_helper_indices()->Array[int]:
 	var helper_indices:Array[int]=[]
 	for roster_index in training_helpers:
-		if roster_index>=0 and roster_index<roster.size() and roster_index!=training_trainee:helper_indices.append(roster_index)
+		if roster_index>=0 and roster_index<roster.size() and roster_index!=training_trainee and not team_indices.has(roster_index):helper_indices.append(roster_index)
 	return helper_indices
 
 # Training consumes helpers and food, so the TRAIN button asks first: the dialog
@@ -2562,6 +2750,7 @@ func remove_roster_member(index:int)->void:
 	if index<0 or index>=roster.size() or roster.size()<=1:return
 	refund_helper_equipment(roster[index])
 	roster.remove_at(index)
+	clean_team_presets()
 	var shifted:Array[int]=[]
 	for team_index in team_indices:
 		if team_index==index:continue
@@ -2697,6 +2886,16 @@ func fitted_move_stones(q:Dictionary)->Array[Dictionary]:
 			result.append({"move_index":move_index,"value":str(value),"effect":str(value).split(":")[0],"move":str(q.moves[move_index].name)})
 	return result
 
+# Count real owned stones; a Link's receiving endpoint is not a second stone.
+func echo_crystal_stones()->Dictionary:
+	var counts:Dictionary={}
+	for stone in GameData.MOVE_STONES:counts[stone.effect]=maxi(0,int(move_stone_inventory.get(stone.effect,0)))
+	for q in roster:
+		for fitted in fitted_move_stones(q):
+			var effect:=GameData.stone_effect(str(fitted.value))
+			if counts.has(effect):counts[effect]+=1
+	return counts
+
 func begin_item_use(item:String)->void:
 	item_use={"item":item,"roster_index":-1,"move_index":-1,"memory_move":"","stone_index":-1,"stone_value":""}
 
@@ -2705,15 +2904,26 @@ func show_item_use(item:String)->void:
 	if str(item_use.get("item",""))!=item:begin_item_use(item)
 	screen="item_use";clear_content();add_menu_backdrop()
 	var left:=panel(Rect2(30,68,585,624),Color("#fffaf0"),18);content.add_child(left);left.name="ItemUseTargets"
-	label(left,"%s  × %d"%[item,int(special_items.get(item,0))],Vector2(22,16),20,GameData.COLORS.ink,true)
+	add_special_item_icon(left,item,Vector2(22,10),Vector2(32,32))
+	label(left,"%s  × %d"%[item,int(special_items.get(item,0))],Vector2(64,16),20,GameData.COLORS.ink,true)
 	label(left,str(SPECIAL_ITEM_DESCRIPTIONS.get(item,"")),Vector2(22,46),12,GameData.COLORS.muted,false,HORIZONTAL_ALIGNMENT_LEFT,540)
-	label(left,"Choose a Quiblet:",Vector2(22,74),13,GameData.COLORS.berry,true)
+	label(left,"Choose a Move Stone:" if item=="Echo Crystal" else "Choose a Quiblet:",Vector2(22,74),13,GameData.COLORS.berry,true)
 	var scroll:=ScrollContainer.new();scroll.position=Vector2(16,100);scroll.size=Vector2(552,508);left.add_child(scroll)
 	var list:=VBoxContainer.new();list.name="ItemTargetList";list.custom_minimum_size=Vector2(530,0);list.add_theme_constant_override("separation",6);scroll.add_child(list)
-	for roster_index in roster.size():
-		var q:Dictionary=roster[roster_index];var chosen:bool=roster_index==int(item_use.roster_index)
-		var button:=add_button(list,"%s   Lv. %d"%[GameData.display_name(q),int(q.level)],Vector2.ZERO,Vector2(530,40),func(index=roster_index):item_use.roster_index=index;item_use.move_index=-1;item_use.memory_move="";item_use.stone_value="";show_item_use(item),"leaf" if chosen else "plain")
-		button.custom_minimum_size=Vector2(530,40);button.name="ItemTarget%d"%roster_index
+	if item=="Echo Crystal":
+		var counts:=echo_crystal_stones()
+		for stone in GameData.MOVE_STONES:
+			var effect:=str(stone.effect);var count:=int(counts[effect])
+			if count<=0:continue
+			var choice:=add_button(list,"%s  ×%d"%[stone.name,count],Vector2.ZERO,Vector2(530,56),func(pick=effect):item_use.stone_value=pick;show_item_use(item),"leaf" if str(item_use.stone_value)==effect else "plain")
+			choice.name="EchoStoneChoice_"+effect;choice.custom_minimum_size=Vector2(530,56)
+			var icon:=TextureRect.new();icon.texture=load(stone.texture);icon.position=Vector2(12,6);icon.size=Vector2(44,44);icon.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;icon.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;icon.mouse_filter=Control.MOUSE_FILTER_IGNORE;choice.add_child(icon)
+		if list.get_child_count()==0:label(list,"You have no Move Stones to copy.",Vector2.ZERO,14,GameData.COLORS.muted)
+	else:
+		for roster_index in roster.size():
+			var q:Dictionary=roster[roster_index];var chosen:bool=roster_index==int(item_use.roster_index)
+			var button:=add_button(list,"%s   Lv. %d"%[GameData.display_name(q),int(q.level)],Vector2.ZERO,Vector2(530,40),func(index=roster_index):item_use.roster_index=index;item_use.move_index=-1;item_use.memory_move="";item_use.stone_value="";show_item_use(item),"leaf" if chosen else "plain")
+			button.custom_minimum_size=Vector2(530,40);button.name="ItemTarget%d"%roster_index
 	var right:=panel(Rect2(635,68,615,624),Color("#f7f3ff"),18);content.add_child(right);right.name="ItemUseDetail"
 	build_item_use_detail(right)
 	add_back_button(content,BACK_BUTTON_POSITION,show_resources)
@@ -2735,6 +2945,16 @@ func add_choice_button(parent:Node,text:String,chosen:bool,callback:Callable,nam
 
 func build_item_use_detail(parent:Control)->void:
 	var item:String=str(item_use.get("item",""))
+	if item=="Echo Crystal":
+		label(parent,"COPY A MOVE STONE",Vector2(22,16),20,GameData.COLORS.ink,true)
+		var effect:=str(item_use.get("stone_value",""))
+		if int(echo_crystal_stones().get(effect,0))>0:
+			var stone:=GameData.stone_info(effect)
+			var icon:=TextureRect.new();icon.texture=load(stone.texture);icon.position=Vector2(22,58);icon.size=Vector2(72,72);icon.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;icon.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;parent.add_child(icon)
+			label(parent,stone.name,Vector2(112,64),20,GameData.COLORS.ink,true)
+			label(parent,stone.desc,Vector2(22,148),14,GameData.COLORS.muted,false,HORIZONTAL_ALIGNMENT_LEFT,560)
+		else:label(parent,"Pick one of your Move Stones on the left.",Vector2(22,60),15,GameData.COLORS.muted)
+		add_item_use_footer(parent);return
 	var q:=item_use_target()
 	if q.is_empty():label(parent,"Pick a Quiblet on the left.",Vector2(22,22),16,GameData.COLORS.muted);add_item_use_footer(parent);return
 	label(parent,"%s   Lv. %d"%[GameData.display_name(q),int(q.level)],Vector2(22,16),20,GameData.COLORS.ink,true)
@@ -2754,10 +2974,6 @@ func build_item_use_detail(parent:Control)->void:
 				var entry:Dictionary=q.moves[move_index]
 				var button:=add_choice_button(choices,"%s   (%d slots)"%[entry.name,int(entry.slots)],move_index==int(item_use.move_index),func(pick=move_index):item_use.move_index=pick;show_item_use(item),"SlotChoice")
 				button.disabled=int(entry.slots)>=MAX_MOVE_STONE_SLOTS
-		"Echo Crystal":
-			var fitted:=fitted_move_stones(q)
-			label(choices,"Fitted Move Stone to copy into the inventory:" if not fitted.is_empty() else "This Quiblet has no fitted Move Stones.",Vector2.ZERO,13,GameData.COLORS.berry,true)
-			for fit in fitted:add_choice_button(choices,"%s on %s"%[GameData.stone_info(fit.effect).name,fit.move],fit.value==str(item_use.stone_value) and int(fit.move_index)==int(item_use.move_index),func(pick=fit):item_use.stone_value=pick.value;item_use.move_index=pick.move_index;show_item_use(item),"StoneChoice")
 	add_item_use_footer(parent)
 
 # Preview text plus the USE button, which is disabled until the selection is valid.
@@ -2770,6 +2986,9 @@ func item_use_problem()->String:
 	var item:String=str(item_use.get("item",""))
 	if int(special_items.get(item,0))<=0:return "You don’t have that item."
 	if not item in QUIBLET_ITEMS:return "That item is not used from this screen."
+	if item=="Echo Crystal":
+		var effect:=str(item_use.get("stone_value",""))
+		return "" if int(echo_crystal_stones().get(effect,0))>0 else "Choose a Move Stone you own."
 	var q:=item_use_target()
 	if q.is_empty():return "Choose a Quiblet."
 	match item:
@@ -2783,9 +3002,6 @@ func item_use_problem()->String:
 			var index:=int(item_use.move_index)
 			if index<0 or index>=q.moves.size():return "Choose a move."
 			if int(q.moves[index].slots)>=MAX_MOVE_STONE_SLOTS:return "That move already has %d Move Stone slots."%MAX_MOVE_STONE_SLOTS
-		"Echo Crystal":
-			if fitted_move_stones(q).is_empty():return "%s has no fitted Move Stones to copy."%GameData.display_name(q)
-			if str(item_use.stone_value).is_empty():return "Choose a fitted Move Stone."
 		"Growth Fruit":
 			if growth_target_level(q)<=0:return "Growth Fruit needs other team members to grow toward."
 			if int(q.level)>=growth_target_level(q):return "%s is already at its teammates' average level."%GameData.display_name(q)
@@ -2803,7 +3019,7 @@ func item_use_preview()->String:
 		"Attack Charm":return "Equips an Attack Charm on %s."%GameData.display_name(q)
 		"Memory Fruit":return "Restores %s%s."%[item_use.memory_move,"" if q.moves.size()<4 else " in place of %s"%q.moves[int(item_use.move_index)].name]
 		"Move Crystal":return "%s gains a Move Stone slot (%d → %d)."%[q.moves[int(item_use.move_index)].name,int(q.moves[int(item_use.move_index)].slots),int(q.moves[int(item_use.move_index)].slots)+1]
-		"Echo Crystal":return "Copies the fitted %s into the inventory; the original stays fitted."%GameData.stone_info(str(item_use.stone_value).split(":")[0]).name
+		"Echo Crystal":return "Adds a copy of %s to your inventory; the original is unchanged."%GameData.stone_info(str(item_use.stone_value).split(":")[0]).name
 		"Growth Fruit":return "%s grows from Lv. %d to its teammates' average Lv. %d."%[GameData.display_name(q),int(q.level),growth_target_level(q)]
 		"Prodigy Fruit":return "%s's next Lv. 25 milestone grants both a Move Stone slot and a new move."%GameData.display_name(q)
 	return ""
@@ -2996,7 +3212,12 @@ func build_stone_workshop_detail(parent:Control)->void:
 	label(parent,STONE_WORKSHOP_MODES[mode].title,Vector2(22,16),20,GameData.COLORS.ink,true)
 	if mode=="combine":
 		var inserted:bool=stone_workshop.get("charm_inserted",false)
-		var charm:=add_button(parent,("REMOVE CHARM" if inserted else "INSERT COMBINER CHARM")+"  ×%d"%int(special_items.get("Combiner Charm",0)),Vector2(22,50),Vector2(571,38),func():stone_workshop.charm_inserted=not inserted;show_stone_workshop(),"leaf" if inserted else "plain");charm.name="CombinerCharmSlot";charm.disabled=not inserted and int(special_items.get("Combiner Charm",0))<1
+		var charm:=add_texture_button(parent,"res://textures/UI/CharmSlotCombiner.png",Vector2(22,46),Vector2(44,44),func():stone_workshop.charm_inserted=not inserted;show_stone_workshop(),"CombinerCharmSlot")
+		charm.disabled=not inserted and int(special_items.get("Combiner Charm",0))<1
+		charm.tooltip_text="Click to remove the Combiner Charm" if inserted else "Click to insert a Combiner Charm"
+		if inserted:add_special_item_icon(charm,"Combiner Charm",Vector2(8,8),Vector2(28,28))
+		label(parent,("CHARM INSERTED — click to remove" if inserted else "Click the slot to insert a Combiner Charm")+"  ×%d"%int(special_items.get("Combiner Charm",0)),Vector2(78,57),13,GameData.COLORS.ink,true,HORIZONTAL_ALIGNMENT_LEFT,510)
+
 	var scroll:=ScrollContainer.new();scroll.position=Vector2(22,98);scroll.size=Vector2(571,354);parent.add_child(scroll)
 	var rows:=VBoxContainer.new();rows.name="WorkshopRows";rows.custom_minimum_size=Vector2(571,0);rows.add_theme_constant_override("separation",6);scroll.add_child(rows)
 	if stones.is_empty():label(rows,"Pick a Power Stone on the left.",Vector2.ZERO,15,GameData.COLORS.muted)
@@ -3043,8 +3264,7 @@ func show_map()->void:
 	map_page=clampi(map_page,0,map_page_count()-1)
 	build_level_select_world()
 	transition_to_expedition_music("map")
-	label(content,"EXPLORE THE ISLAND",Vector2(290,34),26,GameData.COLORS.ink,true,HORIZONTAL_ALIGNMENT_CENTER,700)
-	label(content,"Beat each area’s boss to open the next. Drag to pan • Scroll to zoom.",Vector2(290,72),14,GameData.COLORS.muted,false,HORIZONTAL_ALIGNMENT_CENTER,700)
+	build_camp_shortcuts()
 
 	var navigation:=preload("res://scripts/camp_navigation.gd").new();content.add_child(navigation);navigation.setup(self,show_camp)
 
@@ -3242,6 +3462,10 @@ func _input(event:InputEvent)->void:
 		var origin:=camera_3d.project_ray_origin(event.position);var direction:=camera_3d.project_ray_normal(event.position)
 		var query:=PhysicsRayQueryParameters3D.create(origin,origin+direction*200.0);query.collision_mask=2
 		var hit:=get_world_3d().direct_space_state.intersect_ray(query)
+		if not hit.is_empty() and hit.collider.has_meta("camp_berry_patch"):
+			harvest_camp_berry(str(hit.collider.get_meta("camp_berry_patch")));get_viewport().set_input_as_handled();return
+		if not hit.is_empty() and hit.collider.has_meta("garden_patch"):
+			garden.open(int(hit.collider.get_meta("garden_patch")));get_viewport().set_input_as_handled();return
 		if not hit.is_empty() and hit.collider.get_meta("camp_interaction","")=="cooking":open_cooking_pot();get_viewport().set_input_as_handled()
 
 func start_expedition(stage_title:String)->void:
@@ -3268,10 +3492,19 @@ func show_area_levels(area_index:int)->void:
 	if not is_area_unlocked(area_index):
 		toast("Beat the previous area’s boss to unlock this region.",GameData.COLORS.muted);return
 	selected_area_index=clampi(area_index,0,GameData.EXPEDITION_AREAS.size()-1);map_page=selected_area_index/AREAS_PER_PAGE
-	screen="area_levels";clear_content();build_area_route_world(selected_area_index);add_back_button(content,BACK_BUTTON_POSITION,show_map)
-	label(content,GameData.EXPEDITION_AREAS[selected_area_index],Vector2(240,80),28,GameData.COLORS.ink,true,HORIZONTAL_ALIGNMENT_CENTER,800)
+	if screen not in ["map","area_levels"]:show_map()
+	var previous:=content.get_node_or_null("AreaLevelsOverlay")
+	if previous!=null:content.remove_child(previous);previous.queue_free()
+	for child in content.get_children():
+		if child is CanvasItem:
+			if not child.has_meta("before_area_levels_visible"):child.set_meta("before_area_levels_visible",child.visible)
+			child.hide()
+	screen="area_levels";map_dragging=false
+	var overlay:=ColorRect.new();overlay.name="AreaLevelsOverlay";overlay.color=Color(.09,.17,.14,.65);overlay.mouse_filter=Control.MOUSE_FILTER_STOP;overlay.z_index=40;content.add_child(overlay);overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_back_button(overlay,BACK_BUTTON_POSITION,close_area_levels)
+	label(overlay,GameData.EXPEDITION_AREAS[selected_area_index],Vector2(240,80),28,Color.WHITE,true,HORIZONTAL_ALIGNMENT_CENTER,800)
 	transition_to_expedition_music("level")
-	var route:=Control.new();route.name="AreaLevelRoute";route.position=Vector2(95,250);route.size=Vector2(1090,340);content.add_child(route)
+	var route:=Control.new();route.name="AreaLevelRoute";route.position=Vector2(95,250);route.size=Vector2(1090,340);overlay.add_child(route)
 	var line:=Line2D.new();line.width=8;line.default_color=Color("#b7c3c1");line.position=Vector2.ZERO;route.add_child(line)
 	var positions:=[Vector2(65,65),Vector2(205,65),Vector2(345,65),Vector2(485,65),Vector2(625,65),Vector2(765,65),Vector2(905,65),Vector2(1015,205)]
 	line.points=PackedVector2Array(positions)
@@ -3284,10 +3517,18 @@ func show_area_levels(area_index:int)->void:
 		var metrics:Dictionary=eval.metrics
 		label(card,"♥ %s\n⚔ %s\n◎ %s"%[metrics.Survivability,metrics.Damage,metrics.Positioning],Vector2(8,68),9,GameData.COLORS.ink,false,HORIZONTAL_ALIGNMENT_LEFT,100)
 		var click:=Button.new();click.name="PlayLevel%d"%i;click.flat=true;click.position=Vector2.ZERO;click.size=card.size;click.disabled=not unlocked;click.tooltip_text="Play or replay this level" if unlocked else "Clear the previous level first";click.pressed.connect(start_area_level.bind(selected_area_index,i));card.add_child(click)
-	var charms:=panel(Rect2(190,610,900,82),Color("#f4efffea"),14);content.add_child(charms)
+	var charms:=panel(Rect2(190,610,900,82),Color("#f4efffea"),14);overlay.add_child(charms)
 	add_toggle(charms,"Fortune Charm (%d) • rarer loot"%special_items["Fortune Charm"],Vector2(18,12),fortune_active,func():fortune_active=!fortune_active;show_area_levels(selected_area_index))
 	add_toggle(charms,"Challenger's Charm (%d) • more progress"%special_items["Challenger's Charm"],Vector2(468,12),challenger_active,func():challenger_active=!challenger_active;show_area_levels(selected_area_index))
-	var back:TextureButton=content.find_child("BackButton",false,false);back.z_index=20
+	var back:TextureButton=overlay.find_child("BackButton",false,false);back.z_index=20
+
+func close_area_levels()->void:
+	var overlay:=content.get_node_or_null("AreaLevelsOverlay")
+	if overlay!=null:content.remove_child(overlay);overlay.queue_free()
+	for child in content.get_children():
+		if child is CanvasItem and child.has_meta("before_area_levels_visible"):
+			child.visible=bool(child.get_meta("before_area_levels_visible"));child.remove_meta("before_area_levels_visible")
+	screen="map";map_dragging=false
 
 func start_area_level(area_index:int,level_index:int)->void:
 	if not is_area_level_unlocked(area_index,level_index):return
@@ -3335,8 +3576,9 @@ func _on_expedition_finished(result:Dictionary)->void:
 	for snapshot in expedition_team_before:
 		var roster_index:=int(snapshot.roster_index)
 		if roster_index>=0 and roster_index<roster.size():expedition_team_results.append({"before":snapshot.data,"after":roster[roster_index].duplicate(true)})
-	# Every finished run advances the pot, regardless of victory, defeat, or Give Up.
-	advance_pending_stew()
+	# Only cleared expeditions advance cooking; defeats and Give Up preserve it.
+	if bool(result.get("victory",false)):
+		advance_pending_stew();garden.game=self;garden.advance()
 	show_expedition_changes()
 
 func total_quiblet_exp(q:Dictionary)->int:
@@ -3417,7 +3659,7 @@ func show_expedition_haul()->void:
 		elif entry.kind=="move_stone":
 			var icon:=TextureRect.new();icon.texture=load(entry.texture);icon.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;icon.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;icon.position=Vector2(22,8);icon.size=Vector2(48,48);card.add_child(icon)
 		elif entry.kind=="power_stone":add_power_stone_icon(card,entry,Vector2(22,8),Vector2(48,48))
-		else:label(card,"✦",Vector2(20,10),30,GameData.COLORS.gold,true,HORIZONTAL_ALIGNMENT_CENTER,52)
+		else:add_special_item_icon(card,str(entry.name),Vector2(22,8),Vector2(48,48))
 		var display_name:String=(str(entry.quality)+"\n"+str(entry.type)+" Stone") if entry.kind=="power_stone" else str(entry.name)
 		label(card,display_name,Vector2(4,57),8 if entry.kind=="power_stone" else 9,GameData.COLORS.ink,true,HORIZONTAL_ALIGNMENT_CENTER,84);card.tooltip_text=str(entry.name)
 		label(card,"×%d"%entry.amount,Vector2(58,6),9,GameData.COLORS.muted,true,HORIZONTAL_ALIGNMENT_RIGHT,27)
@@ -3490,6 +3732,8 @@ func clear_world()->void:
 	# Detach old scenery immediately so rebuilt state nodes keep stable names and
 	# stale collision bodies cannot receive input for the rest of this frame.
 	for child in world_root.get_children():
+		if child.name=="RegionMap":
+			child.visible=false;child.process_mode=Node.PROCESS_MODE_DISABLED;continue
 		if child.name in ["CampLandscape","CampResidents"]:
 			child.visible=false;child.set_process(false);continue
 		world_root.remove_child(child);child.queue_free()
@@ -3532,6 +3776,7 @@ func build_camp_world()->void:
 	var terrain=world_root.get_node_or_null("CampLandscape")
 	if terrain==null:
 		terrain=preload("res://scripts/camp_terrain.gd").new();terrain.name="CampLandscape";world_root.add_child(terrain);terrain.build()
+	terrain.wild_berry_regrowth=camp_berry_regrowth;terrain.refresh_wild_berries()
 	terrain.visible=true;terrain.set_process(true)
 	# Imported heater sits flush beneath the cooking pot.
 	var heater_scene:PackedScene=load("res://models/PotHeater.glb")
@@ -3548,6 +3793,7 @@ func build_camp_world()->void:
 	if pot_is_cooking:build_cooking_progress_indicator()
 	elif pot_is_ready:build_cooking_ready_indicator()
 	if not pot_is_cooking:build_pot_click_collider(pot_model)
+	garden.game=self;garden.build()
 	# Every owned Quiblet roams the camp, including those outside the active team.
 	var residents=world_root.get_node_or_null("CampResidents")
 	var pending_visitors:=completed_arrival_quiblets().slice(int(completed_stew_result.get("revealed_count",0)))
@@ -3636,7 +3882,13 @@ func collect_mesh_instances(node:Node,result:Array[MeshInstance3D])->void:
 func build_level_select_world()->void:
 	clear_world();set_stage_fog({})
 	camera_3d.position=Vector3(0,40,28);camera_3d.look_at(Vector3(0,0,-2),Vector3.UP);camera_3d.fov=48
-	var island:=RegionMap3D.new();island.name="RegionMap";world_root.add_child(island);island.setup(visible_map_areas())
+	var island:RegionMap3D=world_root.get_node_or_null("RegionMap")
+	var regions:=visible_map_areas()
+	if island!=null and island.visible_regions!=regions:
+		world_root.remove_child(island);island.queue_free();island=null
+	if island==null:
+		island=RegionMap3D.new();island.name="RegionMap";world_root.add_child(island);island.setup(regions)
+	island.visible=true;island.process_mode=Node.PROCESS_MODE_INHERIT
 	update_region_map_camera()
 	var map_team:Array=[]
 	for roster_index in team_indices:map_team.append(roster[roster_index])
@@ -3653,9 +3905,6 @@ func build_level_select_world()->void:
 			var locked_style:=StyleBoxFlat.new();locked_style.bg_color=Color("#67777e");locked_style.set_corner_radius_all(10);button.add_theme_stylebox_override("disabled",locked_style);button.add_theme_color_override("font_disabled_color",Color("#e5eaec"))
 		var title:=label(content,GameData.EXPEDITION_AREAS[index],position+Vector2(-68,20),11,GameData.COLORS.ink,true,HORIZONTAL_ALIGNMENT_CENTER,136);title.add_theme_color_override("font_outline_color",Color(1,1,1,.85));title.add_theme_constant_override("outline_size",3);title.name="AreaLabel%d"%index;title.mouse_filter=Control.MOUSE_FILTER_IGNORE
 		if button.disabled:title.modulate=Color(.65,.65,.65,.8)
-	add_button(content,"−",Vector2(28,620),Vector2(45,44),func():map_zoom=minf(2.3,map_zoom+.18);update_region_map_camera(),"plain")
-	add_button(content,"+",Vector2(81,620),Vector2(45,44),func():map_zoom=maxf(.55,map_zoom-.18);update_region_map_camera(),"plain")
-	add_button(content,"WHOLE MAP",Vector2(138,620),Vector2(140,44),func():map_zoom=1.7;map_pan=Vector2.ZERO;update_region_map_camera(),"plain")
 	update_region_map_camera()
 
 func update_region_map_camera()->void:
@@ -3807,7 +4056,7 @@ func tag_summary(tags:Dictionary)->String:
 	return ", ".join(parts)
 
 func requirement_text(need:Dictionary)->String:
-	if need.is_empty():return "any five ingredients"
+	if need.is_empty():return "No named recipe matched"
 	var parts:Array[String]=[]
 	for tag in need:parts.append("%s ×%d"%[tag,need[tag]])
 	return ", ".join(parts)
@@ -3828,3 +4077,12 @@ func charm_pips(count:int,max_count:int)->String:
 
 func metric_color(value:String)->Color:
 	return GameData.COLORS.leaf if value=="Good" else (GameData.COLORS.gold if value=="Mixed" else GameData.COLORS.coral)
+
+func harvest_camp_berry(patch_id:String)->void:
+	if screen!="camp":return
+	var terrain=world_root.get_node_or_null("CampLandscape")
+	if terrain==null:return
+	var ingredient:String=terrain.harvest_wild_berry(patch_id)
+	if ingredient.is_empty():return
+	grant_ingredient(ingredient,1);save_game()
+	toast("+1 "+ingredient,GameData.COLORS.leaf)

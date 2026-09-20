@@ -29,7 +29,7 @@ func setup(team:Array,island:RegionMap3D,areas:Array[int])->void:
   var cell:Vector2i=cells[rng.randi_range(0,cells.size()-1)]
   var body:=Node3D.new();body.name="MapTeamMember%d"%i;add_child(body)
   body.position=Vector3(cell.x,terrain.height_at(Vector2(cell)),cell.y)
-  var model:=QuibletModel3D.new();model.setup(int(team[i].species),false,.95);body.add_child(model)
+  var model:=QuibletModel3D.new();model.setup(int(team[i].species),false,1.19);body.add_child(model)
   residents.append({"body":body,"model":model,"area":area,"path":PackedVector2Array(),"wait":rng.randf_range(.1,.8),"phase":rng.randf()*TAU,"floating":float(GameData.species(int(team[i].species)).get("model_hover",0.0))>0})
 
 func _process(delta:float)->void:
