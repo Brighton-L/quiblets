@@ -1,8 +1,8 @@
 extends SceneTree
 
 func _initialize() -> void:
-	var expected_species := ["Plip","Swellit","Spriggle","Frondle","Vinee","Bloomie","Sparko","Scorchit","Fistor","Carapuff","Burlow","Stackle","Shellmie","Mimbit","Pidler","Gloopit","Blubber","Cysicle","Gagglet","Gaggle","Gulper","Tumblet","Miasmum","Sludgle","Arcle","Zippet","Voltick","Electrish"]
-	var expected_types := ["Water","Water","Green","Green","Green","Green","Fire","Fire","Psychic","Psychic","Earth","Earth","Normal","Normal","Normal","Poison","Air","Ice","Air","Air","Poison","Earth","Poison","Poison","Electric","Electric","Electric","Electric"]
+	var expected_species := ["Plip","Swellit","Spriggle","Frondle","Vinee","Bloomie","Sparko","Scorchit","Fistor","Carapuff","Burlow","Stackle","Shellmie","Mimbit","Pidler","Gloopit","Blubber","Cysicle","Gagglet","Gaggle","Gulper","Tumblet","Miasmum","Sludgle","Arcle","Zippet","Voltick","Electrish","Lombat","Lombera","Snobble"]
+	var expected_types := ["Water","Water","Green","Green","Green","Green","Fire","Fire","Psychic","Psychic","Earth","Earth","Normal","Normal","Normal","Poison","Air","Ice","Air","Air","Poison","Earth","Poison","Poison","Electric","Electric","Electric","Electric","Air","Air","Ice"]
 	var expected_learnsets := [
 		["Water Shot","Water Jet","Splash Dash","Backwash","Water Burst","Rain Drop","Spray"],
 		["Water Shot","Water Jet","Hydro Shot","Breaker","Riptide","Undertow","Whirlpool","Wave Rush","Tidal Wave","Water Spout","Downpour","Tsunami"],
@@ -31,9 +31,12 @@ func _initialize() -> void:
 		["Shock Bite","Latch","Live Wire","Static Pulse","Tail Zap","Discharge","Slither","Shock Toss","Amp Drain"],
 		["Zap","Shock Touch","Zip","Jolt Kick","Static Pulse","Flashstep","Friction Dash","Thunderclap","Zigzag"],
 		["Horn Zap","Spark Ram","Clamp","Shock Toss","Ground Scrape","Static Pulse","Discharge","Grounded","Horn Lift","Shock Clamp"],
-		["Tentacle Zap","Static Pulse","Nerve Sting","Shock Net","Live Wire","Jelly Drift","Discharge","Jolt Grab"]
+		["Tentacle Zap","Static Pulse","Nerve Sting","Shock Net","Live Wire","Jelly Drift","Discharge","Jolt Grab"],
+		["Ear Slap","Gust","Air Burst","Dive","Fan","Poison Bite","Noxious Cloud","Keen Ears","Ear Guard","Thunderflap"],
+		["Ear Slap","Gust","Air Burst","Dive","Fan","Poison Bite","Noxious Cloud","Keen Ears","Ear Guard","Thunderflap","Venom Fang","Toxic Gust","Sonic Boom"],
+		["Ice Slide","Tusk Jab","Snowplow","Frost Breath","Cold Snap","Ice Armor","Brace","Avalanche","Pound","Tuskberg"]
 	]
-	assert(GameData.SPECIES.size()==28 and GameData.LEARNSETS.size()==28,"The roster and learnset table should each contain twenty-eight Quiblets")
+	assert(GameData.SPECIES.size()==31 and GameData.LEARNSETS.size()==31,"The roster and learnset table should each contain thirty-one Quiblets")
 	for i in expected_species.size():
 		assert(GameData.SPECIES[i].name==expected_species[i] and GameData.SPECIES[i].element==expected_types[i],"Incorrect Quiblet identity at roster index %d"%i)
 		assert(GameData.learnset(i)==expected_learnsets[i],"Incorrect learnset for "+expected_species[i])
@@ -389,14 +392,14 @@ func _initialize() -> void:
 	for i in int(game.pending_stew.expeditions_remaining):game.advance_pending_stew()
 	assert(int(game.leftovers.get("Plain Stew",0))==1 and int(game.completed_stew_result.leftovers)==1,"Cooking with a matching leftover jar should produce leftovers when finished")
 	game.completed_stew_result.clear()
-	var expected_stews:=["Plain Stew","Rock Bottom Broth","Hot Stuff","Deep Dish","Shock Stock","Food for Thought","Garden Variety","Midnight Snack","Heavy Helping","Light Bite","Punch Drunk","Long Shot","Comfort Food","Woodland Medley","Peak Cuisine","Coastal Catch","Fancy Feast","Mystery Meat"]
-	assert(GameData.RECIPES.size()==expected_stews.size(),"The stew journal should contain all eighteen requested stews")
+	var expected_stews:=["Plain Stew","Deep Dish","Garden Variety","Hot Stuff","Shock Stock","Food for Thought","Rock Bottom Broth","Midnight Snack","Light Bite","Peak Cuisine","Mystery Meat","Red Hot Pot","Blue Creme Stew","Golden Delight","Herbal Medley","Lavender Delight"]
+	assert(GameData.RECIPES.size()==expected_stews.size(),"The stew journal should contain all sixteen requested stews")
 	var stew_names:Array=[]
 	for stew in GameData.RECIPES:stew_names.append(stew.name)
-	for stew_name in expected_stews:assert(stew_names.has(stew_name),"Missing stew: "+stew_name)
-	assert(GameData.choose_recipe({"Emberpepper":2,"Dewmelon":1,"Curlcap":2}).name=="Hot Stuff","Spicy dry combinations should make Hot Stuff")
-	assert(GameData.choose_recipe({"Sunplum":2,"Frostberry":2,"Sparkfruit":1}).name=="Fancy Feast","Sweet, sour, juicy combinations should make Fancy Feast")
-	assert(GameData.choose_recipe({"Puffshroom":2,"Brinepod":2,"Emberpepper":1}).name=="Mystery Meat","Strange mixed combinations should make Mystery Meat")
+	assert(stew_names==expected_stews,"The journal should use the requested stew order")
+	assert(GameData.choose_recipe({"Stonebean":3,"Honeybulb":2}).name=="Rock Bottom Broth")
+	assert(GameData.choose_recipe({"Sunplum":2,"Frostberry":2,"Sparkfruit":1}).name=="Deep Dish")
+	assert(GameData.choose_recipe({"Sunplum":3,"Mudtruffle":2}).name=="Deep Dish")
 	game.show_recipes()
 	await process_frame
 	game.show_training()

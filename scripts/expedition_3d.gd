@@ -704,7 +704,6 @@ const HILL_THICKNESS_GAIN:=1.6
 const HILL_THICKNESS_BASE:=.6
 const RIVER_RAMP:=1.4
 const POND_DEPTH:=.45
-const HILL_ROLL:=.22
 # Hill heights per wall tier, in units (outer rings and thick walls stand taller).
 const CLIFF_TIER_LAYERS:=[2,3,3]
 var terrain_heights:={}
@@ -802,18 +801,36 @@ func build_terrain(rng:RandomNumberGenerator)->void:
 	for r in height_rows:
 		for c in height_cols:
 			var index:=r*height_cols+c;var point:=height_origin+Vector2(c,r)*step
-			# The cell the sample was classified by, never a rounded neighbour.
-			var cell:Vector2i=sample_cells[index]
 			var kind:int=classes[index];var h:=plain_roll(point)
 			# The skirt: the nearest hill's lower slope, fading out over HILL_SKIRT_RADIUS.
 			var skirt_top:float=float(nearby_peak[index])*HILL_SKIRT_SHARE
 			if kind!=2:h+=skirt_top*(1.0-smoothstep(0.0,HILL_SKIRT_RADIUS,float(to_hill[index])))
-			if kind==1 and waterfall_cells.has(cell):
+			if kind==2:
+				var half:float=maxf(HILL_MIN_HALF,float(ridge[index]))
+				var rise:=smoothstep(0.0,minf(HILL_RAMP,half),float(hill_edge[index]))
+				var peak:float=peak_field[index];var base:float=peak*HILL_SKIRT_SHARE
+				h+=base+(peak-base)*rise
+			if kind==2:
+				var outside:=maxf(maxf(float(field_rect.position.x)-point.x,point.x-float(field_rect.end.x-1)),maxf(float(field_rect.position.y)-point.y,point.y-float(field_rect.end.y-1)))
+				h+=smoothstep(1.0,14.0,outside)*5.5
+			height_field[index]=h
+	# Widen the high ground before rounding its shoulders. Averaging narrow
+	# hills alone erodes their peaks instead of giving them longer tops.
+	# Cut water afterward so widened hills cannot fill the stream beds.
+	height_field=shape_rolling_hills(height_field)
+	for r in height_rows:
+		for c in height_cols:
+			var index:=r*height_cols+c
+			if classes[index]!=1:continue
+			var point:=height_origin+Vector2(c,r)*step
+			var cell:Vector2i=sample_cells[index]
+			var h:float=height_field[index]
+			if waterfall_cells.has(cell):
 				# The source channel is an open chute that slopes down from the border
 				# hilltop into the field, so the water runs down the hillside rather
 				# than dropping over a lip into a pit.
 				h=waterfall_source_height(point)
-			elif kind==1:
+			else:
 				var depth:float=-float(terrain_heights.get(cell,-RIVER_DEPTH))
 				if (rivers.has(cell) or spanned_cells.has(cell)) and int(biome.get("river_width",3))<=3:
 					# A wide bank ramp fills a skinny creek with land. Reach a fixed
@@ -821,14 +838,6 @@ func build_terrain(rng:RandomNumberGenerator)->void:
 					# hills and rolling ground must not lift this bed above the water.
 					h=lerpf(h,-depth,smoothstep(0.0,1.0/float(TERRAIN_SUBDIV),float(water_edge[index])))
 				else:h-=depth*smoothstep(0.0,RIVER_RAMP,float(water_edge[index]))
-			elif kind==2:
-				var half:float=maxf(HILL_MIN_HALF,float(ridge[index]))
-				var rise:=smoothstep(0.0,minf(HILL_RAMP,half),float(hill_edge[index]))
-				var peak:float=peak_field[index];var base:float=peak*HILL_SKIRT_SHARE
-				h+=base+(peak-base+HILL_ROLL*sin(point.x*.9+.3)*sin(point.y*.8+1.1)*minf(1.0,peak*.5))*rise
-			if kind==2:
-				var outside:=maxf(maxf(float(field_rect.position.x)-point.x,point.x-float(field_rect.end.x-1)),maxf(float(field_rect.position.y)-point.y,point.y-float(field_rect.end.y-1)))
-				h+=smoothstep(1.0,14.0,outside)*5.5
 			height_field[index]=h
 	build_terrain_mesh(classes,water_edge,hill_edge,rng)
 	# Details on the open grass, decor on the hills nearest the open ground.
@@ -845,12 +854,37 @@ func build_terrain(rng:RandomNumberGenerator)->void:
 # Broad swells of the open ground: a few overlapping long sine waves.
 func plain_roll(point:Vector2)->float:
 	var relief:=float(biome.get("relief",.8))
-	var h:=relief*(.6*sin(point.x*.17+1.3)*cos(point.y*.15)+.3*sin(point.x*.37+.5)*sin(point.y*.31)+.1*sin(point.x*.8)*cos(point.y*.7+1.0))
+	var swell:=.5+.5*sin(point.x*.095+1.3)*cos(point.y*.075)
+	var h:=relief*(smoothstep(.18,.82,swell)-.5)*2.4
 	match str(biome.get("landform","rolling")):
 		"basin":h+=1.8*pow(clampf(absf(point.y)/maxf(1,field_rect.size.y*.5),0,1),2)
 		"ridges","fjords","looming":h+=relief*pow(absf(sin(point.x*.08+point.y*.11)),3)
 		"wetland":h-=.2*absf(sin(point.x*.14)*cos(point.y*.19))
 	return h
+
+func shape_rolling_hills(values:PackedFloat32Array)->PackedFloat32Array:
+	var broadened:=local_max(values,2*TERRAIN_SUBDIV)
+	return smooth_land_heights(smooth_land_heights(broadened,2*TERRAIN_SUBDIV),TERRAIN_SUBDIV)
+
+# Running sums keep broad terrain smoothing linear in the number of samples.
+func smooth_land_heights(values:PackedFloat32Array,radius:int)->PackedFloat32Array:
+	var horizontal:=PackedFloat32Array();horizontal.resize(values.size())
+	var result:=PackedFloat32Array();result.resize(values.size())
+	for r in height_rows:
+		var total:=0.0
+		for c in range(mini(radius,height_cols-1)+1):total+=values[r*height_cols+c]
+		for c in height_cols:
+			horizontal[r*height_cols+c]=total/float(mini(height_cols-1,c+radius)-maxi(0,c-radius)+1)
+			if c-radius>=0:total-=values[r*height_cols+c-radius]
+			if c+radius+1<height_cols:total+=values[r*height_cols+c+radius+1]
+	for c in height_cols:
+		var total:=0.0
+		for r in range(mini(radius,height_rows-1)+1):total+=horizontal[r*height_cols+c]
+		for r in height_rows:
+			result[r*height_cols+c]=total/float(mini(height_rows-1,r+radius)-maxi(0,r-radius)+1)
+			if r-radius>=0:total-=horizontal[(r-radius)*height_cols+c]
+			if r+radius+1<height_rows:total+=horizontal[(r+radius+1)*height_cols+c]
+	return result
 
 # Distance from every sample to the nearest sample of `target` class (0 on that class).
 func distance_to_class(classes:PackedByteArray,target:int,step:float)->PackedFloat32Array:
@@ -888,13 +922,13 @@ func local_max(values:PackedFloat32Array,window:int)->PackedFloat32Array:
 	var pass_x:=PackedFloat32Array();pass_x.resize(values.size())
 	for r in height_rows:
 		for c in height_cols:
-			var best:=0.0
+			var best:=-INF
 			for k in range(maxi(0,c-window),mini(height_cols-1,c+window)+1):best=maxf(best,values[r*height_cols+k])
 			pass_x[r*height_cols+c]=best
 	var result:=PackedFloat32Array();result.resize(values.size())
 	for r in height_rows:
 		for c in height_cols:
-			var best:=0.0
+			var best:=-INF
 			for k in range(maxi(0,r-window),mini(height_rows-1,r+window)+1):best=maxf(best,pass_x[k*height_cols+c])
 			result[r*height_cols+c]=best
 	return result
@@ -1494,6 +1528,7 @@ func plain_material(color:Color)->StandardMaterial3D:
 # --- Clouds ----------------------------------------------------------------------
 # A few puffy sphere clouds drift slowly high over the field.
 const CLOUD_BLOCKED_OPACITY:=.2
+const TREE_BLOCKED_OPACITY:=.5
 const CLOUD_FADE_SECONDS:=.22
 var clouds:Array=[]
 func build_clouds(rng:RandomNumberGenerator)->void:
@@ -1510,7 +1545,9 @@ func build_clouds(rng:RandomNumberGenerator)->void:
 
 # Only gameplay objects trigger fading; empty terrain and decorative scenery
 # remain covered. Bounds are cached on each model, while transforms stay live.
+var occlusion_point_owners:Dictionary={}
 func cloud_important_points()->PackedVector3Array:
+	occlusion_point_owners.clear()
 	var points:=PackedVector3Array()
 	if not is_instance_valid(camera):return points
 	var targets:Array=[]
@@ -1542,7 +1579,8 @@ func cloud_important_points()->PackedVector3Array:
 		var vertical:float=bounds.size.y*.35
 		for offset in [Vector3.ZERO,camera.global_basis.x*horizontal,-camera.global_basis.x*horizontal,camera.global_basis.y*vertical,-camera.global_basis.y*vertical]:
 			var point:Vector3=center+offset
-			if not camera.is_position_behind(point) and view.has_point(camera.unproject_position(point)):points.append(point)
+			if not camera.is_position_behind(point) and view.has_point(camera.unproject_position(point)):
+				points.append(point);occlusion_point_owners[point]=target
 	return points
 
 func cloud_blocks_camera(node:Node3D,important_points:Variant=null)->bool:
@@ -1577,20 +1615,41 @@ func update_clouds(delta:float)->void:
 func update_tree_fades(delta:float,important_points:PackedVector3Array)->void:
 	if not is_instance_valid(camera):return
 	for prop in props:
-		if not is_instance_valid(prop) or prop.kind!="tree" or prop.shattered:continue
+		if not is_instance_valid(prop) or prop.kind not in ["tree","big_mushroom"] or prop.shattered:continue
 		var blocked:=false
+		if not prop.has_meta("cloud_target_bounds"):
+			var local_bounds:=AABB();var started:=false
+			for part in prop.parts:
+				var part_bounds:AABB=(prop.global_transform.affine_inverse()*part.global_transform)*part.get_aabb()
+				local_bounds=local_bounds.merge(part_bounds) if started else part_bounds;started=true
+			prop.set_meta("cloud_target_bounds",local_bounds)
 		var bounds:AABB=prop.global_transform*prop.get_meta("cloud_target_bounds",AABB())
 		for point in important_points:
-			# A tree must not fade merely because its own harvestable crown is a target.
-			if bounds.grow(.05).has_point(point):continue
+			# A prop must not fade merely because its own harvestable crown is a target.
+			if occlusion_point_owners.get(point)==prop:continue
+			if not occlusion_point_owners.has(point) and bounds.grow(.05).has_point(point):continue
 			var origin:=camera.project_ray_origin(camera.unproject_position(point))
 			if bounds.intersects_segment(origin,point)==null:continue
 			for part in prop.parts:
 				var inverse:Transform3D=part.global_transform.affine_inverse()
-				if part.get_aabb().intersects_segment(inverse*origin,inverse*point)!=null:blocked=true;break
+				if prop_part_blocks_segment(part,inverse*origin,inverse*point):blocked=true;break
 			if blocked:break
-		for part in prop.parts:
-			part.transparency=move_toward(part.transparency,.2 if blocked else 0.0,.2*delta/CLOUD_FADE_SECONDS)
+		prop.set_occlusion_opacity(move_toward(prop.occlusion_opacity,TREE_BLOCKED_OPACITY if blocked else 1.0,(1.0-TREE_BLOCKED_OPACITY)*delta/CLOUD_FADE_SECONDS))
+
+# Leaf blobs and mushroom caps are ellipsoids, not their enclosing boxes.
+# Empty corners of those boxes must not count as visual obstruction.
+func prop_part_blocks_segment(part:MeshInstance3D,origin:Vector3,target:Vector3)->bool:
+	if not part.visible or part.mesh==null:return false
+	var box:=part.get_aabb()
+	if box.intersects_segment(origin,target)==null:return false
+	if part.mesh is SphereMesh:
+		var radii:=box.size*.5
+		var start:Vector3=(origin-box.get_center())/radii
+		var end:Vector3=(target-box.get_center())/radii
+		var direction:=end-start
+		var t:=clampf(-start.dot(direction)/maxf(direction.length_squared(),.000001),0.0,1.0)
+		return (start+direction*t).length_squared()<1.0
+	return true
 
 func build_multimesh(node_name:String,mesh:Mesh,entries:Array[Dictionary])->MultiMeshInstance3D:
 	var multimesh:=MultiMesh.new();multimesh.transform_format=MultiMesh.TRANSFORM_3D;multimesh.use_colors=true;multimesh.use_custom_data=entries.any(func(entry):return entry.has("custom"));multimesh.mesh=mesh;multimesh.instance_count=entries.size()
@@ -2247,7 +2306,7 @@ func spawn_enemy_set()->void:
 	var positions:=encounter_positions(center,count)
 	for i in count:
 		var level_boost:=(2 if challenger else (1 if fortune else 0))+(BOSS_STAGE_ENEMY_LEVEL_BOOST if stage_kind=="boss" else 0)
-		var q:=make_enemy((stage_area_index+stage_node_index+wave*3+i)%GameData.SPECIES.size(),enemy_level(spawn_rng.randi_range(-1,1)))
+		var q:=make_enemy(GameData.roll_area_species(stage_area_index,spawn_rng),enemy_level(spawn_rng.randi_range(-1,1)))
 		var actor:=QuibletActor3D.new();actor.setup(q,true,level_boost,-1,scaling)
 		actor.position=Vector3(positions[i].x,0,positions[i].y)
 		actor.set_meta("zone",patch_zone(center));actor.set_meta("group",wave);actor.set_meta("spawn_point",point_index);actor.set_meta("alert_center",center);actor.set_meta("alert_radius",1.8 if encounter_style=="surround" else SCATTER_ALERT_RADIUS);actor.set_meta("encounter_style",encounter_style);actor.set_meta("alerted",false)
@@ -2404,7 +2463,7 @@ func spawn_boss_wave()->void:
 		var is_level_boss:=i==count-1
 		var level_boost:=(2 if challenger else (1 if fortune else 0))
 		if stage_kind=="boss":level_boost+=BOSS_STAGE_BOSS_LEVEL_BOOST if is_level_boss else BOSS_STAGE_ENEMY_LEVEL_BOOST
-		var q:=make_enemy((stage_area_index+stage_node_index+7+i)%GameData.SPECIES.size(),enemy_level(1));var actor:=QuibletActor3D.new();actor.setup(q,true,level_boost,-1,scaling)
+		var q:=make_enemy(GameData.roll_area_species(stage_area_index,spawn_rng,is_level_boss),enemy_level(1));var actor:=QuibletActor3D.new();actor.setup(q,true,level_boost,-1,scaling)
 		# The boss drops in too, but its landing squash is left to its own introduction.
 		actor.position=Vector3(positions[i].x,0,positions[i].y);actor.set_meta("zone",arena_index);actor.set_meta("alert_center",center);actor.set_meta("alert_radius",5.0);actor.set_meta("group",wave);actor.set_meta("alerted",false);place_actor(actor);enemies.append(actor);play_spawn_drop(actor,i*SPAWN_DROP_STAGGER,not is_level_boss)
 		if is_level_boss:
@@ -2457,14 +2516,13 @@ func play_boss_grunt()->void:
 
 # One guardian idles in every other meadow, a little stronger than a regular enemy.
 func spawn_grove_guardians()->void:
-	var scaling:=GameData.enemy_scaling(stage_area_index);var guardian_index:=0
+	var scaling:=GameData.enemy_scaling(stage_area_index)
 	for zone_index in range(GROVE_GUARDED_MEADOW_STEP,zones.size(),GROVE_GUARDED_MEADOW_STEP):
 		var center:Vector2=zones[zone_index].center
-		var q:=make_enemy((stage_area_index+stage_node_index+zone_index*2+guardian_index)%GameData.SPECIES.size(),enemy_level(-1))
+		var q:=make_enemy(GameData.roll_area_species(stage_area_index,spawn_rng),enemy_level(-1))
 		var actor:=QuibletActor3D.new();actor.setup(q,true,GROVE_GUARDIAN_LEVEL_BOOST+(2 if challenger else (1 if fortune else 0)),-1,scaling)
 		actor.max_hp*=GROVE_GUARDIAN_HP_MULTIPLIER;actor.current_hp=actor.max_hp
 		actor.position=Vector3(center.x,0,center.y-1.2);actor.set_meta("zone",zone_index);actor.set_meta("alerted",false);actor.set_meta("guardian",true);place_actor(actor);enemies.append(actor)
-		guardian_index+=1
 	begin_advance(1)
 	event_message.emit("Gather every berry patch to finish the grove. Guardians roam the deeper meadows.")
 

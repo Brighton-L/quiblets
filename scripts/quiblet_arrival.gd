@@ -32,7 +32,7 @@ func setup(owner_game,visitors:Array[Dictionary])->void:
 func reveal_stew()->void:
 	can_continue=false;revealing_stew=true
 	var recipe:Dictionary=GameData.RECIPES[0]
-	for entry in GameData.RECIPES:
+	for entry in game.leftover_recipes():
 		if entry.name==game.completed_stew_result.get("recipe",""):recipe=entry;break
 	var pot:Node3D=game.world_root.get_node("CookingPot")
 	var bounds:AABB=game.world_mesh_bounds(pot)

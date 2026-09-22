@@ -15,10 +15,9 @@ func setup(index: int, selected := false) -> void:
 	if selected:
 		selection_outline=Panel.new();selection_outline.name="PortraitSelectionFlash"
 		selection_outline.mouse_filter=Control.MOUSE_FILTER_IGNORE;selection_outline.z_index=20
-		var style:=_outline(Color.WHITE,3.0)
-		style.shadow_color=Color("#244838");style.shadow_size=2
+		var style:=_outline(Color("#85898f"),3.0)
 		selection_outline.add_theme_stylebox_override("panel",style);add_child(selection_outline)
-		pulse=PULSE_DURATION;update_selection_outline();set_process(true)
+		pulse=0.0;update_selection_outline();set_process(true)
 	else:set_process(false)
 
 func _gui_input(event: InputEvent) -> void:
@@ -33,24 +32,22 @@ func _get_drag_data(_at_position: Vector2) -> Variant:
 	return {"kind":"quiblet", "roster_index":roster_index}
 
 func _process(delta: float) -> void:
-	pulse=maxf(0.0,pulse-delta)
+	pulse=fposmod(pulse+delta,PULSE_DURATION)
 	update_selection_outline()
-	if pulse<=0.0:set_process(false)
 
 func update_selection_outline()->void:
 	if not is_instance_valid(selection_outline):return
-	selection_outline.visible=pulse>0.0
-	var progress:=clampf(1.0-pulse/PULSE_DURATION,0.0,1.0)
-	# Keep the outline bright while it contracts, then expands, so its size
-	# change is visible instead of hidden inside the old fade-in/fade-out.
-	var extent:=portrait_rect.size*(1.0-.28*sin(progress*PI))
+	var progress:=pulse/PULSE_DURATION
+	# Loop only the border's size, keeping it centered, opaque, and unfilled.
+	var contraction:=(1.0-cos(progress*TAU))*.5
+	var extent:=portrait_rect.size*(1.0-.28*contraction)
 	selection_outline.position=portrait_rect.get_center()-extent*.5
 	selection_outline.size=extent
-	selection_outline.modulate.a=1.0-smoothstep(.82,1.0,progress)
 
 func _outline(color: Color, width: float) -> StyleBoxFlat:
 	var box := StyleBoxFlat.new()
 	box.bg_color = Color.TRANSPARENT
+	box.draw_center = false
 	box.border_color = color
 	box.set_border_width_all(int(width))
 	box.set_corner_radius_all(13)

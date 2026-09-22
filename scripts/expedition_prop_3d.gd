@@ -57,6 +57,7 @@ var parts:Array[MeshInstance3D]=[]
 var shards:Array[Dictionary]=[]
 var colors:Array[Color]=[]
 var hurt_time:=0.0
+var occlusion_opacity:=1.0
 
 static func prop_hp(prop_kind:String,stage_level:int)->float:
 	var base:=40.0+float(stage_level)*9.0
@@ -252,10 +253,21 @@ func harvest()->void:
 	if shattered:return
 	harvested=true;shatter()
 
+# Material alpha works with the Mobile renderer as well as Forward+.
+func set_occlusion_opacity(value:float)->void:
+	occlusion_opacity=clampf(value,0.0,1.0)
+	for part in parts:
+		var material:=part.material_override as StandardMaterial3D
+		if material==null:continue
+		part.transparency=0.0
+		material.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA if occlusion_opacity<.999 else BaseMaterial3D.TRANSPARENCY_DISABLED
+		var color:=material.albedo_color;color.a=occlusion_opacity;material.albedo_color=color
+
 func hit(amount:float)->bool:
 	if shattered or amount<=0.0:return false
 	hp=maxf(0.0,hp-amount);hurt_time=.15
 	for i in parts.size():parts[i].material_override.albedo_color=colors[i].lightened(.45)
+	set_occlusion_opacity(occlusion_opacity)
 	set_process(true)
 	if hp<=0.0:shatter()
 	return true
@@ -284,6 +296,7 @@ func _process(delta:float)->void:
 		hurt_time-=delta
 		if hurt_time<=0.0:
 			for i in parts.size():parts[i].material_override.albedo_color=colors[i]
+			set_occlusion_opacity(occlusion_opacity)
 	if not shattered:
 		if hurt_time<=0.0 and harvest_progress<=0.0:set_process(false)
 		return

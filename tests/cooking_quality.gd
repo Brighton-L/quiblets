@@ -18,15 +18,15 @@ func run()->void:
 	game.leftover_boost=false;game.empty_leftover_jar_used=false
 	var recipe:=set_pot(game,{"Bumbleberry":1,"Emberpepper":1,"Dewmelon":1,"Knobroot":1,"Curlcap":1})
 	check(recipe.name=="Plain Stew" and game.calculate_stew_score(recipe)==25 and game.calculate_quality()=="Decent","Common varied Plain Stew should be Decent with a score of 25")
-	recipe=set_pot(game,{"Stonebean":5})
-	check(game.calculate_stew_score(recipe)==52 and game.calculate_quality()=="Good","Tier-2 recipe match should be Good")
+	recipe=set_pot(game,{"Stonebean":3,"Honeybulb":2})
+	check(game.calculate_stew_score(recipe)==54 and game.calculate_quality()=="Good","Tier-2 recipe match should be Good")
 	game.leftover_boost=true
-	check(game.recipe_precision_points(recipe)==42 and game.calculate_stew_score(recipe)==64,"Matching leftovers should contribute all 12 points above five matching ingredients")
+	check(game.recipe_precision_points(recipe)==42 and game.calculate_stew_score(recipe)==66,"Matching leftovers should contribute all 12 points above five matching ingredients")
 	game.leftover_boost=false
-	recipe=set_pot(game,{"Brinepod":5})
-	check(game.calculate_stew_score(recipe)==72 and game.calculate_quality()=="Great","Tier-3 recipe match should be Great")
+	recipe=set_pot(game,{"Brinepod":3,"Oldroot":2})
+	check(game.calculate_stew_score(recipe)==74 and game.calculate_quality()=="Great","Tier-3 recipe match should be Great")
 	recipe=set_pot(game,{"Sunplum":2,"Frostberry":2,"Sparkfruit":1})
-	check(recipe.name=="Fancy Feast" and game.calculate_stew_score(recipe)==84 and game.calculate_quality()=="Amazing","Precise high-tier recipe should be Amazing")
+	check(recipe.name=="Deep Dish" and game.calculate_stew_score(recipe)==84 and game.calculate_quality()=="Amazing","Precise high-tier recipe should be Amazing")
 	recipe=set_pot(game,{"Bumbleberry":1,"Emberpepper":1,"Dewmelon":1,"Knobroot":1,"Curlcap":1});game.empty_leftover_jar_used=true
 	check(game.calculate_stew_score(recipe)==37 and game.calculate_quality()=="Good","An Empty Leftover Jar should add recipe precision without adding ingredient quality")
 	game.empty_leftover_jar_used=false
@@ -105,9 +105,10 @@ func run()->void:
 	# Predicted result on the pot lid: --- under five ingredients, ??? until discovered, then the name.
 	game.pending_stew={};game.completed_stew_result={};game.known_recipes.clear();game.clear_all_cooking_slots(true);game.show_cooking();await process_frame
 	check(game.content.find_child("PredictedResult",true,false).text=="Predicted Result: ---","An unfilled pot predicts ---")
-	game.ingredients["Stonebean"]=15
+	game.ingredients["Stonebean"]=15;game.ingredients["Honeybulb"]=15
+	if not game.unlocked_ingredients.has("Honeybulb"):game.unlocked_ingredients.append("Honeybulb")
 	if not game.unlocked_ingredients.has("Stonebean"):game.unlocked_ingredients.append("Stonebean")
-	for i in 5:game.assign_cooking_item("ingredient",i,{"kind":"ingredient","name":"Stonebean"})
+	for i in 5:game.assign_cooking_item("ingredient",i,{"kind":"ingredient","name":"Stonebean" if i<3 else "Honeybulb"})
 	await process_frame
 	var predicted_name:String=GameData.choose_recipe(game.pot).name
 	check(predicted_name!="Plain Stew" and game.content.find_child("PredictedResult",true,false).text=="Predicted Result: ???","An undiscovered stew predicts ???")
@@ -124,20 +125,23 @@ func run()->void:
 	check(browser.find_child("RecipePrevious",true,false).text=="▲" and browser.find_child("RecipeNext",true,false).text=="▼","Up and down arrows step through recipes")
 	browser.find_child("RecipeNext",true,false).pressed.emit();await process_frame;browser=game.content.find_child("RecipeBrowser",true,false)
 	check(game.cooking_recipe_index==1 and browser.find_child("RecipeNumber",true,false).text=="#2" and browser.find_child("RecipeName",true,false).text=="???" and browser.find_child("RecipeRequires",true,false).text=="???" and browser.find_child("RecipeAttracts",true,false).text=="???","An undiscovered stew shows ??? for its name, requirements, and attraction")
-	game.known_recipes.append("Rock Bottom Broth");game.show_cooking();await process_frame;browser=game.content.find_child("RecipeBrowser",true,false)
-	check(browser.find_child("RecipeName",true,false).text=="Rock Bottom Broth" and browser.find_child("RecipeRequires",true,false).text==game.requirement_text(GameData.RECIPES[1].need) and browser.find_child("RecipeAttracts",true,false).text==game.recipe_attracts_text(GameData.RECIPES[1]),"A discovered stew reveals its details")
+	game.known_recipes.append("Deep Dish");game.show_cooking();await process_frame;browser=game.content.find_child("RecipeBrowser",true,false)
+	check(browser.find_child("RecipeName",true,false).text=="Deep Dish" and browser.find_child("RecipeRequires",true,false).text==game.requirement_text(GameData.RECIPES[1].need) and browser.find_child("RecipeAttracts",true,false).text==game.recipe_attracts_text(GameData.RECIPES[1]),"A discovered stew reveals its details")
 	browser.find_child("RecipePrevious",true,false).pressed.emit();await process_frame
 	game.step_cooking_recipe(-1);await process_frame
 	check(game.cooking_recipe_index==GameData.RECIPES.size()-1 and game.content.find_child("RecipeNumber",true,false).text=="#%d"%GameData.RECIPES.size(),"Stepping up from the first stew wraps to the last")
 	check(game.content.find_children("*","Panel",true,false).filter(func(node):return node.get_parent()==game.content.find_child("RecipeBrowser",true,false)).is_empty(),"Only one recipe is shown at a time")
-	check(game.recipe_attracts_text(GameData.RECIPES[3])=="Attracts Water type Quiblets","Water stew uses the simple type description")
-	check(game.recipe_attracts_text(GameData.RECIPES[1])=="Attracts Green and Earth type Quiblets","Mixed pools list each eligible type once")
-	check(game.recipe_attracts_text(GameData.RECIPES[0])=="Attracts all types of Quiblets","Plain stew describes all types compactly")
+	check(game.recipe_attracts_text(GameData.RECIPES[1])=="Attracts Water type Quiblets","Water stew uses the simple type description")
+	check(game.recipe_attracts_text(GameData.RECIPES[15])=="Attracts purple-colored Quiblets","Color stews describe color rather than type")
+	check(game.recipe_attracts_text(GameData.RECIPES[0])=="Attracts any Quiblet","Plain stew describes all types compactly")
 	var species_names:Array=[]
 	for entry in GameData.SPECIES:species_names.append(str(entry.name))
 	for stew in GameData.RECIPES:
 		var hint:String=game.recipe_attracts_text(stew)
-		check(hint.begins_with("Attracts ") and not species_names.any(func(name):return hint.contains(name)) and (hint=="Attracts all types of Quiblets" or stew.pool.all(func(index):return hint.contains(str(GameData.species(int(index)).element)))),"Every recipe describes its eligible types without species names: "+stew.name)
+		var expected_hint:String="Attracts any Quiblet"
+		if stew.attraction_kind=="type":expected_hint="Attracts %s type Quiblets"%stew.attraction_target
+		elif stew.attraction_kind=="color":expected_hint="Attracts %s-colored Quiblets"%str(stew.attraction_target).to_lower()
+		check(hint==expected_hint and not species_names.any(func(name):return hint.contains(name)),"Every recipe describes its type or color without species names: "+stew.name)
 	# Spices season arrivals with small permanent stat bonuses scaled by quality.
 	var hot_great:Dictionary=GameData.spice_stat_bonuses("Hot Flakes","great");var hot_basic:Dictionary=GameData.spice_stat_bonuses("Hot Flakes","basic");var hot_special:Dictionary=GameData.spice_stat_bonuses("Hot Flakes","special")
 	check(is_equal_approx(float(hot_great.get("attack",0.0)),.04) and is_equal_approx(float(hot_basic.get("attack",0.0)),.014) and is_equal_approx(float(hot_special.get("attack",0.0)),.06),"Hot Flakes stat bonus should scale with spice quality")

@@ -782,7 +782,7 @@ func build_quiblet_info(parent:Control,q:Dictionary,with_button:bool)->void:
 		add_quiblet_stat_badge(parent,Vector2(442,28),Vector2(150,34),"res://textures/UI/HealthIcon.png",GameData.max_hp(q),Color("#4b9fda"),"HealthStatBadge")
 		add_quiblet_stat_badge(parent,Vector2(442,68),Vector2(150,34),"res://textures/UI/AttackIcon.png",GameData.attack(q),Color("#df5b55"),"AttackStatBadge")
 	var stat_y:=124.0 if with_button else 92.0
-	label(parent,"%s • %s range"%[GameData.species(int(q.species)).element,"long" if is_long_range(q) else "short"],Vector2(18,200) if with_button else Vector2(left,stat_y+14),13,GameData.COLORS.muted,false,HORIZONTAL_ALIGNMENT_CENTER,424 if with_button else 205)
+	label(parent,"%s • %s range"%[GameData.species_type_text(int(q.species)),"long" if is_long_range(q) else "short"],Vector2(18,200) if with_button else Vector2(left,stat_y+14),13,GameData.COLORS.muted,false,HORIZONTAL_ALIGNMENT_CENTER,424 if with_button else 205)
 	if with_button:add_button(parent,"POWER STONES",Vector2(175,264),Vector2(252,54),show_quiblet_edit,"leaf")
 
 func build_short_quiblet_info(parent:Control,q:Dictionary)->void:
@@ -804,7 +804,7 @@ func build_short_quiblet_info(parent:Control,q:Dictionary)->void:
 func build_narrow_quiblet_info(parent:Control,q:Dictionary)->void:
 	var portrait:=QuibletPortrait.new();portrait.position=Vector2(60,16);portrait.size=Vector2(130,138);portrait.setup(int(q.species),1.08);parent.add_child(portrait)
 	label(parent,GameData.display_name(q),Vector2(12,157),23,GameData.COLORS.ink,true,HORIZONTAL_ALIGNMENT_CENTER,226)
-	label(parent,"%s • %s range"%[GameData.species(int(q.species)).element,"long" if is_long_range(q) else "short"],Vector2(12,194),11,GameData.COLORS.muted,false,HORIZONTAL_ALIGNMENT_CENTER,226)
+	label(parent,"%s • %s range"%[GameData.species_type_text(int(q.species)),"long" if is_long_range(q) else "short"],Vector2(12,194),11,GameData.COLORS.muted,false,HORIZONTAL_ALIGNMENT_CENTER,226)
 	label(parent,"Lv. %d"%int(q.level),Vector2(18,236),13,GameData.COLORS.muted,true)
 	var xp:=ProgressBar.new();xp.name="QuibletXPBar";xp.position=Vector2(18,258);xp.size=Vector2(107,21);xp.scale=Vector2(1,.5);xp.max_value=GameData.exp_to_level(int(q.level));xp.value=int(q.exp);xp.show_percentage=false;parent.add_child(xp)
 	style_quiblet_xp_bar(xp)
@@ -1531,13 +1531,13 @@ func show_legacy_team() -> void:
 	var vb:=VBoxContainer.new(); vb.custom_minimum_size=Vector2(286,0); vb.add_theme_constant_override("separation",8); list.add_child(vb)
 	for i in roster.size():
 		var q:Dictionary=roster[i]
-		var row:=Button.new(); row.custom_minimum_size=Vector2(286,70); row.text="     %s\n     Lv. %d  •  %s"%[GameData.display_name(q),q.level,GameData.species(int(q.species)).element]; row.alignment=HORIZONTAL_ALIGNMENT_LEFT; style_button(row,"selected" if i==selected_roster else "plain"); row.pressed.connect(func(index=i): selected_roster=index; show_team()); vb.add_child(row)
+		var row:=Button.new(); row.custom_minimum_size=Vector2(286,70); row.text="     %s\n     Lv. %d  •  %s"%[GameData.display_name(q),q.level,GameData.species_type_text(int(q.species))]; row.alignment=HORIZONTAL_ALIGNMENT_LEFT; style_button(row,"selected" if i==selected_roster else "plain"); row.pressed.connect(func(index=i): selected_roster=index; show_team()); vb.add_child(row)
 		var p:=QuibletPortrait.new(); p.position=Vector2(5,4); p.size=Vector2(60,60); p.setup(int(q.species)); row.add_child(p)
 	var q:Dictionary=roster[selected_roster]
 	var detail:=panel(Rect2(376,110,876,574),Color("#fffdf7"),18); content.add_child(detail)
 	var portrait:=QuibletPortrait.new(); portrait.position=Vector2(24,22); portrait.size=Vector2(150,150); portrait.setup(int(q.species),1.05); detail.add_child(portrait)
 	label(detail,GameData.display_name(q),Vector2(183,29),30,GameData.COLORS.ink,true)
-	label(detail,"%s Quiblet  •  Level %d"%[GameData.species(int(q.species)).element,q.level],Vector2(184,67),16,GameData.COLORS.muted)
+	label(detail,"%s Quiblet  •  Level %d"%[GameData.species_type_text(int(q.species)),q.level],Vector2(184,67),16,GameData.COLORS.muted)
 	label(detail,"♥ %d     ⚔ %d     Next milestone: Lv. %d"%[GameData.max_hp(q),GameData.attack(q),(int(q.level)/25+1)*25],Vector2(184,101),16,GameData.COLORS.ink)
 	var in_team:=team_indices.has(selected_roster)
 	add_button(detail,"REMOVE FROM TEAM" if in_team else "ADD TO TEAM",Vector2(183,131),Vector2(190,42),func(): toggle_team_member(selected_roster),"coral" if in_team else "leaf")
@@ -1698,7 +1698,7 @@ func show_resources() -> void:
 	label(sp_panel,"SPECIAL ITEMS",Vector2(22,14),18,GameData.COLORS.ink,true)
 	var workshop_button:=add_button(sp_panel,"STONE WORKSHOP",Vector2(370,10),Vector2(248,42),func():show_stone_workshop(),"gold");workshop_button.name="OpenStoneWorkshop"
 	var sp_grid:=GridContainer.new();sp_grid.name="ResourceSpecialGrid";sp_grid.position=Vector2(16,60);sp_grid.columns=8;sp_grid.add_theme_constant_override("h_separation",8);sp_grid.add_theme_constant_override("v_separation",8);sp_panel.add_child(sp_grid)
-	for recipe in GameData.RECIPES:
+	for recipe in leftover_recipes():
 		var stored:int=int(leftovers.get(recipe.name,0))
 		if stored>0:add_resource_item_card(sp_grid,"Leftover:%s"%recipe.name,"🫙",stored,recipe.color)
 	for item in special_items:
@@ -1717,8 +1717,10 @@ func build_resource_info(parent:Control)->void:
 		var recipe_name:=selected_resource_item.trim_prefix("Leftover:")
 		label(parent,"🫙",Vector2(20,20),34,GameData.COLORS.gold)
 		label(parent,"%s Leftovers"%recipe_name,Vector2(84,12),19,GameData.COLORS.ink,true)
-		label(parent,"Reinvest when cooking %s again for better precision, or recycle for ingredients."%recipe_name,Vector2(84,44),13,GameData.COLORS.muted,false,HORIZONTAL_ALIGNMENT_LEFT,940)
-		for recipe in GameData.RECIPES:
+		var retired:bool=GameData.LEGACY_RECIPES.any(func(recipe):return str(recipe.name)==recipe_name)
+		var jar_hint:String="This stew is retired. Recycle its leftovers for ingredients." if retired else "Use with %s for better precision, or recycle for ingredients."%recipe_name
+		label(parent,jar_hint,Vector2(84,44),13,GameData.COLORS.muted,false,HORIZONTAL_ALIGNMENT_LEFT,940)
+		for recipe in leftover_recipes():
 			if str(recipe.name)==recipe_name:
 				var recycle:=add_button(parent,"RECYCLE",Vector2(1070,28),Vector2(120,44),func(r=recipe):recycle_leftover(r),"leaf");recycle.name="RecycleLeftovers";break
 		return
@@ -1948,15 +1950,15 @@ func show_cooking() -> void:
 		var bountiful_card:=CookingItemCard.new();bountiful_card.name="BountifulBerryCard";bountiful_card.custom_minimum_size=Vector2(67,66);special_row.add_child(bountiful_card);bountiful_card.chosen.connect(select_cooking_source);bountiful_card.setup("🫐","Bountiful Berry","2–5 arrivals",int(special_items["Bountiful Berry"]),GameData.COLORS.berry,{"kind":"special","id":"Bountiful Berry","label":"Bountiful Berry"})
 	if int(special_items["Empty Leftover Jar"])>0:
 		var empty_jar_card:=CookingItemCard.new();empty_jar_card.name="EmptyLeftoverJarCard";empty_jar_card.custom_minimum_size=Vector2(67,66);special_row.add_child(empty_jar_card);empty_jar_card.chosen.connect(select_cooking_source);empty_jar_card.setup("🫙","Empty Leftover Jar","collects leftovers",int(special_items["Empty Leftover Jar"]),GameData.COLORS.gold,{"kind":"special","id":"Empty Leftover Jar","label":"Empty Leftover Jar"})
-	for leftover_recipe in GameData.RECIPES:
+	for leftover_recipe in leftover_recipes():
 		var count:=int(leftovers.get(leftover_recipe.name,0))
 		if count<=0:continue
-		var leftover_card:=CookingItemCard.new();leftover_card.name="LeftoversCard%d"%GameData.RECIPES.find(leftover_recipe);leftover_card.custom_minimum_size=Vector2(67,66);special_row.add_child(leftover_card);leftover_card.chosen.connect(select_cooking_source)
+		var leftover_card:=CookingItemCard.new();leftover_card.name="LeftoversCard%d"%leftover_recipes().find(leftover_recipe);leftover_card.custom_minimum_size=Vector2(67,66);special_row.add_child(leftover_card);leftover_card.chosen.connect(select_cooking_source)
 		leftover_card.setup("🫙",leftover_recipe.name+" Leftovers","improves matching stew",count,leftover_recipe.color,{"kind":"special","id":"Leftovers:"+str(leftover_recipe.name),"label":leftover_recipe.name+" Leftovers"})
 	add_back_button(content,BACK_BUTTON_POSITION,func():request_leave_cooking(show_camp))
 
 func build_recipe_card(parent:Control,shown_recipe:Dictionary,discovered:bool,recipe_index:int,with_arrows:=false)->void:
-	label(parent,"#%d"%(recipe_index+1),Vector2(14,10),12,GameData.COLORS.muted,true,HORIZONTAL_ALIGNMENT_LEFT,40).name="RecipeNumber"
+	if recipe_index>=0:label(parent,"#%d"%(recipe_index+1),Vector2(14,10),12,GameData.COLORS.muted,true,HORIZONTAL_ALIGNMENT_LEFT,40).name="RecipeNumber"
 	label(parent,str(shown_recipe.name) if discovered else "???",Vector2(52,6),18,shown_recipe.color if discovered else GameData.COLORS.muted,true,HORIZONTAL_ALIGNMENT_LEFT,510).name="RecipeName"
 	label(parent,"REQUIRES",Vector2(18,42),10,GameData.COLORS.muted,true,HORIZONTAL_ALIGNMENT_LEFT,270)
 	label(parent,requirement_text(shown_recipe.need) if discovered else "???",Vector2(18,58),12,GameData.COLORS.ink,false,HORIZONTAL_ALIGNMENT_LEFT,272).name="RecipeRequires"
@@ -1971,16 +1973,13 @@ func step_cooking_recipe(direction:int)->void:
 	cooking_recipe_index=wrapi(cooking_recipe_index+direction,0,GameData.RECIPES.size());show_cooking()
 
 func recipe_attracts_text(recipe:Dictionary)->String:
-	var types:Array[String]=[]
-	for species_index in recipe.pool:
-		var type_name:=str(GameData.species(int(species_index)).element)
-		if not types.has(type_name):types.append(type_name)
-	var all_types:Array[String]=[]
-	for entry in GameData.SPECIES:
-		if not all_types.has(str(entry.element)):all_types.append(str(entry.element))
-	if types.size()==all_types.size():return "Attracts all types of Quiblets"
-	var type_text:=types[0] if types.size()==1 else ", ".join(types.slice(0,-1))+" and "+types[-1]
-	return "Attracts %s type Quiblets"%type_text
+	if recipe.get("attraction_kind","")=="any":return "Attracts any Quiblet"
+	if recipe.get("attraction_kind","")=="type":return "Attracts %s type Quiblets"%str(recipe.attraction_target)
+	if recipe.get("attraction_kind","")=="color":return "Attracts %s-colored Quiblets"%str(recipe.attraction_target).to_lower()
+	return "Attracts "+str(recipe.get("attracts","Quiblets"))
+
+func leftover_recipes()->Array:
+	return GameData.RECIPES+GameData.LEGACY_RECIPES
 
 func pot_total()->int:
 	return pot_slots.count("")*-1+pot_slots.size()
@@ -2535,7 +2534,7 @@ func build_quiblet_menu_replica(parent:Control,q:Dictionary)->Dictionary:
 	refs.level_label=label(compact_info,"Lv. %d"%int(q.level),Vector2(122,42),13,GameData.COLORS.muted,true);refs.level_label.name="ResultLevel"
 	var xp:=ProgressBar.new();xp.name="ResultXP";xp.position=Vector2(122,64);xp.size=Vector2(115,18);xp.scale=Vector2(1,.5);xp.max_value=GameData.exp_to_level(int(q.level));xp.value=int(q.exp);xp.show_percentage=false;compact_info.add_child(xp);style_quiblet_xp_bar(xp);refs.xp_bar=xp
 	var separator:=HSeparator.new();separator.position=Vector2(122,82);separator.size=Vector2(300,2);compact_info.add_child(separator)
-	label(compact_info,"%s • %s range"%[GameData.species(int(q.species)).element,"long" if is_long_range(q) else "short"],Vector2(122,92),12,GameData.COLORS.muted,false,HORIZONTAL_ALIGNMENT_LEFT,300)
+	label(compact_info,"%s • %s range"%[GameData.species_type_text(int(q.species)),"long" if is_long_range(q) else "short"],Vector2(122,92),12,GameData.COLORS.muted,false,HORIZONTAL_ALIGNMENT_LEFT,300)
 	add_quiblet_stat_badge(compact_info,Vector2(RESULT_MENU_WIDTH-170,16),Vector2(150,34),"res://textures/UI/HealthIcon.png",GameData.max_hp(q),Color("#4b9fda"),"HealthStatBadge")
 	add_quiblet_stat_badge(compact_info,Vector2(RESULT_MENU_WIDTH-170,62),Vector2(150,34),"res://textures/UI/AttackIcon.png",GameData.attack(q),Color("#df5b55"),"AttackStatBadge")
 	refs.health_label=compact_info.find_child("HealthStatBadgeValue",true,false);refs.attack_label=compact_info.find_child("AttackStatBadgeValue",true,false)
@@ -3298,6 +3297,8 @@ func build_expedition_hud()->void:
 	var old_hud:Control=content.find_child("ExpeditionHud",false,false)
 	if old_hud!=null:content.remove_child(old_hud);old_hud.queue_free()
 	var hud:=Control.new();hud.name="ExpeditionHud";hud.position=Vector2.ZERO;hud.size=Vector2(1280,720);hud.mouse_filter=Control.MOUSE_FILTER_IGNORE;content.add_child(hud)
+	if expedition.is_grove():
+		var indicators:=preload("res://scripts/berry_patch_indicators.gd").new();indicators.name="BerryPatchIndicators";indicators.expedition=expedition;indicators.z_index=5;hud.add_child(indicators)
 	add_texture_button(hud,"res://textures/UI/PauseButton.png",Vector2(26,24),Vector2(40,40),open_expedition_pause,"PauseButton")
 	for i in expedition.team.size():
 		var actor:QuibletActor3D=expedition.team[i]

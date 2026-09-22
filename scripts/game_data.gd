@@ -5,6 +5,27 @@ const MAIN_AREA_COUNT:=16
 const OPTIONAL_AREA_HOSTS:={16:1,17:5,18:9,19:13}
 const EXPEDITION_AREAS:=["Rolling Steppe", "Windy Fields", "Winding Creeks", "Crooked Cliffs", "Soggy Lowlands", "Lush Basin", "Glimmering Grotto", "Shivering Shelf", "Parched Plains", "Highland Peaks", "Muddy Moor", "Foaming Fjord", "Gloomy Glade", "Looming Lowlands", "Distant Downs", "Mystery Meadow", "Rustling Thicket", "Pebbled Shoals", "Rocky Ravine", "Golden Grove"]
 
+# In EXPEDITION_AREAS order. Dual-type Quiblets belong to either matching area.
+const AREA_ENCOUNTER_TYPES:=[
+	"Normal", "Air", "Water", "Earth", "Poison", "Green", "Psychic", "Ice",
+	"Fire", "Air", "Poison", "Water", "Psychic", "Earth", "Electric", "Psychic",
+	"Green", "Water", "Earth", "Green"
+]
+const AREA_SPECIALTY_CHANCE:=.8
+
+static func area_encounter_type(area_index:int)->String:
+	return AREA_ENCOUNTER_TYPES[clampi(area_index,0,AREA_ENCOUNTER_TYPES.size()-1)]
+
+static func roll_area_species(area_index:int,rng:RandomNumberGenerator,boss:=false)->int:
+	var specialty:=area_encounter_type(area_index)
+	var matching:Array[int]=[];var visitors:Array[int]=[]
+	for index in SPECIES.size():
+		if species_types(index).has(specialty):matching.append(index)
+		else:visitors.append(index)
+	var pool:Array[int]=matching if boss or rng.randf()<AREA_SPECIALTY_CHANCE else visitors
+	if pool.is_empty():pool=visitors if matching.is_empty() else matching
+	return pool[rng.randi_range(0,pool.size()-1)]
+
 static func expedition_area_level(area_index:int)->int:
 	var index:=clampi(int(OPTIONAL_AREA_HOSTS.get(area_index,area_index)),0,MAIN_AREA_COUNT-1)
 	# Early areas begin close to a fresh Quiblet's level, then rise smoothly.
@@ -1122,17 +1143,37 @@ const SPECIES := [
 	{"name":"Cysicle", "element":"Ice", "color":Color("#8fd0e6"), "accent":Color("#e2f7ff"), "shape":"spikes", "base_hp":168, "base_atk":40, "range":180.0, "family":"cysicle"},
 	{"name":"Gagglet", "element":"Air", "color":Color("#dcd2c4"), "accent":Color("#f0a24d"), "shape":"beak", "base_hp":165, "base_atk":30, "range":140.0, "family":"gaggle", "model":"res://models/Gagglet.glb", "evolves_to":19, "evolve_level":22},
 	{"name":"Gaggle", "element":"Air", "color":Color("#cfc4b4"), "accent":Color("#e8944a"), "shape":"twinbeak", "base_hp":210, "base_atk":34, "range":130.0, "family":"gaggle", "model":"res://models/Gaggle.glb"},
-	{"name":"Gulper","element":"Poison","color":Color("#849d53"),"accent":Color("#c88aca"),"shape":"sphere","base_hp":215,"base_atk":33,"range":75.0,"family":"gulper","speed_multiplier":0.82},
+	{"name":"Gulper","model":"res://models/Gulper.glb","element":"Poison","color":Color("#849d53"),"accent":Color("#c88aca"),"shape":"sphere","base_hp":215,"base_atk":33,"range":75.0,"family":"gulper","speed_multiplier":0.82},
 	{"name":"Tumblet","element":"Earth","color":Color("#8f887b"),"accent":Color("#c7b99a"),"shape":"sphere","base_hp":260,"base_atk":25,"range":75.0,"family":"tumblet","speed_multiplier":0.78,"knockback_resistance":0.5},
 	{"name":"Miasmum","element":"Poison","color":Color("#9275ac"),"accent":Color("#c6acdf"),"shape":"gloop","base_hp":180,"base_atk":34,"range":175.0,"family":"miasmum","model":"res://models/Miasmum.glb", "model_yaw":PI*1.5,"model_hover":0.65,"speed_multiplier":0.9},
-	{"name":"Sludgle","element":"Poison","color":Color("#879951"),"accent":Color("#beca80"),"shape":"gloop","base_hp":205,"base_atk":32,"range":90.0,"family":"sludgle","model":"res://models/Sludgle.glb", "model_yaw":0.0},
+	{"name":"Sludgle","element":"Poison","color":Color("#879951"),"accent":Color("#beca80"),"shape":"gloop","base_hp":205,"base_atk":32,"range":90.0,"family":"sludgle","model":"res://models/Sludgle.glb", "model_yaw":PI},
 	{"name": "Arcle", "element": "Electric", "shape": "tail", "base_hp": 210, "base_atk": 34, "range": 90.0, "family": "arcle", "model": "res://models/Arcle.glb", "model_yaw":PI*1.5, "visual_scale":0.3,"color":Color("#e5bf48"),"accent":Color("#fff0a0")},
 	{"name": "Zippet", "element": "Electric", "shape": "sphere", "base_hp": 140, "base_atk": 37, "range": 95.0, "family": "zippet", "speed_multiplier": 1.35,"color":Color("#e5bf48"),"accent":Color("#fff0a0")},
 	{"name": "Voltick", "element": "Electric", "shape": "horn", "base_hp": 245, "base_atk": 36, "range": 85.0, "family": "voltick", "model": "res://models/Voltick.glb", "model_yaw":PI*1.5, "visual_scale":0.8, "speed_multiplier": 0.85,"color":Color("#e5bf48"),"accent":Color("#fff0a0")},
-	{"name": "Electrish", "element": "Electric", "shape": "puff", "base_hp": 170, "base_atk": 35, "range": 150.0, "family": "electrish", "model": "res://models/Electrish.glb", "model_yaw":PI*1.5, "visual_scale":1.15, "model_hover": 0.6,"color":Color("#e5bf48"),"accent":Color("#fff0a0")}
+	{"name": "Electrish", "element": "Electric", "shape": "puff", "base_hp": 170, "base_atk": 35, "range": 150.0, "family": "electrish", "model": "res://models/Electrish.glb", "model_yaw":PI*1.5, "visual_scale":1.15, "model_hover": 0.6,"color":Color("#e5bf48"),"accent":Color("#fff0a0")},
+	{"name": "Lombat", "element": "Air", "elements": ["Air", "Poison"], "shape": "ears", "base_hp": 170, "base_atk": 32, "range": 100.0, "family": "lombat", "evolves_to": 29, "evolve_level": 22, "model": "res://models/Lombat.glb", "model_yaw":PI*0.5,"color":Color("#ad8bc0"),"accent":Color("#dbc6e8")},
+	{"name": "Lombera", "element": "Air", "elements": ["Air", "Poison"], "shape": "ears", "base_hp": 225, "base_atk": 43, "range": 115.0, "family": "lombat", "visual_scale": 1.2, "model": "res://models/Lombera.glb", "model_yaw":PI*0.5,"color":Color("#ad8bc0"),"accent":Color("#dbc6e8")},
+	{"name": "Snobble", "element": "Ice", "shape": "sphere", "base_hp": 250, "base_atk": 36, "range": 85.0, "family": "snobble", "speed_multiplier": 0.85, "model": "res://models/Snobble.glb", "model_yaw":PI*0.5,"color":Color("#bde7ee"),"accent":Color("#f4ffff")}
 ]
 
 const MOVES := {
+	"Ear Slap":{"power": 62.0, "cooldown": 4.0, "range": 90.0, "kind": "burst", "desc": "Swings an enormous ear into an enemy, knocking it backward.","color":Color("#b5cedf")},
+	"Dive":{"power": 82.0, "cooldown": 6.0, "range": 170.0, "kind": "burst", "desc": "Leaps upward and dives into an enemy.","color":Color("#b5cedf")},
+	"Fan":{"power": 26.0, "cooldown": 7.0, "range": 170.0, "kind": "burst", "desc": "Sustained ear flaps send a stream of wind forward, repeatedly pushing enemies away.","color":Color("#b5cedf")},
+	"Poison Bite":{"power": 65.0, "cooldown": 5.0, "range": 90.0, "kind": "burst", "desc": "Lunges forward for a venomous bite with a strong Poison chance.","color":Color("#b5cedf")},
+	"Keen Ears":{"power": 0.0, "cooldown": 8.0, "range": 0.0, "kind": "recover", "desc": "Focuses its hearing to evade attacks. Sharing spreads the evasion buff to teammates.","color":Color("#b5cedf")},
+	"Ear Guard":{"power": 0.0, "cooldown": 9.0, "range": 0.0, "kind": "recover", "desc": "Wraps itself in its ears, reducing incoming damage for a short time.","color":Color("#b5cedf")},
+	"Thunderflap":{"power": 135.0, "cooldown": 15.0, "range": 160.0, "kind": "burst", "desc": "A tremendous ear clap releases a pressure wave with very strong knockback.","color":Color("#b5cedf")},
+	"Venom Fang":{"power": 100.0, "cooldown": 8.0, "range": 190.0, "kind": "burst", "desc": "Swoops through an enemy with a powerful bite and a very high Poison chance.","color":Color("#b5cedf")},
+	"Toxic Gust":{"power": 58.0, "cooldown": 8.0, "range": 190.0, "kind": "projectile", "desc": "Blasts a broad moving cloud of poisonous fumes forward.","color":Color("#b5cedf")},
+	"Sonic Boom":{"power": 115.0, "cooldown": 11.0, "range": 260.0, "kind": "projectile", "desc": "Fires a long-range pressure wave that deals heavy damage and strong knockback.","color":Color("#b5cedf")},
+	"Ice Slide":{"power": 78.0, "cooldown": 6.0, "range": 160.0, "kind": "burst", "desc": "Slides belly-first through enemies, damaging and knocking them aside.","color":Color("#a8e8f3")},
+	"Tusk Jab":{"power": 90.0, "cooldown": 4.8, "range": 90.0, "kind": "burst", "desc": "Jabs forward with both tusks for heavy physical damage.","color":Color("#a8e8f3")},
+	"Snowplow":{"power": 45.0, "cooldown": 8.0, "range": 175.0, "kind": "burst", "desc": "Slides forward while continuously pushing enemies ahead of itself.","color":Color("#a8e8f3")},
+	"Frost Breath":{"power": 35.0, "cooldown": 7.0, "range": 150.0, "kind": "burst", "desc": "Breathes a sustained cone of freezing air, repeatedly damaging and slowing enemies.","color":Color("#a8e8f3")},
+	"Ice Armor":{"power": 0.0, "cooldown": 9.0, "range": 0.0, "kind": "recover", "desc": "Coats itself in ice to reduce incoming damage. Sharing spreads the defense buff.","color":Color("#a8e8f3")},
+	"Avalanche":{"power": 140.0, "cooldown": 12.0, "range": 190.0, "kind": "burst", "desc": "Snow and ice crash down on a targeted area, dealing heavy damage.","color":Color("#a8e8f3")},
+	"Tuskberg":{"power": 150.0, "cooldown": 14.0, "range": 175.0, "kind": "burst", "desc": "Tears a huge chunk of ice from beneath the target, damaging and launching nearby enemies.","color":Color("#a8e8f3")},
 	"Shock Bite":{"power": 48.0, "cooldown": 4.0, "range": 100.0, "kind": "burst", "desc": "Lunges and bites, with a small chance to Paralyze.","color":Color("#f4d456")},
 	"Latch":{"power": 20.0, "cooldown": 6.0, "range": 110.0, "kind": "burst", "desc": "Leaps onto an enemy, repeatedly biting and slowing it while attached.","color":Color("#f4d456")},
 	"Live Wire":{"power": 28.0, "cooldown": 5.5, "range": 170.0, "kind": "burst", "desc": "Maintains an electrical connection that repeatedly shocks an enemy and breaks beyond its reach.","color":Color("#f4d456")},
@@ -1278,7 +1319,7 @@ const MOVES := {
 	"Boulder Roll":{"power":58.0,"cooldown":4.5,"range":145.0,"color":Color("#c8965a"),"kind":"burst","desc":"Rearranges into a rounder form and rolls through enemies."},
 	"Earth Pillar":{"power":60.0,"cooldown":5.5,"range":175.0,"color":Color("#c8965a"),"kind":"burst","desc":"Raises a pillar of stone beneath a target, damaging and launching them."},
 	"Stone Spikes":{"power":52.0,"cooldown":4.0,"range":165.0,"color":Color("#c8965a"),"kind":"burst","desc":"Causes sharp rocks to erupt from the ground in a target area."},
-	"Brace":{"power":0.0,"cooldown":7.5,"range":0.0,"color":Color("#c8965a"),"kind":"recover","desc":"Locks its rocks together, greatly reducing knockback and incoming damage for a short time."},
+	"Brace":{"power":0.0,"cooldown":7.5,"range":0.0,"color":Color("#c8965a"),"kind":"recover","desc":"Braces for protection. Snobble gains damage reduction and anchors itself; Sharing passes its defense boost, not its anchoring."},
 	"Crush":{"power":66.0,"cooldown":5.0,"range":150.0,"color":Color("#c8965a"),"kind":"burst","desc":"Splits apart around an enemy, then slams its rocks back together on the target."},
 	"Barricade":{"power":20.0,"cooldown":6.0,"range":160.0,"color":Color("#c8965a"),"kind":"burst","desc":"Spreads several rock pieces into a temporary obstacle line."},
 	"Rock Scatter":{"power":72.0,"cooldown":7.0,"range":150.0,"color":Color("#a9743d"),"kind":"burst","desc":"Explodes its body outward into multiple rock projectiles, then snaps itself back together."},
@@ -1406,7 +1447,10 @@ const LEARNSETS := [
 	["Shock Bite", "Latch", "Live Wire", "Static Pulse", "Tail Zap", "Discharge", "Slither", "Shock Toss", "Amp Drain"],
 	["Zap", "Shock Touch", "Zip", "Jolt Kick", "Static Pulse", "Flashstep", "Friction Dash", "Thunderclap", "Zigzag"],
 	["Horn Zap", "Spark Ram", "Clamp", "Shock Toss", "Ground Scrape", "Static Pulse", "Discharge", "Grounded", "Horn Lift", "Shock Clamp"],
-	["Tentacle Zap", "Static Pulse", "Nerve Sting", "Shock Net", "Live Wire", "Jelly Drift", "Discharge", "Jolt Grab"]
+	["Tentacle Zap", "Static Pulse", "Nerve Sting", "Shock Net", "Live Wire", "Jelly Drift", "Discharge", "Jolt Grab"],
+	["Ear Slap", "Gust", "Air Burst", "Dive", "Fan", "Poison Bite", "Noxious Cloud", "Keen Ears", "Ear Guard", "Thunderflap"],
+	["Ear Slap", "Gust", "Air Burst", "Dive", "Fan", "Poison Bite", "Noxious Cloud", "Keen Ears", "Ear Guard", "Thunderflap", "Venom Fang", "Toxic Gust", "Sonic Boom"],
+	["Ice Slide", "Tusk Jab", "Snowplow", "Frost Breath", "Cold Snap", "Ice Armor", "Brace", "Avalanche", "Pound", "Tuskberg"]
 ]
 
 const MOVE_STONES := [
@@ -1521,12 +1565,20 @@ static func quiblet_relationship(a:Dictionary,b:Dictionary)->String:
 	if int(a.species)==int(b.species):return "species"
 	var species_a:=species(int(a.species));var species_b:=species(int(b.species))
 	if str(species_a.get("family",""))==str(species_b.get("family","")):return "family"
-	if str(species_a.element)==str(species_b.element):return "type"
+	if species_types(int(a.species)).any(func(type):return species_types(int(b.species)).has(type)):return "type"
 	return "none"
 
 static func ingredient_compatibility(species_index:int,ingredient_name:String)->String:
+	var order:=["opposing","poor","neutral","good","excellent"]
+	var best:="opposing"
+	for type in species_types(species_index):
+		var candidate:=ingredient_type_compatibility(str(type),ingredient_name)
+		if order.find(candidate)>order.find(best):best=candidate
+	return best
+
+static func ingredient_type_compatibility(type:String,ingredient_name:String)->String:
 	if not INGREDIENTS.has(ingredient_name):return "neutral"
-	var affinity:Dictionary=INGREDIENT_AFFINITY.get(str(species(species_index).element),{})
+	var affinity:Dictionary=INGREDIENT_AFFINITY.get(type,{})
 	if affinity.is_empty():return "neutral"
 	if affinity.opposing.has(ingredient_name):return "opposing"
 	if affinity.excellent.has(ingredient_name):return "excellent"
@@ -1662,26 +1714,45 @@ const SPICE_RECIPES := [
 
 const SPICE_QUALITIES := ["basic","good","great","special"]
 
+const RECIPE_COLOR_GROUPS := {"Red": [6, 7], "Blue": [0, 1, 16, 17, 30], "Yellow": [12, 24, 25, 26], "Green": [2, 3, 4, 5, 15, 20, 23], "Purple": [8, 9, 14, 22, 28, 29]}
+
+# Listed order is the hidden final tiebreaker; specificity and fit take precedence.
 const RECIPES := [
-	{"name":"Plain Stew","need":{},"priority":0,"desc":"A simple mixed stew with a broad general pool.","pool":[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27],"attracts":"any Quiblet","color":Color("#b98c64")},
-	{"name":"Rock Bottom Broth","need":{"earthy":4,"hard":3},"priority":1017,"desc":"A dense mineral broth for Stone and rocky Quiblets.","pool":[3,4,10,11,21],"attracts":"sturdy, rocky Quiblets","color":Color("#777c86")},
-	{"name":"Hot Stuff","need":{"spicy":4,"dry":2},"priority":1016,"desc":"A fiery stew for heat-loving Quiblets.","pool":[6,7],"attracts":"Fire-type Quiblets","color":Color("#df6246")},
-	{"name":"Deep Dish","need":{"juicy":3,"savory":2},"priority":1015,"desc":"A briny, juicy dish for Water and aquatic Quiblets.","pool":[0,1],"attracts":"Water-type Quiblets","color":Color("#55abc7")},
-	{"name":"Shock Stock","need":{"sour":3,"seed":3,"dry":2},"priority":1014,"desc":"A crackling stock that draws Electric Quiblets.","pool":[24,25,26,27],"attracts":"Electric-type Quiblets","color":Color("#e1c53c")},
-	{"name":"Food for Thought","need":{"bitter":4,"soft":3},"priority":1013,"desc":"A curious dish favored by Psychic Quiblets.","pool":[8,9],"attracts":"thoughtful Psychic-type Quiblets","color":Color("#9a78c7")},
-	{"name":"Garden Variety","need":{"plant":2,"leaf":2},"priority":1012,"desc":"A green stew for Plant and leafy Quiblets.","pool":[2,3,4,5],"attracts":"Green-type Quiblets","color":Color("#69a45e")},
-	{"name":"Midnight Snack","need":{"bitter":4,"fungus":3},"priority":2011,"desc":"A dark, earthy meal for nocturnal and shadowy Quiblets.","pool":[4,7,15,20,22,23],"attracts":"dark, nocturnal Quiblets","color":Color("#625a83")},
-	{"name":"Heavy Helping","need":{"hard":4,"savory":3},"priority":2010,"desc":"A weighty meal for large, bulky, tanky Quiblets.","pool":[1,3,7,11,12,20,21,24,26],"attracts":"big, bulky Quiblets","color":Color("#8c735e")},
-	{"name":"Light Bite","need":{"soft":3,"juicy":2},"priority":2009,"desc":"A light dish for small, nimble Quiblets.","pool":[0,2,6,13,18,25],"attracts":"small, nimble Quiblets","color":Color("#76c7b0")},
-	{"name":"Punch Drunk","need":{"spicy":3,"hard":2},"priority":2508,"desc":"A forceful stew for melee and aggressive Quiblets.","pool":[4,6,7,10,20,21,24,25,26],"attracts":"aggressive melee Quiblets","color":Color("#cf7041")},
-	{"name":"Long Shot","need":{"dry":4,"seed":3},"priority":2507,"desc":"A crisp seed stew for ranged Quiblets.","pool":[0,1,2,3,6,7,14,15,16,17,27],"attracts":"long-range Quiblets","color":Color("#6e9bc5")},
+	{"name": "Plain Stew", "need": {}, "priority": 0, "desc": "A simple stew made when no other recipe matches.", "pool": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30], "attracts": "Any Quiblet", "attraction_kind": "any", "attraction_target": "Any","color":Color("#b98c64")},
+	{"name": "Deep Dish", "need": {"juicy": 3, "soft": 2, "sweet": 2}, "priority": 99, "desc": "A stew that attracts Water type Quiblets.", "pool": [0, 1], "attracts": "Water type Quiblets", "attraction_kind": "type", "attraction_target": "Water","color":Color("#55abc7")},
+	{"name": "Garden Variety", "need": {"earthy": 2, "soft": 2, "dry": 1, "plant": 1}, "priority": 98, "desc": "A stew that attracts Green type Quiblets.", "pool": [2, 3, 4, 5], "attracts": "Green type Quiblets", "attraction_kind": "type", "attraction_target": "Green","color":Color("#69a45e")},
+	{"name": "Hot Stuff", "need": {"spicy": 3, "dry": 2, "savory": 1}, "priority": 97, "desc": "A stew that attracts Fire type Quiblets.", "pool": [6, 7], "attracts": "Fire type Quiblets", "attraction_kind": "type", "attraction_target": "Fire","color":Color("#df6246")},
+	{"name": "Shock Stock", "need": {"sour": 3, "dry": 2, "spicy": 2}, "priority": 96, "desc": "A stew that attracts Electric type Quiblets.", "pool": [24, 25, 26, 27], "attracts": "Electric type Quiblets", "attraction_kind": "type", "attraction_target": "Electric","color":Color("#e1c53c")},
+	{"name": "Food for Thought", "need": {"sweet": 3, "bitter": 2, "soft": 2}, "priority": 95, "desc": "A stew that attracts Psychic type Quiblets.", "pool": [8, 9], "attracts": "Psychic type Quiblets", "attraction_kind": "type", "attraction_target": "Psychic","color":Color("#9a78c7")},
+	{"name": "Rock Bottom Broth", "need": {"earthy": 3, "hard": 2, "soft": 2, "savory": 2}, "priority": 94, "desc": "A stew that attracts Earth type Quiblets.", "pool": [10, 11, 21], "attracts": "Earth type Quiblets", "attraction_kind": "type", "attraction_target": "Earth","color":Color("#777c86")},
+	{"name": "Midnight Snack", "need": {"bitter": 3, "spicy": 2, "dry": 2}, "priority": 93, "desc": "A stew that attracts Poison type Quiblets.", "pool": [15, 20, 22, 23, 28, 29], "attracts": "Poison type Quiblets", "attraction_kind": "type", "attraction_target": "Poison","color":Color("#7f598e")},
+	{"name": "Light Bite", "need": {"dry": 2, "soft": 3, "sweet": 2}, "priority": 92, "desc": "A stew that attracts Air type Quiblets.", "pool": [16, 18, 19, 28, 29], "attracts": "Air type Quiblets", "attraction_kind": "type", "attraction_target": "Air","color":Color("#acdce2")},
+	{"name": "Peak Cuisine", "need": {"hard": 2, "juicy": 3, "sour": 2}, "priority": 91, "desc": "A stew that attracts Ice type Quiblets.", "pool": [17, 30], "attracts": "Ice type Quiblets", "attraction_kind": "type", "attraction_target": "Ice","color":Color("#aedfeb")},
+	{"name": "Mystery Meat", "need": {"savory": 3, "sweet": 2, "hard": 1}, "priority": 90, "desc": "A stew that attracts Normal type Quiblets.", "pool": [12, 13, 14], "attracts": "Normal type Quiblets", "attraction_kind": "type", "attraction_target": "Normal","color":Color("#b9a889")},
+	{"name": "Red Hot Pot", "need": {"spicy": 3, "soft": 2, "fruit": 2}, "priority": 89, "desc": "A stew that attracts Red-colored Quiblets.", "pool": [6, 7], "attracts": "Red-colored Quiblets", "attraction_kind": "color", "attraction_target": "Red","color":Color("#e75049")},
+	{"name": "Blue Creme Stew", "need": {"juicy": 3, "salty": 2, "sweet": 1}, "priority": 88, "desc": "A stew that attracts Blue-colored Quiblets.", "pool": [0, 1, 16, 17, 30], "attracts": "Blue-colored Quiblets", "attraction_kind": "color", "attraction_target": "Blue","color":Color("#74bfe5")},
+	{"name": "Golden Delight", "need": {"sweet": 3, "dry": 2, "seed": 2}, "priority": 87, "desc": "A stew that attracts Yellow-colored Quiblets.", "pool": [12, 24, 25, 26], "attracts": "Yellow-colored Quiblets", "attraction_kind": "color", "attraction_target": "Yellow","color":Color("#edd063")},
+	{"name": "Herbal Medley", "need": {"earthy": 2, "dry": 2, "soft": 2, "plant": 1}, "priority": 86, "desc": "A stew that attracts Green-colored Quiblets.", "pool": [2, 3, 4, 5, 15, 20, 23], "attracts": "Green-colored Quiblets", "attraction_kind": "color", "attraction_target": "Green","color":Color("#75ad67")},
+	{"name": "Lavender Delight", "need": {"sweet": 2, "bitter": 2, "soft": 2, "sour": 1}, "priority": 85, "desc": "A stew that attracts Purple-colored Quiblets.", "pool": [8, 9, 14, 22, 28, 29], "attracts": "Purple-colored Quiblets", "attraction_kind": "color", "attraction_target": "Purple","color":Color("#b296d4")}
+]
+
+# Retired dishes are only kept for existing jars and already-cooking reveals.
+const LEGACY_RECIPES := [
+	{"name":"Heavy Helping","need":{"hard":4,"savory":3},"priority":2010,"desc":"A weighty meal for large, bulky, tanky Quiblets.","pool":[1,3,7,11,12,20,21,24,26,29,30],"attracts":"big, bulky Quiblets","color":Color("#8c735e")},
+	{"name":"Punch Drunk","need":{"spicy":3,"hard":2},"priority":2508,"desc":"A forceful stew for melee and aggressive Quiblets.","pool":[4,6,7,10,20,21,24,25,26,28,29,30],"attracts":"aggressive melee Quiblets","color":Color("#cf7041")},
+	{"name":"Long Shot","need":{"dry":4,"seed":3},"priority":2507,"desc":"A crisp seed stew for ranged Quiblets.","pool":[0,1,2,3,6,7,14,15,16,17,27,29],"attracts":"long-range Quiblets","color":Color("#6e9bc5")},
 	{"name":"Comfort Food","need":{"sweet":4,"soft":4},"priority":2506,"desc":"A soothing meal for healing and support-oriented Quiblets.","pool":[5,13,18,19],"attracts":"healing, supportive Quiblets","color":Color("#d49b9f")},
 	{"name":"Woodland Medley","need":{"fungus":3,"leaf":2,"earthy":2},"priority":1505,"desc":"A forest medley enjoyed by woodland Quiblets across types.","pool":[2,3,4,5,15,20,22,23],"attracts":"woodland Quiblets","color":Color("#638b58")},
-	{"name":"Peak Cuisine","need":{"root":4,"hard":4},"priority":1504,"desc":"A sturdy dish for mountain, cave, and highland Quiblets.","pool":[1,3,7,10,11,17,21],"attracts":"mountain and cave Quiblets","color":Color("#7c818c")},
-	{"name":"Coastal Catch","need":{"salty":4,"juicy":3},"priority":1503,"desc":"A shore-inspired dish broader than a purely aquatic stew.","pool":[0,1,2,3,16],"attracts":"shoreline Quiblets","color":Color("#4fa7a6")},
-	{"name":"Fancy Feast","need":{"sweet":4,"sour":4,"juicy":3},"priority":3002,"desc":"An elaborate dish that attracts unusual and rare Quiblets.","pool":[1,5,7,14,17,19,22,23,27],"attracts":"rare and unusual Quiblets","color":Color("#c17fc4")},
-	{"name":"Mystery Meat","need":{"spicy":3,"salty":2,"bitter":2,"savory":2},"priority":3001,"desc":"A strange mixed dish with an unpredictable, weird pool.","pool":[0,1,2,3,4,5,6,7,14,15,16,18,19,20,21,22,23,24,25,26,27],"attracts":"unpredictable Quiblets","color":Color("#826177")}
+	{"name":"Coastal Catch","need":{"salty":4,"juicy":3},"priority":1503,"desc":"A shore-inspired dish broader than a purely aquatic stew.","pool":[0,1,2,3,16,30],"attracts":"shoreline Quiblets","color":Color("#4fa7a6")},
+	{"name":"Fancy Feast","need":{"sweet":4,"sour":4,"juicy":3},"priority":3002,"desc":"An elaborate dish that attracts unusual and rare Quiblets.","pool":[1,5,7,14,17,19,22,23,27,29,30],"attracts":"rare and unusual Quiblets","color":Color("#c17fc4")},
 ]
+
+static func species_types(index:int)->Array:
+	var info:=species(index)
+	return info.get("elements",[str(info.element)]).duplicate()
+
+static func species_type_text(index:int)->String:
+	return " + ".join(species_types(index))
 
 static func species(index: int) -> Dictionary:
 	return SPECIES[posmod(index, SPECIES.size())]

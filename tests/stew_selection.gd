@@ -4,12 +4,13 @@ var winners:={}
 var better_fit_over_priority:=false
 var specificity_over_priority:=false
 func _initialize():
- assert(GameData.choose_recipe({"Bumbleberry":5}).name=="Comfort Food")
+ assert(GameData.RECIPES.size()==16)
  assert(GameData.choose_recipe({"Bumbleberry":4}).name=="Plain Stew")
- assert(GameData.choose_recipe({"Bumbleberry":1,"Emberpepper":1,"Dewmelon":1,"Knobroot":1,"Curlcap":1}).name=="Plain Stew")
- assert(GameData.choose_recipe({"Bumbleberry":1,"Knobroot":4}).name=="Peak Cuisine")
- assert(GameData.choose_recipe({"Bumbleberry":1,"Knobroot":1,"Stonebean":3}).name=="Heavy Helping")
- assert(GameData.choose_recipe({"Bumbleberry":1,"Stonebean":4}).name=="Heavy Helping")
+ for recipe in GameData.RECIPES:
+  assert(not recipe.pool.is_empty())
+  for id in GameData.SPECIES.size():
+   var eligible:bool=recipe.attraction_kind=="any" or (recipe.attraction_kind=="type" and GameData.species_types(id).has(recipe.attraction_target)) or (recipe.attraction_kind=="color" and GameData.RECIPE_COLOR_GROUPS[recipe.attraction_target].has(id))
+   assert(recipe.pool.has(id)==eligible,"Incorrect recruitment pool: "+recipe.name)
  visit({},0,5)
  assert(winners.size()==GameData.RECIPES.size())
  assert(better_fit_over_priority and specificity_over_priority)

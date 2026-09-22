@@ -26,5 +26,5 @@ func run():
    var count:=arena.get_child_count();actor.request_move(0,victim);assert(arena.get_child_count()==count,"Cooldown was bypassed")
  fixture("Water Shot");actor.current_hp=0;actor.request_move(0,victim);assert(actor.move_cooldowns[0]==0)
  arena.free();await process_frame
- print("All 212 moves activate immediately near/far/without targets and while locked; cooldowns and knockout still respected")
+ print("All %d moves activate immediately near/far/without targets and while locked; cooldowns and knockout still respected"%GameData.MOVES.size())
  quit()

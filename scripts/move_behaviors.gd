@@ -5,6 +5,24 @@ extends RefCounted
 # Distances are world units; times are seconds. Each named move has an explicit
 # delivery method and effect, rather than falling back to a generic attack.
 const PROFILES:={
+	"Ear Slap":{"mode": "cone", "angle": 0.8, "knockback": 3.0, "physical": true},
+	"Dive":{"mode": "dash", "speed": 17.0, "radius": 0.9, "physical": true, "leap": true, "leap_height": 3.0, "stop_at_target": true, "knockback": 1.2},
+	"Fan":{"mode": "beam", "angle": 0.65, "radius": 1.0, "duration": 2.4, "tick": 0.3, "knockback": 0.8},
+	"Poison Bite":{"mode": "dash", "speed": 14.0, "radius": 0.8, "stop_at_target": true, "physical": true, "poison": 4.0, "poison_chance": 0.65},
+	"Keen Ears":{"mode": "buff", "status": "evade", "duration": 5.0, "amount": 0.55},
+	"Ear Guard":{"mode": "buff", "status": "defense", "duration": 4.0, "amount": 0.6},
+	"Thunderflap":{"mode": "area", "anchor": "self", "radius": 4.5, "knockback": 5.0, "visual": "pressure_rings"},
+	"Venom Fang":{"mode": "dash", "speed": 20.0, "radius": 0.85, "physical": true, "leap": true, "leap_height": 1.2, "poison": 5.0, "poison_chance": 0.9},
+	"Toxic Gust":{"mode": "wave", "speed": 6.0, "radius": 1.0, "width": 3.6, "poison": 4.0, "poison_chance": 0.6, "visual": "toxic_wind"},
+	"Sonic Boom":{"mode": "wave", "speed": 16.0, "radius": 0.65, "width": 2.8, "knockback": 3.5, "visual": "sonic_wave"},
+	"Ice Slide":{"mode": "dash", "speed": 15.0, "radius": 1.0, "physical": true, "knockback": 1.8},
+	"Tusk Jab":{"mode": "cone", "angle": 0.5, "physical": true, "knockback": 0.6},
+	"Snowplow":{"mode": "dash", "speed": 9.0, "radius": 1.15, "physical": true, "knockback": 0.3, "carry": true},
+	"Frost Breath":{"mode": "beam", "angle": 0.65, "radius": 1.0, "duration": 2.4, "tick": 0.3, "status": "slow", "status_duration": 2.0, "amount": 0.5},
+	"Ice Armor":{"mode": "buff", "status": "defense", "duration": 6.0, "amount": 0.45},
+	"Avalanche":{"mode": "area", "anchor": "target", "radius": 3.2, "knockback": 1.5, "visual": "avalanche"},
+	"Tuskberg":{"mode": "area", "anchor": "target", "radius": 2.8, "launch": 3.0, "visual": "ice_pillar"},
+
 	"Shock Bite":{"mode": "dash", "speed": 11.0, "radius": 0.8, "physical": true, "stop_at_target": true, "status": "paralyzed", "status_duration": 1.0, "status_chance": 0.2},
 	"Latch":{"mode": "contact", "attach": true, "duration": 2.4, "tick": 0.4, "status": "slow", "status_duration": 0.65, "amount": 0.5, "physical": true},
 	"Live Wire":{"mode": "contact", "duration": 2.5, "tick": 0.3},

@@ -44,11 +44,17 @@ var contact_time:=0.0
 var maneuver_points:Array[Vector3]=[]
 var maneuver_index:=0
 var owns_motion_lock:=false
+var dramatic_scale:=1.0
 
 func setup(source, move_entry:Dictionary, new_target, power_scale:float, is_echo:bool)->void:
 	caster_ref=weakref(source);epoch=source.cast_epoch;source_enemy=source.enemy
 	target_ref=weakref(new_target) if is_instance_valid(new_target) else null
 	entry=move_entry.duplicate(true);move_name=entry.name;profile=BEHAVIORS.profile(move_name);strength=power_scale
+	var species_name:=str(GameData.species(int(source.data.species)).name)
+	if species_name in ["Lombat","Lombera"] and move_name=="Noxious Cloud":profile.anchor="self"
+	if species_name=="Snobble" and move_name=="Brace":profile.status="defense";profile.amount=.6;profile["self_anchor"]=true
+	if species_name=="Lombera" and move_name=="Thunderflap":dramatic_scale=1.6
+	if species_name=="Snobble" and move_name=="Pound":profile.visual="heavy_ice_impact"
 	var move:Dictionary=GameData.MOVES[move_name]
 	damage=(float(move.power)+source.attack*.58)*strength*source.damage_multiplier
 	# Helping Hand's empower buff temporarily raises the caster's attack output;
@@ -142,7 +148,7 @@ func _ready()->void:
 		if mode=="beam":actor.motion_lock+=1
 		visuals.append(orb(origin+direction*distance*.5+Vector3.UP*.7,Vector3(radius*2,.4,distance),.35))
 		visuals[0].rotation.y=atan2(direction.x,direction.z)
-		if mode=="cone":
+		if mode=="cone" or (mode=="beam" and profile.has("angle")):
 			# An actual wedge mesh makes the visible footprint match the hit test.
 			var wedge:=ImmediateMesh.new();wedge.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
 			for i in 20:
@@ -337,12 +343,15 @@ func update_dash(delta:float)->void:
 	var step:float=minf(float(profile.speed)*delta,maxf(0,distance-travel))
 	var end:Vector3=actor.safe_displacement(start,start+direction*step,.55)
 	actor.global_position=end;actor.model.look_at(end+direction,Vector3.UP,true);travel+=step
-	if profile.get("leap",false):actor.model.position.y=sin(clampf(travel/maxf(distance,.01),0,1)*PI)*1.5
+	if profile.get("leap",false):actor.model.position.y=sin(clampf(travel/maxf(distance,.01),0,1)*PI)*float(profile.get("leap_height",1.5))
 	visuals[0].position=end+Vector3.UP*.55
 	for other in opponents():
 		if not dash_hits.has(other.get_instance_id()) and segment_hit(start,end,other.global_position,radius+.5)>=0:
 			dash_hits[other.get_instance_id()]=true;hit(other,damage)
 			if profile.get("stop_on_hit",false):travel=distance;break
+	if profile.get("carry",false):
+		for other in opponents():
+			if dash_hits.has(other.get_instance_id()) and flat(other.global_position-end).length()<radius+1.2:other.displace(direction*step*1.35)
 	if profile.has("trail") and (patches.is_empty() or Vector3(patches[-1].pos).distance_to(end)>.6):
 		patches.append({"pos":end,"time":float(profile.trail)*duration_scale,"tick":0.0})
 		var trail_width:=float(profile.get("trail_radius",.65))*2.0
@@ -417,7 +426,7 @@ func linear_hits(amount:float)->void:
 	var actor=source();var end:Vector3=actor.safe_displacement(origin,origin+direction*distance,.05)
 	for other in opponents():
 		var relative:=flat(other.global_position-origin)
-		if profile.mode=="cone":
+		if profile.mode=="cone" or (profile.mode=="beam" and profile.has("angle")):
 			if relative.length()>distance*area_scale+.5 or direction.dot(relative.normalized())<cos(float(profile.angle)):continue
 			if actor.safe_displacement(origin,other.global_position,.05).distance_to(other.global_position)>.2:continue
 		elif segment_hit(origin,end,other.global_position,radius+.5)<0:continue
@@ -488,6 +497,7 @@ func support()->void:
 	if profile.get("ally",false):
 		var mate=best_ally(actor)
 		if mate!=null:primary=mate
+	if profile.get("self_anchor",false):actor.add_status("anchored",duration,1.0,actor)
 	var recipients:Array=[primary]
 	# Team buffs (Cheer, Shelter, Tailwind) reach the caster and every nearby ally.
 	if profile.get("team",false):
@@ -587,8 +597,26 @@ func orb(point:Vector3,dimensions:Vector3,alpha:float=.8)->MeshInstance3D:
 	visual.material_override=mat;add_child(visual);return visual
 
 func pulse(point:Vector3,size:float)->void:
-	var visual:=orb(point+Vector3.UP*.3,Vector3(size*1.5,.6,size*1.5),.55)
 	var look:String=profile.get("visual","")
+	if look in ["pressure_rings","heavy_ice_impact"]:
+		for i in (5 if dramatic_scale>1.0 else 3):
+			var ring:=orb(point+Vector3.UP*(.18+i*.3),Vector3.ONE,.75)
+			var mesh:=TorusMesh.new();mesh.inner_radius=.87;mesh.outer_radius=1.0;mesh.rings=32;mesh.ring_segments=6;ring.mesh=mesh
+			var spread:=size*dramatic_scale*(1.0+i*.08)
+			ring.scale=Vector3(.3,.2,.3)
+			var wave:=ring.create_tween();wave.set_parallel(true);wave.tween_property(ring,"scale",Vector3(spread,.12,spread),.4+i*.04);wave.tween_property(ring,"transparency",1.0,.5);wave.chain().tween_callback(ring.queue_free)
+	if look in ["avalanche","heavy_ice_impact","ice_pillar"]:
+		for i in (1 if look=="ice_pillar" else 9):
+			var offset:=Vector3(cos(i*2.4),0,sin(i*2.4))*size*.65 if look!="ice_pillar" else Vector3.ZERO
+			var chunk:=orb(point+offset,Vector3(.55,.65,.65),.95);chunk.mesh=BoxMesh.new();chunk.rotation=Vector3(.15,i*.6,.2)
+			var fall:=chunk.create_tween()
+			if look=="ice_pillar":
+				chunk.scale=Vector3(size*.8,.1,size*.8);fall.tween_property(chunk,"scale",Vector3(size*.8,4.,size*.8),.16);fall.parallel().tween_property(chunk,"position:y",point.y+1.8,.16)
+			else:
+				chunk.position.y+=3.0 if look=="avalanche" else .1
+				fall.tween_property(chunk,"position",point+offset+Vector3.UP*(.1 if look=="avalanche" else 1.3),.22)
+			fall.tween_property(chunk,"transparency",1.0,.25);fall.tween_callback(chunk.queue_free)
+	var visual:=orb(point+Vector3.UP*.3,Vector3(size*1.5,.6,size*1.5),.55)
 	if look in ["pillar","plant","roots","thorns","root_slam"]:visual.scale=Vector3(size,3,size)
 	var tween:=visual.create_tween();tween.set_parallel(true);tween.tween_property(visual,"scale",visual.scale*1.3,.22);tween.tween_property(visual,"transparency",1.0,.22);tween.chain().tween_callback(visual.queue_free)
 

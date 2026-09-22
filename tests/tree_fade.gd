@@ -1,0 +1,45 @@
+extends SceneTree
+func _initialize():call_deferred("run")
+func run():
+ var world:=Expedition3D.new();root.add_child(world);world.set_process(false)
+ var camera:=Camera3D.new();world.add_child(camera);world.camera=camera;camera.position=Vector3(0,0,10);camera.look_at(Vector3.ZERO)
+ var tree:=ExpeditionProp3D.new();world.add_child(tree);tree.kind="tree";tree.position.z=5;world.props.append(tree)
+ var mesh:=MeshInstance3D.new();mesh.mesh=BoxMesh.new();tree.add_child(mesh);tree.parts.append(mesh);mesh.material_override=StandardMaterial3D.new();tree.colors.append(Color.WHITE)
+ world.update_tree_fades(.11,PackedVector3Array([Vector3.ZERO]))
+ assert(is_equal_approx(mesh.material_override.albedo_color.a,.75),"Tree should fade gradually")
+ world.update_tree_fades(.3,PackedVector3Array([Vector3.ZERO]))
+ assert(is_equal_approx(mesh.material_override.albedo_color.a,.5),"Tree must stop at 50% opacity")
+ assert(mesh.material_override.transparency==BaseMaterial3D.TRANSPARENCY_ALPHA)
+ tree.hit(1);tree._process(.2)
+ assert(is_equal_approx(mesh.material_override.albedo_color.a,.5),"Damage flash must preserve opacity")
+ world.update_tree_fades(.3,PackedVector3Array())
+ assert(is_equal_approx(mesh.material_override.albedo_color.a,1.0),"Tree must return to opaque when clear")
+ world.update_tree_fades(.3,PackedVector3Array([tree.position]))
+ assert(is_equal_approx(mesh.material_override.albedo_color.a,1.0),"Tree must not fade for itself")
+ tree.kind="big_mushroom"
+ world.update_tree_fades(.3,PackedVector3Array([Vector3.ZERO]))
+ assert(is_equal_approx(mesh.material_override.albedo_color.a,.5),"Large mushrooms must also fade to 50% opacity")
+ world.update_tree_fades(.3,PackedVector3Array())
+ assert(is_equal_approx(mesh.material_override.albedo_color.a,1.0),"Large mushrooms must return to opaque when clear")
+ # A harvestable prop's own sampled edge can fall outside its box.
+ world.occlusion_point_owners[Vector3.ZERO]=tree
+ world.update_tree_fades(.3,PackedVector3Array([Vector3.ZERO]))
+ assert(is_equal_approx(tree.occlusion_opacity,1.0),"A prop's own target points must never trigger fading")
+ world.occlusion_point_owners.clear()
+ mesh.mesh=GameData.leaf_sphere()
+ assert(not world.prop_part_blocks_segment(mesh,Vector3(.49,.49,2),Vector3(.49,.49,-2)),"Empty canopy corners must not obstruct")
+ assert(world.prop_part_blocks_segment(mesh,Vector3(0,0,2),Vector3(0,0,-2)),"The solid canopy must obstruct")
+ world.update_tree_fades(.3,PackedVector3Array([Vector3(4,0,0)]))
+ assert(is_equal_approx(tree.occlusion_opacity,1.0),"An onscreen prop beside the target must remain opaque")
+ world.update_tree_fades(.3,PackedVector3Array([Vector3(0,0,8)]))
+ assert(is_equal_approx(tree.occlusion_opacity,1.0),"A prop behind the target must remain opaque")
+ world.props.clear();tree.hide()
+ var natural:=ExpeditionProp3D.new();world.add_child(natural)
+ var rng:=RandomNumberGenerator.new();rng.seed=12
+ natural.setup("tree",Vector2i.ZERO,{},1,rng);world.props.append(natural)
+ for step in 12:
+  var angle:=step*TAU/12.0
+  camera.position=Vector3(sin(angle)*10,8,cos(angle)*10);camera.look_at(Vector3(0,2,0))
+  world.update_tree_fades(.3,world.cloud_important_points())
+  assert(is_equal_approx(natural.occlusion_opacity,1.0),"A lone visible tree must stay opaque from every camera angle")
+ world.queue_free();await process_frame;print("Tree fading: non-harvestable bounds, gradual fade, 50% limit, restoration and self-exclusion passed");quit()

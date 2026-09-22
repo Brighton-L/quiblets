@@ -7,7 +7,17 @@ signal move_used(actor: QuibletActor3D, move_name: String, target: QuibletActor3
 
 var data: Dictionary
 var enemy := false
-var current_hp := 100.0
+var living_collision_layer:=1
+var living_collision_mask:=1
+var current_hp := 100.0:
+	set(value):
+		var was_alive:=current_hp>0.0
+		current_hp=value
+		if was_alive and current_hp<=0.0:
+			living_collision_layer=collision_layer;living_collision_mask=collision_mask
+			collision_layer=0;collision_mask=0
+		elif not was_alive and current_hp>0.0:
+			collision_layer=living_collision_layer;collision_mask=living_collision_mask
 var max_hp := 100.0
 var attack := 20.0
 var damage_multiplier:=1.0
@@ -350,7 +360,7 @@ func apply_force(hit_target:QuibletActor3D,entry:Dictionary,base_distance:float)
 	if away.length()>.01:hit_target.position=hit_target.clamp_point(hit_target.position+away.normalized()*distance)
 
 func bonus_value(stat:String)->float:
-	return float(bonus_totals.get(stat,0.0))+(float(statuses.grounded.amount) if stat=="knockback" and statuses.has("grounded") else 0.0)+(float(GameData.species(int(data.species)).get("knockback_resistance",0.0)) if stat=="knockback" else 0.0)
+	return float(bonus_totals.get(stat,0.0))+(float(statuses.grounded.amount) if stat=="knockback" and statuses.has("grounded") else 0.0)+(1.0 if stat=="knockback" and statuses.has("anchored") else 0.0)+(float(GameData.species(int(data.species)).get("knockback_resistance",0.0)) if stat=="knockback" else 0.0)
 
 func receive_shared_heal(amount:float)->void:
 	if current_hp>0:current_hp=minf(max_hp,current_hp+maxf(0,amount)*(1.0+bonus_value("healing")))
@@ -361,6 +371,7 @@ func take_damage(amount:float,attacker:QuibletActor3D=null,reflectable:bool=true
 	if reflectable and is_instance_valid(attacker) and attacker!=self and attacker.bonus_value("crit")>0.0 and randf()<minf(1.0,attacker.bonus_value("crit")):amount*=GameData.CRITICAL_HIT_MULTIPLIER
 	amount*=maxf(0.0,1.0-bonus_value("resist"))
 	# Corrode and similar effects lower the victim's defense, so it takes more.
+	if statuses.has("defense"):amount*=maxf(.05,1.0-float(statuses.defense.amount))
 	if statuses.has("defense_down"):amount*=1.0+float(statuses.defense_down.amount)
 	# Level gap: under-levelled fighters deal less to and take more from higher-level foes.
 	if is_instance_valid(attacker) and attacker!=self and attacker.enemy!=enemy:amount*=GameData.level_gap_factor(int(attacker.data.get("level",1)),int(data.get("level",1)))
@@ -463,7 +474,7 @@ func actions_locked()->bool:
 	return statuses.has("paralyzed") or statuses.has("cocoon") or statuses.has("stun") or statuses.has("bubble") or statuses.has("launch")
 
 func movement_locked()->bool:
-	return actions_locked() or statuses.has("root")
+	return actions_locked() or statuses.has("root") or statuses.has("anchored")
 
 func cleanse()->void:
 	for kind in ["burn","leech","root","stun","bubble","smoke","poison","slow","confuse","defense_down","weaken","nauseated","slippery","contaminated","paralyzed"]:statuses.erase(kind)
@@ -500,12 +511,12 @@ func update_status_visual()->void:
 		status_visual.material_override=mat
 	status_visual.visible=not statuses.is_empty() and current_hp>0
 	var tint:=Color(.7,.7,.7,.3)
-	for kind in ["burn","leech","root","stun","smoke","evade","thorns","cocoon","bubble","shield","empower","poison","slow","confuse","defense_down","taunt","haste","hasten","weaken","nauseated","slippery","contaminated","paralyzed"]:
+	for kind in ["burn","leech","root","stun","smoke","evade","thorns","cocoon","bubble","shield","defense","anchored","empower","poison","slow","confuse","defense_down","taunt","haste","hasten","weaken","nauseated","slippery","contaminated","paralyzed"]:
 		if not statuses.has(kind):continue
 		match kind:
 			"burn":tint=Color(1,.25,.03,.45)
 			"root","leech","thorns":tint=Color(.3,.6,.12,.4)
-			"bubble","shield":tint=Color(.2,.7,1,.35)
+			"defense","anchored","bubble","shield":tint=Color(.2,.7,1,.35)
 			"cocoon":tint=Color(.85,1,.65,.8)
 			"stun","confuse":tint=Color(.7,.3,.85,.4)
 			"empower":tint=Color(.63,.44,.85,.4)
