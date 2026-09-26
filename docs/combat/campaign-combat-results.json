@@ -1,0 +1,2768 @@
+[
+  {
+    "area": 0,
+    "boss_casts": 0,
+    "hp": [
+      0.95
+    ],
+    "min_alive": 1,
+    "node": 0,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 3.1,
+    "seed_offset": 0,
+    "team_power": 266
+  },
+  {
+    "area": 0,
+    "boss_casts": 0,
+    "hp": [
+      0.76
+    ],
+    "min_alive": 1,
+    "node": 1,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 5.4,
+    "seed_offset": 0,
+    "team_power": 266
+  },
+  {
+    "area": 0,
+    "boss_casts": 0,
+    "hp": [
+      0.53,
+      1.0
+    ],
+    "min_alive": 2,
+    "node": 2,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 4.0,
+    "seed_offset": 0,
+    "team_power": 589
+  },
+  {
+    "area": 0,
+    "boss_casts": 0,
+    "hp": [
+      0.81,
+      0.84
+    ],
+    "min_alive": 2,
+    "node": 3,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 2.9,
+    "seed_offset": 0,
+    "team_power": 589
+  },
+  {
+    "area": 0,
+    "boss_casts": 0,
+    "hp": [
+      0.91,
+      1.0
+    ],
+    "min_alive": 2,
+    "node": 4,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 4.4,
+    "seed_offset": 0,
+    "team_power": 589
+  },
+  {
+    "area": 0,
+    "boss_casts": 2,
+    "hp": [
+      0.41,
+      0.71
+    ],
+    "min_alive": 2,
+    "node": 5,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 5.3,
+    "seed_offset": 0,
+    "team_power": 727
+  },
+  {
+    "area": 0,
+    "boss_casts": 4,
+    "hp": [
+      0.22,
+      0.6
+    ],
+    "min_alive": 2,
+    "node": 6,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 8.3,
+    "seed_offset": 0,
+    "team_power": 727
+  },
+  {
+    "area": 0,
+    "boss_casts": 0,
+    "hp": [
+      0.95,
+      1.0
+    ],
+    "min_alive": 2,
+    "node": 7,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 1.5,
+    "seed_offset": 0,
+    "team_power": 727
+  },
+  {
+    "area": 1,
+    "boss_casts": 0,
+    "hp": [
+      0.51,
+      0.74,
+      0.84
+    ],
+    "min_alive": 3,
+    "node": 0,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 2.8,
+    "seed_offset": 0,
+    "team_power": 1161
+  },
+  {
+    "area": 1,
+    "boss_casts": 0,
+    "hp": [
+      0.49,
+      0.67,
+      1.0
+    ],
+    "min_alive": 3,
+    "node": 1,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 2.7,
+    "seed_offset": 0,
+    "team_power": 1161
+  },
+  {
+    "area": 1,
+    "boss_casts": 0,
+    "hp": [
+      0.89,
+      0.98,
+      1.0
+    ],
+    "min_alive": 3,
+    "node": 2,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 1.6,
+    "seed_offset": 0,
+    "team_power": 1260
+  },
+  {
+    "area": 1,
+    "boss_casts": 0,
+    "hp": [
+      0.74,
+      0.81,
+      0.79
+    ],
+    "min_alive": 3,
+    "node": 3,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 2.5,
+    "seed_offset": 0,
+    "team_power": 1260
+  },
+  {
+    "area": 1,
+    "boss_casts": 0,
+    "hp": [
+      0.85,
+      1.0,
+      1.0
+    ],
+    "min_alive": 3,
+    "node": 4,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 2.0,
+    "seed_offset": 0,
+    "team_power": 1359
+  },
+  {
+    "area": 1,
+    "boss_casts": 2,
+    "hp": [
+      0.47,
+      0.65,
+      1.0
+    ],
+    "min_alive": 3,
+    "node": 5,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 5.7,
+    "seed_offset": 0,
+    "team_power": 1359
+  },
+  {
+    "area": 1,
+    "boss_casts": 4,
+    "hp": [
+      0.15,
+      0.36,
+      0.49
+    ],
+    "min_alive": 3,
+    "node": 6,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 10.6,
+    "seed_offset": 0,
+    "team_power": 1722
+  },
+  {
+    "area": 1,
+    "boss_casts": 0,
+    "hp": [
+      0.92,
+      1.0,
+      1.0
+    ],
+    "min_alive": 3,
+    "node": 7,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 1.8,
+    "seed_offset": 0,
+    "team_power": 1722
+  },
+  {
+    "area": 2,
+    "boss_casts": 0,
+    "hp": [
+      0.71,
+      1.0,
+      1.0
+    ],
+    "min_alive": 3,
+    "node": 0,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 3.3,
+    "seed_offset": 0,
+    "team_power": 1860
+  },
+  {
+    "area": 2,
+    "boss_casts": 0,
+    "hp": [
+      0.83,
+      1.0,
+      1.0
+    ],
+    "min_alive": 3,
+    "node": 1,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 2.8,
+    "seed_offset": 0,
+    "team_power": 1970
+  },
+  {
+    "area": 2,
+    "boss_casts": 0,
+    "hp": [
+      0.84,
+      0.87,
+      0.75
+    ],
+    "min_alive": 3,
+    "node": 2,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 3.5,
+    "seed_offset": 0,
+    "team_power": 1970
+  },
+  {
+    "area": 2,
+    "boss_casts": 0,
+    "hp": [
+      0.77,
+      1.0,
+      1.0
+    ],
+    "min_alive": 3,
+    "node": 3,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 2.5,
+    "seed_offset": 0,
+    "team_power": 1970
+  },
+  {
+    "area": 2,
+    "boss_casts": 0,
+    "hp": [
+      0.78,
+      1.0,
+      1.0
+    ],
+    "min_alive": 3,
+    "node": 4,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 2.8,
+    "seed_offset": 0,
+    "team_power": 2066
+  },
+  {
+    "area": 2,
+    "boss_casts": 2,
+    "hp": [
+      0.34,
+      0.82,
+      0.85
+    ],
+    "min_alive": 3,
+    "node": 5,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 6.8,
+    "seed_offset": 0,
+    "team_power": 2162
+  },
+  {
+    "area": 2,
+    "boss_casts": 4,
+    "hp": [
+      0.0,
+      0.59,
+      0.62
+    ],
+    "min_alive": 2,
+    "node": 6,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 11.3,
+    "seed_offset": 0,
+    "team_power": 2556
+  },
+  {
+    "area": 2,
+    "boss_casts": 0,
+    "hp": [
+      0.66,
+      1.0,
+      1.0
+    ],
+    "min_alive": 3,
+    "node": 7,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 3.6,
+    "seed_offset": 0,
+    "team_power": 2162
+  },
+  {
+    "area": 3,
+    "boss_casts": 0,
+    "hp": [
+      0.91,
+      0.82,
+      0.8,
+      1.0
+    ],
+    "min_alive": 4,
+    "node": 0,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 5.1,
+    "seed_offset": 0,
+    "team_power": 3648
+  },
+  {
+    "area": 3,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      0.9,
+      1.0
+    ],
+    "min_alive": 4,
+    "node": 1,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 2.4,
+    "seed_offset": 0,
+    "team_power": 3816
+  },
+  {
+    "area": 3,
+    "boss_casts": 0,
+    "hp": [
+      0.9,
+      0.9,
+      0.79,
+      1.0
+    ],
+    "min_alive": 4,
+    "node": 2,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 4.4,
+    "seed_offset": 0,
+    "team_power": 3816
+  },
+  {
+    "area": 3,
+    "boss_casts": 0,
+    "hp": [
+      0.91,
+      0.91,
+      0.81,
+      1.0
+    ],
+    "min_alive": 4,
+    "node": 3,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 3.3,
+    "seed_offset": 0,
+    "team_power": 3816
+  },
+  {
+    "area": 3,
+    "boss_casts": 0,
+    "hp": [
+      0.9,
+      0.91,
+      0.9,
+      1.0
+    ],
+    "min_alive": 4,
+    "node": 4,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 2.4,
+    "seed_offset": 0,
+    "team_power": 3984
+  },
+  {
+    "area": 3,
+    "boss_casts": 4,
+    "hp": [
+      0.64,
+      0.4,
+      0.36,
+      0.55
+    ],
+    "min_alive": 4,
+    "node": 5,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 10.7,
+    "seed_offset": 0,
+    "team_power": 4176
+  },
+  {
+    "area": 3,
+    "boss_casts": 4,
+    "hp": [
+      0.72,
+      0.34,
+      0.29,
+      0.78
+    ],
+    "min_alive": 4,
+    "node": 6,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 16.4,
+    "seed_offset": 0,
+    "team_power": 5257
+  },
+  {
+    "area": 3,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      0.94,
+      0.95,
+      1.0
+    ],
+    "min_alive": 4,
+    "node": 7,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 2.4,
+    "seed_offset": 0,
+    "team_power": 5005
+  },
+  {
+    "area": 4,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "min_alive": 4,
+    "node": 0,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 2.3,
+    "seed_offset": 0,
+    "team_power": 5479
+  },
+  {
+    "area": 4,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      0.94,
+      0.95,
+      1.0
+    ],
+    "min_alive": 4,
+    "node": 1,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 3.3,
+    "seed_offset": 0,
+    "team_power": 5671
+  },
+  {
+    "area": 4,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      0.9,
+      0.92,
+      1.0
+    ],
+    "min_alive": 4,
+    "node": 2,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 2.5,
+    "seed_offset": 0,
+    "team_power": 5863
+  },
+  {
+    "area": 4,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "min_alive": 4,
+    "node": 3,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 4.0,
+    "seed_offset": 0,
+    "team_power": 5671
+  },
+  {
+    "area": 4,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      0.92,
+      1.0
+    ],
+    "min_alive": 4,
+    "node": 4,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 2.4,
+    "seed_offset": 0,
+    "team_power": 6745
+  },
+  {
+    "area": 4,
+    "boss_casts": 4,
+    "hp": [
+      1.0,
+      0.35,
+      0.46,
+      0.41
+    ],
+    "min_alive": 4,
+    "node": 5,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 12.1,
+    "seed_offset": 0,
+    "team_power": 6961
+  },
+  {
+    "area": 4,
+    "boss_casts": 10,
+    "hp": [
+      0.81,
+      0.31,
+      0.31,
+      0.23
+    ],
+    "min_alive": 2,
+    "node": 6,
+    "result": "victory",
+    "revivals": 2,
+    "seconds": 36.2,
+    "seed_offset": 0,
+    "team_power": 7465
+  },
+  {
+    "area": 4,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      0.98,
+      0.98,
+      1.0
+    ],
+    "min_alive": 4,
+    "node": 7,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 3.5,
+    "seed_offset": 0,
+    "team_power": 7213
+  },
+  {
+    "area": 5,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      0.77,
+      0.77,
+      0.91
+    ],
+    "min_alive": 4,
+    "node": 0,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 6.9,
+    "seed_offset": 0,
+    "team_power": 7717
+  },
+  {
+    "area": 5,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      0.92,
+      1.0
+    ],
+    "min_alive": 4,
+    "node": 1,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 8.2,
+    "seed_offset": 0,
+    "team_power": 7969
+  },
+  {
+    "area": 5,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      0.93,
+      1.0
+    ],
+    "min_alive": 4,
+    "node": 2,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 7.0,
+    "seed_offset": 0,
+    "team_power": 9085
+  },
+  {
+    "area": 5,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "min_alive": 4,
+    "node": 3,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 3.5,
+    "seed_offset": 0,
+    "team_power": 7969
+  },
+  {
+    "area": 5,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      0.83,
+      0.8,
+      0.87
+    ],
+    "min_alive": 4,
+    "node": 4,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 4.9,
+    "seed_offset": 0,
+    "team_power": 9367
+  },
+  {
+    "area": 5,
+    "boss_casts": 8,
+    "hp": [
+      0.1,
+      0.19,
+      0.33,
+      0.47
+    ],
+    "min_alive": 1,
+    "node": 5,
+    "result": "victory",
+    "revivals": 3,
+    "seconds": 34.2,
+    "seed_offset": 0,
+    "team_power": 9691
+  },
+  {
+    "area": 5,
+    "boss_casts": 8,
+    "hp": [
+      0.82,
+      0.16,
+      0.0,
+      0.14
+    ],
+    "min_alive": 3,
+    "node": 6,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 22.5,
+    "seed_offset": 0,
+    "team_power": 10339
+  },
+  {
+    "area": 5,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "min_alive": 4,
+    "node": 7,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 8.3,
+    "seed_offset": 0,
+    "team_power": 10015
+  },
+  {
+    "area": 6,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      0.71,
+      0.69,
+      0.49
+    ],
+    "min_alive": 4,
+    "node": 0,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 9.9,
+    "seed_offset": 0,
+    "team_power": 11029
+  },
+  {
+    "area": 6,
+    "boss_casts": 0,
+    "hp": [
+      0.98,
+      0.61,
+      0.69,
+      0.66
+    ],
+    "min_alive": 4,
+    "node": 1,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 9.5,
+    "seed_offset": 0,
+    "team_power": 12325
+  },
+  {
+    "area": 6,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      0.9,
+      0.83,
+      0.78
+    ],
+    "min_alive": 4,
+    "node": 2,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 7.0,
+    "seed_offset": 0,
+    "team_power": 12493
+  },
+  {
+    "area": 6,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      0.92,
+      1.0
+    ],
+    "min_alive": 4,
+    "node": 3,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 4.7,
+    "seed_offset": 0,
+    "team_power": 12493
+  },
+  {
+    "area": 6,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      0.64,
+      0.27
+    ],
+    "min_alive": 4,
+    "node": 4,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 9.9,
+    "seed_offset": 0,
+    "team_power": 12757
+  },
+  {
+    "area": 6,
+    "boss_casts": 12,
+    "hp": [
+      1.0,
+      0.5,
+      0.14,
+      0.29
+    ],
+    "min_alive": 2,
+    "node": 5,
+    "result": "victory",
+    "revivals": 2,
+    "seconds": 44.5,
+    "seed_offset": 0,
+    "team_power": 13141
+  },
+  {
+    "area": 6,
+    "boss_casts": 6,
+    "hp": [
+      0.82,
+      0.79,
+      0.65,
+      0.06
+    ],
+    "min_alive": 4,
+    "node": 6,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 19.6,
+    "seed_offset": 0,
+    "team_power": 14773
+  },
+  {
+    "area": 6,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      0.81,
+      1.0
+    ],
+    "min_alive": 4,
+    "node": 7,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 5.3,
+    "seed_offset": 0,
+    "team_power": 13357
+  },
+  {
+    "area": 7,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      0.8,
+      1.0,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 0,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 6.5,
+    "seed_offset": 0,
+    "team_power": 19126
+  },
+  {
+    "area": 7,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 1,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 5.6,
+    "seed_offset": 0,
+    "team_power": 19352
+  },
+  {
+    "area": 7,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      0.91,
+      0.93,
+      1.0,
+      0.96
+    ],
+    "min_alive": 5,
+    "node": 2,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 8.1,
+    "seed_offset": 0,
+    "team_power": 19714
+  },
+  {
+    "area": 7,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 3,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 3.3,
+    "seed_offset": 0,
+    "team_power": 19714
+  },
+  {
+    "area": 7,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      0.91,
+      1.0,
+      0.78,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 4,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 7.0,
+    "seed_offset": 0,
+    "team_power": 20302
+  },
+  {
+    "area": 7,
+    "boss_casts": 2,
+    "hp": [
+      1.0,
+      1.0,
+      0.84,
+      0.59,
+      0.81
+    ],
+    "min_alive": 5,
+    "node": 5,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 11.8,
+    "seed_offset": 0,
+    "team_power": 22533
+  },
+  {
+    "area": 7,
+    "boss_casts": 4,
+    "hp": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 6,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 24.1,
+    "seed_offset": 0,
+    "team_power": 23163
+  },
+  {
+    "area": 7,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      0.92,
+      0.92,
+      1.0,
+      0.92
+    ],
+    "min_alive": 5,
+    "node": 7,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 4.1,
+    "seed_offset": 0,
+    "team_power": 22848
+  },
+  {
+    "area": 8,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      0.96,
+      0.88,
+      1.0,
+      0.96
+    ],
+    "min_alive": 5,
+    "node": 0,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 8.0,
+    "seed_offset": 0,
+    "team_power": 23868
+  },
+  {
+    "area": 8,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      0.92,
+      0.84,
+      1.0,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 1,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 5.5,
+    "seed_offset": 0,
+    "team_power": 24033
+  },
+  {
+    "area": 8,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      0.93,
+      0.74,
+      0.9,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 2,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 8.2,
+    "seed_offset": 0,
+    "team_power": 26540
+  },
+  {
+    "area": 8,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      0.93,
+      0.94,
+      1.0,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 3,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 3.6,
+    "seed_offset": 0,
+    "team_power": 26284
+  },
+  {
+    "area": 8,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 4,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 6.8,
+    "seed_offset": 0,
+    "team_power": 26796
+  },
+  {
+    "area": 8,
+    "boss_casts": 2,
+    "hp": [
+      1.0,
+      0.78,
+      0.58,
+      0.79,
+      0.86
+    ],
+    "min_alive": 5,
+    "node": 5,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 14.9,
+    "seed_offset": 0,
+    "team_power": 27308
+  },
+  {
+    "area": 8,
+    "boss_casts": 5,
+    "hp": [
+      1.0,
+      0.96,
+      0.6,
+      1.0,
+      0.97
+    ],
+    "min_alive": 5,
+    "node": 6,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 22.5,
+    "seed_offset": 0,
+    "team_power": 29868
+  },
+  {
+    "area": 8,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      0.83,
+      0.85,
+      1.0,
+      0.92
+    ],
+    "min_alive": 5,
+    "node": 7,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 4.3,
+    "seed_offset": 0,
+    "team_power": 27564
+  },
+  {
+    "area": 9,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      0.93,
+      0.93,
+      1.0,
+      0.93
+    ],
+    "min_alive": 5,
+    "node": 0,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 5.5,
+    "seed_offset": 0,
+    "team_power": 30408
+  },
+  {
+    "area": 9,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 1,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 16.0,
+    "seed_offset": 0,
+    "team_power": 30678
+  },
+  {
+    "area": 9,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 2,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 8.3,
+    "seed_offset": 0,
+    "team_power": 31308
+  },
+  {
+    "area": 9,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 3,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 3.6,
+    "seed_offset": 0,
+    "team_power": 31038
+  },
+  {
+    "area": 9,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 4,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 10.3,
+    "seed_offset": 0,
+    "team_power": 34016
+  },
+  {
+    "area": 9,
+    "boss_casts": 4,
+    "hp": [
+      1.0,
+      1.0,
+      1.0,
+      0.76,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 5,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 22.3,
+    "seed_offset": 0,
+    "team_power": 34686
+  },
+  {
+    "area": 9,
+    "boss_casts": 7,
+    "hp": [
+      1.0,
+      1.0,
+      0.87,
+      1.0,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 6,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 27.9,
+    "seed_offset": 0,
+    "team_power": 35544
+  },
+  {
+    "area": 9,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      0.92,
+      0.87,
+      1.0,
+      0.95
+    ],
+    "min_alive": 5,
+    "node": 7,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 4.6,
+    "seed_offset": 0,
+    "team_power": 34972
+  },
+  {
+    "area": 10,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      0.97,
+      0.92,
+      1.0,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 0,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 6.0,
+    "seed_offset": 0,
+    "team_power": 36214
+  },
+  {
+    "area": 10,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      0.96,
+      0.76,
+      1.0,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 1,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 8.3,
+    "seed_offset": 0,
+    "team_power": 38718
+  },
+  {
+    "area": 10,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      1.0,
+      0.51,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 2,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 10.2,
+    "seed_offset": 0,
+    "team_power": 39018
+  },
+  {
+    "area": 10,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      0.93,
+      1.0,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 3,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 5.5,
+    "seed_offset": 0,
+    "team_power": 38718
+  },
+  {
+    "area": 10,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      0.88,
+      0.93,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 4,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 8.3,
+    "seed_offset": 0,
+    "team_power": 39513
+  },
+  {
+    "area": 10,
+    "boss_casts": 6,
+    "hp": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 5,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 23.7,
+    "seed_offset": 0,
+    "team_power": 40113
+  },
+  {
+    "area": 10,
+    "boss_casts": 7,
+    "hp": [
+      1.0,
+      1.0,
+      0.89,
+      1.0,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 6,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 32.2,
+    "seed_offset": 0,
+    "team_power": 40908
+  },
+  {
+    "area": 10,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      0.92,
+      0.74,
+      1.0,
+      0.92
+    ],
+    "min_alive": 5,
+    "node": 7,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 3.9,
+    "seed_offset": 0,
+    "team_power": 40413
+  },
+  {
+    "area": 11,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      0.81,
+      0.98,
+      0.9,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 0,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 9.8,
+    "seed_offset": 0,
+    "team_power": 44288
+  },
+  {
+    "area": 11,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      1.0,
+      0.87,
+      0.97
+    ],
+    "min_alive": 5,
+    "node": 1,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 6.1,
+    "seed_offset": 0,
+    "team_power": 44807
+  },
+  {
+    "area": 11,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 2,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 6.5,
+    "seed_offset": 0,
+    "team_power": 45123
+  },
+  {
+    "area": 11,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      0.92,
+      1.0,
+      0.83
+    ],
+    "min_alive": 5,
+    "node": 3,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 4.4,
+    "seed_offset": 0,
+    "team_power": 45123
+  },
+  {
+    "area": 11,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      1.0,
+      0.85,
+      0.88
+    ],
+    "min_alive": 5,
+    "node": 4,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 9.5,
+    "seed_offset": 0,
+    "team_power": 45755
+  },
+  {
+    "area": 11,
+    "boss_casts": 4,
+    "hp": [
+      1.0,
+      1.0,
+      1.0,
+      0.12,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 5,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 17.4,
+    "seed_offset": 0,
+    "team_power": 48978
+  },
+  {
+    "area": 11,
+    "boss_casts": 8,
+    "hp": [
+      0.79,
+      1.0,
+      0.85,
+      0.88,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 6,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 32.9,
+    "seed_offset": 0,
+    "team_power": 49848
+  },
+  {
+    "area": 11,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      0.86,
+      1.0,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 7,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 5.6,
+    "seed_offset": 0,
+    "team_power": 49188
+  },
+  {
+    "area": 12,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      0.97,
+      1.0,
+      0.98
+    ],
+    "min_alive": 5,
+    "node": 0,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 9.4,
+    "seed_offset": 0,
+    "team_power": 50838
+  },
+  {
+    "area": 12,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      0.92,
+      0.79,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 1,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 11.4,
+    "seed_offset": 0,
+    "team_power": 51738
+  },
+  {
+    "area": 12,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      0.78,
+      0.87,
+      0.82,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 2,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 11.1,
+    "seed_offset": 0,
+    "team_power": 52518
+  },
+  {
+    "area": 12,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      0.78,
+      1.0,
+      0.93
+    ],
+    "min_alive": 5,
+    "node": 3,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 4.9,
+    "seed_offset": 0,
+    "team_power": 52068
+  },
+  {
+    "area": 12,
+    "boss_casts": 0,
+    "hp": [
+      0.92,
+      1.0,
+      1.0,
+      0.79,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 4,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 13.7,
+    "seed_offset": 0,
+    "team_power": 53418
+  },
+  {
+    "area": 12,
+    "boss_casts": 6,
+    "hp": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 5,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 22.6,
+    "seed_offset": 0,
+    "team_power": 54198
+  },
+  {
+    "area": 12,
+    "boss_casts": 10,
+    "hp": [
+      1.0,
+      1.0,
+      0.66,
+      1.0,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 6,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 34.3,
+    "seed_offset": 0,
+    "team_power": 55998
+  },
+  {
+    "area": 12,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      0.68,
+      1.0,
+      0.92
+    ],
+    "min_alive": 5,
+    "node": 7,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 5.2,
+    "seed_offset": 0,
+    "team_power": 55098
+  },
+  {
+    "area": 13,
+    "boss_casts": 0,
+    "hp": [
+      0.78,
+      0.94,
+      0.5,
+      0.62,
+      0.94
+    ],
+    "min_alive": 5,
+    "node": 0,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 9.1,
+    "seed_offset": 0,
+    "team_power": 57348
+  },
+  {
+    "area": 13,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      0.44,
+      0.48,
+      0.94
+    ],
+    "min_alive": 5,
+    "node": 1,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 10.9,
+    "seed_offset": 0,
+    "team_power": 57798
+  },
+  {
+    "area": 13,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      0.97,
+      1.0,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 2,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 10.9,
+    "seed_offset": 0,
+    "team_power": 58248
+  },
+  {
+    "area": 13,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      0.71,
+      1.0,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 3,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 5.6,
+    "seed_offset": 0,
+    "team_power": 58248
+  },
+  {
+    "area": 13,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      0.95,
+      0.75,
+      1.0,
+      0.98
+    ],
+    "min_alive": 5,
+    "node": 4,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 8.6,
+    "seed_offset": 0,
+    "team_power": 58818
+  },
+  {
+    "area": 13,
+    "boss_casts": 6,
+    "hp": [
+      0.78,
+      0.8,
+      0.87,
+      1.0,
+      0.8
+    ],
+    "min_alive": 5,
+    "node": 5,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 22.6,
+    "seed_offset": 0,
+    "team_power": 59598
+  },
+  {
+    "area": 13,
+    "boss_casts": 6,
+    "hp": [
+      0.83,
+      1.0,
+      0.28,
+      1.0,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 6,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 29.1,
+    "seed_offset": 0,
+    "team_power": 60618
+  },
+  {
+    "area": 13,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      0.84,
+      1.0,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 7,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 5.5,
+    "seed_offset": 0,
+    "team_power": 60168
+  },
+  {
+    "area": 14,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      0.9,
+      0.64,
+      1.0,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 0,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 10.2,
+    "seed_offset": 0,
+    "team_power": 61638
+  },
+  {
+    "area": 14,
+    "boss_casts": 0,
+    "hp": [
+      0.97,
+      1.0,
+      1.0,
+      0.85,
+      0.86
+    ],
+    "min_alive": 5,
+    "node": 1,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 16.6,
+    "seed_offset": 0,
+    "team_power": 62088
+  },
+  {
+    "area": 14,
+    "boss_casts": 0,
+    "hp": [
+      0.76,
+      0.74,
+      0.73,
+      0.54,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 2,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 11.5,
+    "seed_offset": 0,
+    "team_power": 62988
+  },
+  {
+    "area": 14,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      0.71,
+      1.0,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 3,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 7.0,
+    "seed_offset": 0,
+    "team_power": 62538
+  },
+  {
+    "area": 14,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      0.83,
+      0.76,
+      0.72,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 4,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 8.2,
+    "seed_offset": 0,
+    "team_power": 64008
+  },
+  {
+    "area": 14,
+    "boss_casts": 6,
+    "hp": [
+      1.0,
+      0.81,
+      0.83,
+      1.0,
+      0.93
+    ],
+    "min_alive": 5,
+    "node": 5,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 28.2,
+    "seed_offset": 0,
+    "team_power": 65028
+  },
+  {
+    "area": 14,
+    "boss_casts": 10,
+    "hp": [
+      1.0,
+      0.72,
+      0.81,
+      0.95,
+      0.82
+    ],
+    "min_alive": 4,
+    "node": 6,
+    "result": "victory",
+    "revivals": 1,
+    "seconds": 42.1,
+    "seed_offset": 0,
+    "team_power": 66618
+  },
+  {
+    "area": 14,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      0.83,
+      0.97,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 7,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 8.1,
+    "seed_offset": 0,
+    "team_power": 65598
+  },
+  {
+    "area": 15,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      0.55,
+      0.59,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 0,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 12.6,
+    "seed_offset": 0,
+    "team_power": 67638
+  },
+  {
+    "area": 15,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 1,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 13.5,
+    "seed_offset": 0,
+    "team_power": 68898
+  },
+  {
+    "area": 15,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      0.92,
+      0.41,
+      0.69,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 2,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 14.8,
+    "seed_offset": 0,
+    "team_power": 70038
+  },
+  {
+    "area": 15,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 3,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 6.7,
+    "seed_offset": 0,
+    "team_power": 69468
+  },
+  {
+    "area": 15,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      0.83,
+      0.45,
+      0.92
+    ],
+    "min_alive": 5,
+    "node": 4,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 12.5,
+    "seed_offset": 0,
+    "team_power": 71058
+  },
+  {
+    "area": 15,
+    "boss_casts": 12,
+    "hp": [
+      0.14,
+      1.0,
+      0.77,
+      1.0,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 5,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 36.2,
+    "seed_offset": 0,
+    "team_power": 72198
+  },
+  {
+    "area": 15,
+    "boss_casts": 8,
+    "hp": [
+      0.97,
+      0.93,
+      0.74,
+      0.63,
+      0.97
+    ],
+    "min_alive": 4,
+    "node": 6,
+    "result": "victory",
+    "revivals": 1,
+    "seconds": 38.1,
+    "seed_offset": 0,
+    "team_power": 74718
+  },
+  {
+    "area": 15,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      0.84,
+      0.84,
+      1.0,
+      0.92
+    ],
+    "min_alive": 5,
+    "node": 7,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 4.9,
+    "seed_offset": 0,
+    "team_power": 73458
+  },
+  {
+    "area": 16,
+    "boss_casts": 0,
+    "hp": [
+      0.87,
+      1.0,
+      1.0
+    ],
+    "min_alive": 3,
+    "node": 0,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 1.6,
+    "seed_offset": 0,
+    "team_power": 1161
+  },
+  {
+    "area": 16,
+    "boss_casts": 0,
+    "hp": [
+      0.63,
+      0.8,
+      1.0
+    ],
+    "min_alive": 3,
+    "node": 1,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 2.5,
+    "seed_offset": 0,
+    "team_power": 1161
+  },
+  {
+    "area": 16,
+    "boss_casts": 0,
+    "hp": [
+      0.88,
+      1.0,
+      1.0
+    ],
+    "min_alive": 3,
+    "node": 2,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 1.6,
+    "seed_offset": 0,
+    "team_power": 1260
+  },
+  {
+    "area": 16,
+    "boss_casts": 0,
+    "hp": [
+      0.87,
+      1.0,
+      1.0
+    ],
+    "min_alive": 3,
+    "node": 3,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 1.3,
+    "seed_offset": 0,
+    "team_power": 1260
+  },
+  {
+    "area": 16,
+    "boss_casts": 0,
+    "hp": [
+      0.85,
+      0.97,
+      0.94
+    ],
+    "min_alive": 3,
+    "node": 4,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 3.3,
+    "seed_offset": 0,
+    "team_power": 1359
+  },
+  {
+    "area": 16,
+    "boss_casts": 2,
+    "hp": [
+      0.39,
+      0.49,
+      0.56
+    ],
+    "min_alive": 3,
+    "node": 5,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 6.7,
+    "seed_offset": 0,
+    "team_power": 1359
+  },
+  {
+    "area": 16,
+    "boss_casts": 3,
+    "hp": [
+      0.48,
+      0.64,
+      0.69
+    ],
+    "min_alive": 3,
+    "node": 6,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 9.4,
+    "seed_offset": 0,
+    "team_power": 1722
+  },
+  {
+    "area": 16,
+    "boss_casts": 0,
+    "hp": [
+      0.78,
+      1.0,
+      1.0
+    ],
+    "min_alive": 3,
+    "node": 7,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 2.2,
+    "seed_offset": 0,
+    "team_power": 1722
+  },
+  {
+    "area": 17,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      0.92,
+      1.0
+    ],
+    "min_alive": 4,
+    "node": 0,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 2.4,
+    "seed_offset": 0,
+    "team_power": 7717
+  },
+  {
+    "area": 17,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      0.92,
+      1.0
+    ],
+    "min_alive": 4,
+    "node": 1,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 3.3,
+    "seed_offset": 0,
+    "team_power": 7969
+  },
+  {
+    "area": 17,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      0.94,
+      1.0
+    ],
+    "min_alive": 4,
+    "node": 2,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 3.1,
+    "seed_offset": 0,
+    "team_power": 9085
+  },
+  {
+    "area": 17,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      0.83,
+      1.0
+    ],
+    "min_alive": 4,
+    "node": 3,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 4.9,
+    "seed_offset": 0,
+    "team_power": 7969
+  },
+  {
+    "area": 17,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      0.74,
+      0.81
+    ],
+    "min_alive": 4,
+    "node": 4,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 6.6,
+    "seed_offset": 0,
+    "team_power": 9367
+  },
+  {
+    "area": 17,
+    "boss_casts": 4,
+    "hp": [
+      1.0,
+      0.43,
+      0.32,
+      0.44
+    ],
+    "min_alive": 4,
+    "node": 5,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 12.2,
+    "seed_offset": 0,
+    "team_power": 9691
+  },
+  {
+    "area": 17,
+    "boss_casts": 10,
+    "hp": [
+      0.54,
+      0.35,
+      0.26,
+      0.05
+    ],
+    "min_alive": 2,
+    "node": 6,
+    "result": "victory",
+    "revivals": 2,
+    "seconds": 30.4,
+    "seed_offset": 0,
+    "team_power": 10339
+  },
+  {
+    "area": 17,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      0.94,
+      1.0
+    ],
+    "min_alive": 4,
+    "node": 7,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 3.9,
+    "seed_offset": 0,
+    "team_power": 10015
+  },
+  {
+    "area": 18,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      0.88,
+      1.0,
+      0.99
+    ],
+    "min_alive": 5,
+    "node": 0,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 8.4,
+    "seed_offset": 0,
+    "team_power": 30408
+  },
+  {
+    "area": 18,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 1,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 6.9,
+    "seed_offset": 0,
+    "team_power": 30678
+  },
+  {
+    "area": 18,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      0.93,
+      1.0,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 2,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 6.3,
+    "seed_offset": 0,
+    "team_power": 31308
+  },
+  {
+    "area": 18,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      0.93,
+      1.0,
+      0.93
+    ],
+    "min_alive": 5,
+    "node": 3,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 5.1,
+    "seed_offset": 0,
+    "team_power": 31038
+  },
+  {
+    "area": 18,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 4,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 6.8,
+    "seed_offset": 0,
+    "team_power": 34016
+  },
+  {
+    "area": 18,
+    "boss_casts": 2,
+    "hp": [
+      0.9,
+      0.77,
+      0.83,
+      0.36,
+      0.96
+    ],
+    "min_alive": 5,
+    "node": 5,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 12.6,
+    "seed_offset": 0,
+    "team_power": 34686
+  },
+  {
+    "area": 18,
+    "boss_casts": 14,
+    "hp": [
+      0.6,
+      0.57,
+      0.46,
+      0.91,
+      0.83
+    ],
+    "min_alive": 2,
+    "node": 6,
+    "result": "victory",
+    "revivals": 6,
+    "seconds": 59.4,
+    "seed_offset": 0,
+    "team_power": 35544
+  },
+  {
+    "area": 18,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 7,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 13.2,
+    "seed_offset": 0,
+    "team_power": 34972
+  },
+  {
+    "area": 19,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      0.92
+    ],
+    "min_alive": 5,
+    "node": 0,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 19.6,
+    "seed_offset": 0,
+    "team_power": 57348
+  },
+  {
+    "area": 19,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 1,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 14.8,
+    "seed_offset": 0,
+    "team_power": 57798
+  },
+  {
+    "area": 19,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      1.0,
+      0.83,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 2,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 10.7,
+    "seed_offset": 0,
+    "team_power": 58248
+  },
+  {
+    "area": 19,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      0.92,
+      0.92,
+      1.0,
+      0.92
+    ],
+    "min_alive": 5,
+    "node": 3,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 5.4,
+    "seed_offset": 0,
+    "team_power": 58248
+  },
+  {
+    "area": 19,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      0.86,
+      0.88,
+      0.87
+    ],
+    "min_alive": 5,
+    "node": 4,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 10.9,
+    "seed_offset": 0,
+    "team_power": 58818
+  },
+  {
+    "area": 19,
+    "boss_casts": 6,
+    "hp": [
+      1.0,
+      0.25,
+      0.13,
+      0.66,
+      0.5
+    ],
+    "min_alive": 3,
+    "node": 5,
+    "result": "victory",
+    "revivals": 2,
+    "seconds": 26.3,
+    "seed_offset": 0,
+    "team_power": 59598
+  },
+  {
+    "area": 19,
+    "boss_casts": 13,
+    "hp": [
+      1.0,
+      1.0,
+      0.71,
+      1.0,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 6,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 46.8,
+    "seed_offset": 0,
+    "team_power": 60618
+  },
+  {
+    "area": 19,
+    "boss_casts": 0,
+    "hp": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "min_alive": 5,
+    "node": 7,
+    "result": "victory",
+    "revivals": 0,
+    "seconds": 6.9,
+    "seed_offset": 0,
+    "team_power": 60168
+  }
+]

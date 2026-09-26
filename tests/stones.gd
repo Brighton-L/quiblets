@@ -61,7 +61,11 @@ func _initialize() -> void:
 	# The delayed activation must resolve with a safe null target, not pass a
 	# previously-freed object into the typed move executor.
 	var doomed:=make_actor(arena,7,Vector3(1.6,0,0),true);var delayed_before:=user.delayed_executions_resolved
-	user.move_cooldowns[0]=0.0;user.use_move(0,doomed);doomed.queue_free();await process_frame;await create_timer(1.2).timeout
+	user.move_cooldowns[0]=0.0;user.request_move(0,doomed);doomed.queue_free();await process_frame
+	# Echo waits for every split projectile to finish, including surviving targets.
+	for attempt in 50:
+		if user.delayed_executions_resolved>delayed_before:break
+		await create_timer(.1).timeout
 	assert(user.delayed_executions_resolved>delayed_before,"A delayed move did not safely resolve after its target was freed")
 	var enemy_probe:=make_actor(arena,0,Vector3(1.8,0,0),true);enemy_probe.target=ally;enemy_probe.move_cooldowns.fill(0.0)
 	enemy_probe.try_use_best_move(enemy_probe.horizontal_distance(enemy_probe.global_position,ally.global_position))

@@ -1,42 +1,42 @@
 extends SceneTree
 
 func _initialize() -> void:
-	var expected_species := ["Plip","Swellit","Spriggle","Frondle","Vinee","Bloomie","Sparko","Scorchit","Fistor","Carapuff","Burlow","Stackle","Shellmie","Mimbit","Pidler","Gloopit","Blubber","Cysicle","Gagglet","Gaggle","Gulper","Tumblet","Miasmum","Sludgle","Arcle","Zippet","Voltick","Electrish","Lombat","Lombera","Snobble"]
+	var expected_species := ["Plip","Swellit","Spriggle","Frondle","Vinee","Bloomie","Flaret","Scorchit","Fistor","Carapuff","Burlow","Stackle","Shellmie","Mimbit","Pidler","Gloopit","Blubber","Cysicle","Gagglet","Gaggle","Gulper","Tumblet","Miasmum","Sludgle","Arcle","Zippet","Voltick","Electrish","Lombat","Lombera","Snobble"]
 	var expected_types := ["Water","Water","Green","Green","Green","Green","Fire","Fire","Psychic","Psychic","Earth","Earth","Normal","Normal","Normal","Poison","Air","Ice","Air","Air","Poison","Earth","Poison","Poison","Electric","Electric","Electric","Electric","Air","Air","Ice"]
 	var expected_learnsets := [
-		["Water Shot","Water Jet","Splash Dash","Backwash","Water Burst","Rain Drop","Spray"],
-		["Water Shot","Water Jet","Hydro Shot","Breaker","Riptide","Undertow","Whirlpool","Wave Rush","Tidal Wave","Water Spout","Downpour","Tsunami"],
-		["Leaf Shot","Seed Pop","Sprout","Thorn Burst","Spore Cloud","Seed Mine","Soothing Scent"],
-		["Leaf Shot","Vine Whip","Vine Spear","Rootbind","Thorn Burst","Sprout","Seed Pop","Overgrowth","Root Slam","Growth Spurt","Seed Mine"],
-		["Vine Whip","Vine Spear","Vine Grab","Rootbind","Thorn Burst","Sprout","Seed Mine","Root Slam","Leech Bloom"],
-		["Healing Bloom","Pollen Puff","Soothing Scent","Spore Cloud","Thorn Armor","Cocoon","Last Bloom"],
-		["Fireball","Flame Burst","Spark Burst","Flare","Flame Dash","Flame Pillar","Ignite"],
-		["Fireball","Flame Burst","Flare","Flame Dash","Blazing Rush","Flame Wave","Firestorm","Inferno","Flame Pillar","Ignite","Meteor Ember"],
-		["Mind Jab","Psycho Punch","Fist Barrage","Helping Hand"],
-		["Psy Bolt","Psychic Push","Telekinesis","Psychic Pull","Psy Barrier","Gravity Well","Mind Squeeze","Psy Wall","Psy Bounce","Puff Grab","Mind Pop"],
-		["Rock Toss","Quake","Mud Shot","Pitfall","Sinkhole","Burrow","Groundbreaker","Dust Cloud","Dig Punch","Dust-Up","Tunneling Charge"],
-		["Rock Toss","Quake","Stone Spikes","Stone Wall","Rock Armor","Boulder Roll","Earth Pillar","Brace","Crush","Barricade","Rock Scatter"],
-		["Shell Bash","Guard","Taunt","Spin","Fortify","Cover","Body Block","Hunker Down","Shelter"],
-		["Distract","Cheer","Encourage","Copycat"],
-		["Web Shot","Web Snare","Web Yank","Web Line","Web Trap","Silk Sling","Tangle","Cocoon"],
-		["Poison Spit","Gunk Glob","Corrode","Blinding Gunk","Toxic Pop","Noxious Cloud","Acid Rain","Nauseate","Fume Burst","Poison Bomb"],
-		["Gust","Air Burst","Updraft","Vacuum","Crosswind","Tailwind","Whirlwind","Wind Wall","Downdraft","Cyclone","Deflate"],
-		["Icicle Shot","Ice Spike","Cold Snap","Ice Wall","Frost Patch","Ice Cage","Glacier Rush","Hail","Iceberg","Icicle Mine","Shatter"],
-		["Wingbeat","Honk","Peck","Feather Guard","Tailwind","Scare","Escort","Alarm Honk"],
-		["Wingbeat","Honk","Peck","Feather Guard","Tailwind","Scare","Escort","Alarm Honk","Double Honk","Two-Headed Watch","Cross Peck","Gaggle Rush"],
-		["Gulp","Poison Spit","Poison Bomb","Slosh","Acid Spray","Nectar","Belch","Sour Shot","Dribble","Lid Smack"],
-		["Rollout","Unfurl","Rock Toss","Brace","Rockslide","Pound","Rolling Smash","Stone Skip","Rock Ring","Pebble Spray"],
-		["Noxious Cloud","Fume Burst","Poison Spit","Smog","Nauseate","Toxic Drift","Contaminate","Fume Shot","Pressure Cloud","Miasmum"],
-		["Toxic Touch","Gunk Glob","Sludge Wave","Slime Slide","Slip Slime","Poison Coat","Acid Splash","Nauseate","Mud Shot","Slick Escape"],
-		["Shock Bite","Latch","Live Wire","Static Pulse","Tail Zap","Discharge","Slither","Shock Toss","Amp Drain"],
-		["Zap","Shock Touch","Zip","Jolt Kick","Static Pulse","Flashstep","Friction Dash","Thunderclap","Zigzag"],
-		["Horn Zap","Spark Ram","Clamp","Shock Toss","Ground Scrape","Static Pulse","Discharge","Grounded","Horn Lift","Shock Clamp"],
-		["Tentacle Zap","Static Pulse","Nerve Sting","Shock Net","Live Wire","Jelly Drift","Discharge","Jolt Grab"],
-		["Ear Slap","Gust","Air Burst","Dive","Fan","Poison Bite","Noxious Cloud","Keen Ears","Ear Guard","Thunderflap"],
-		["Ear Slap","Gust","Air Burst","Dive","Fan","Poison Bite","Noxious Cloud","Keen Ears","Ear Guard","Thunderflap","Venom Fang","Toxic Gust","Sonic Boom"],
-		["Ice Slide","Tusk Jab","Snowplow","Frost Breath","Cold Snap","Ice Armor","Brace","Avalanche","Pound","Tuskberg"]
+		["Water Shot", "Water Jet", "Splash Dash", "Backwash", "Water Burst", "Rain Drop", "Spray"],
+		["Water Shot", "Water Jet", "Hydro Shot", "Breaker", "Riptide", "Undertow", "Whirlpool", "Wave Rush", "Tidal Wave", "Water Spout", "Downpour", "Tsunami"],
+		["Leaf Shot", "Seed Pop", "Sprout", "Thorn Burst", "Spore Cloud", "Seed Mine", "Soothing Scent"],
+		["Leaf Shot", "Vine Whip", "Vine Spear", "Rootbind", "Thorn Burst", "Sprout", "Seed Pop", "Overgrowth", "Root Slam", "Growth Spurt", "Seed Mine"],
+		["Vine Whip", "Vine Spear", "Vine Grab", "Rootbind", "Thorn Burst", "Sprout", "Seed Mine", "Root Slam", "Leech Bloom"],
+		["Healing Bloom", "Pollen Puff", "Soothing Scent", "Spore Cloud", "Thorn Armor", "Cocoon", "Last Bloom"],
+		["Fireball", "Flame Burst", "Spark Burst", "Flare", "Flame Dash", "Flame Pillar", "Ignite"],
+		["Fireball", "Flame Burst", "Flare", "Flame Dash", "Flame Wave", "Firestorm", "Inferno", "Flame Pillar", "Ignite", "Meteor Ember"],
+		["Mind Jab", "Psycho Punch", "Fist Barrage", "Helping Hand"],
+		["Psy Bolt", "Psychic Push", "Telekinesis", "Psychic Pull", "Guard", "Gravity Well", "Mind Squeeze", "Psy Wall", "Psy Bounce", "Mind Pop"],
+		["Rock Toss", "Quake", "Mud Shot", "Pitfall", "Sinkhole", "Burrow", "Groundbreaker", "Dust Cloud", "Dig Punch", "Dust-Up", "Tunneling Charge"],
+		["Rock Toss", "Quake", "Stone Spikes", "Stone Wall", "Guard", "Boulder Roll", "Earth Pillar", "Brace", "Crush", "Barricade", "Rock Scatter"],
+		["Shell Bash", "Guard", "Taunt", "Spin", "Body Block", "Cocoon"],
+		["Taunt", "Cheer", "Encourage", "Copycat"],
+		["Web Shot", "Web Snare", "Web Yank", "Web Line", "Web Trap", "Silk Sling", "Tangle", "Cocoon"],
+		["Poison Spit", "Gunk Glob", "Corrode", "Blinding Gunk", "Toxic Pop", "Noxious Cloud", "Acid Rain", "Nauseate", "Fume Burst", "Poison Bomb"],
+		["Gust", "Air Burst", "Updraft", "Vacuum", "Crosswind", "Tailwind", "Whirlwind", "Wind Wall", "Downdraft", "Cyclone", "Deflate"],
+		["Icicle Shot", "Ice Spike", "Cold Snap", "Ice Wall", "Frost Patch", "Ice Cage", "Glacier Rush", "Hail", "Iceberg", "Icicle Mine", "Shatter"],
+		["Wingbeat", "Honk", "Peck", "Guard", "Tailwind", "Scare", "Alarm Honk"],
+		["Wingbeat", "Honk", "Peck", "Guard", "Tailwind", "Scare", "Alarm Honk", "Cross Peck", "Gaggle Rush"],
+		["Gulp", "Poison Spit", "Poison Bomb", "Slosh", "Acid Spray", "Nectar", "Belch", "Sour Shot", "Dribble", "Lid Smack"],
+		["Rollout", "Unfurl", "Rock Toss", "Brace", "Rockslide", "Pound", "Rolling Smash", "Stone Skip", "Rock Ring", "Pebble Spray"],
+		["Noxious Cloud", "Fume Burst", "Poison Spit", "Smog", "Nauseate", "Toxic Drift", "Contaminate", "Fume Shot", "Pressure Cloud", "Miasmum"],
+		["Toxic Touch", "Gunk Glob", "Sludge Wave", "Slime Slide", "Slip Slime", "Poison Coat", "Acid Splash", "Nauseate", "Mud Shot", "Slick Escape"],
+		["Shock Bite", "Latch", "Live Wire", "Static Pulse", "Tail Zap", "Discharge", "Slither", "Shock Toss", "Amp Drain"],
+		["Zap", "Shock Touch", "Zip", "Jolt Kick", "Static Pulse", "Flashstep", "Friction Dash", "Thunderclap", "Zigzag"],
+		["Horn Zap", "Spark Ram", "Clamp", "Shock Toss", "Ground Scrape", "Static Pulse", "Discharge", "Grounded", "Horn Lift"],
+		["Tentacle Zap", "Static Pulse", "Nerve Sting", "Shock Net", "Live Wire", "Jelly Drift", "Discharge", "Jolt Grab"],
+		["Ear Slap", "Gust", "Air Burst", "Dive", "Fan", "Poison Bite", "Noxious Cloud", "Keen Ears", "Armor", "Thunderflap"],
+		["Ear Slap", "Gust", "Air Burst", "Dive", "Fan", "Poison Bite", "Noxious Cloud", "Keen Ears", "Armor", "Thunderflap", "Venom Fang", "Toxic Gust", "Sonic Boom"],
+		["Ice Slide", "Tusk Jab", "Snowplow", "Frost Breath", "Cold Snap", "Armor", "Brace", "Avalanche", "Pound", "Tuskberg"]
 	]
-	assert(GameData.SPECIES.size()==31 and GameData.LEARNSETS.size()==31,"The roster and learnset table should each contain thirty-one Quiblets")
+	assert(GameData.SPECIES.size()==34 and GameData.LEARNSETS.size()==34,"The roster and learnset table should each contain thirty-four Quiblets")
 	for i in expected_species.size():
 		assert(GameData.SPECIES[i].name==expected_species[i] and GameData.SPECIES[i].element==expected_types[i],"Incorrect Quiblet identity at roster index %d"%i)
 		assert(GameData.learnset(i)==expected_learnsets[i],"Incorrect learnset for "+expected_species[i])
@@ -193,16 +193,16 @@ func _initialize() -> void:
 		assert(fitted_power_grid.position.x==20 and fitted_power_grid.position.y+fitted_power_grid.size.y*fitted_power_grid.scale.y<=452.1,"The left-aligned Power Stone grid should stay below all move rows and inside the menu")
 	game.roster[game.selected_roster].moves=moves_before_layout_test;game.show_quiblet_edit();await process_frame
 	var first_move_before:Dictionary=game.roster[game.selected_roster].moves[0].duplicate(true);var second_move_before:Dictionary=game.roster[game.selected_roster].moves[1].duplicate(true)
-	game.roster[game.selected_roster].moves[0].slots=2;game.roster[game.selected_roster].moves[0].stones=["echo"];game.show_quiblet_edit();await process_frame
+	game.roster[game.selected_roster].moves[0].slots=2;game.roster[game.selected_roster].moves[0].erase("slot_data");game.roster[game.selected_roster].moves[0].stones=["echo"];game.show_quiblet_edit();await process_frame
 	editable_move_icons=game.content.find_children("EditableMoveIcon*","",true,false)
 	var move_reorder_drag_data:Dictionary={"kind":"quiblet_move","move_index":0,"move_name":game.roster[game.selected_roster].moves[0].name}
 	assert(editable_move_icons[1]._can_drop_data(Vector2.ZERO,move_reorder_drag_data),"Each move icon should accept another move from the same Quiblet")
 	editable_move_icons[1]._drop_data(Vector2.ZERO,move_reorder_drag_data);await process_frame
 	assert(game.roster[game.selected_roster].moves[1].name==first_move_before.name and game.roster[game.selected_roster].moves[1].slots==2 and game.roster[game.selected_roster].moves[1].stones==["echo"] and game.roster[game.selected_roster].moves[0].name==second_move_before.name,"Dropping one move onto another should swap the complete moves, including unlocked slots and fitted stones")
 	game.roster[game.selected_roster].moves[0]=first_move_before;game.roster[game.selected_roster].moves[1]=second_move_before;game.show_quiblet_edit();await process_frame
-	var original_slot_count:int=game.roster[game.selected_roster].moves[0].slots;game.roster[game.selected_roster].moves[0].slots=game.MAX_MOVE_STONE_SLOTS;game.show_quiblet_edit();await process_frame
+	var original_slot_count:int=game.roster[game.selected_roster].moves[0].slots;game.roster[game.selected_roster].moves[0].slots=game.MAX_MOVE_STONE_SLOTS;game.roster[game.selected_roster].moves[0].erase("slot_data");game.show_quiblet_edit();await process_frame
 	var full_slot_row:Array=game.content.find_children("MoveStoneSlot0_*","",true,false);assert(full_slot_row.size()==8 and full_slot_row[-1].position.x+full_slot_row[-1].size.x<820,"A consolidated move row should reserve enough room for eight enlarged Move Stone slots")
-	game.roster[game.selected_roster].moves[0].slots=original_slot_count;game.show_quiblet_edit();await process_frame
+	game.roster[game.selected_roster].moves[0].slots=original_slot_count;game.roster[game.selected_roster].moves[0].erase("slot_data");game.show_quiblet_edit();await process_frame
 	equipment_menu=game.content.find_child("StoneEquipmentMenu",true,false);editable_move_icons=game.content.find_children("EditableMoveIcon*","",true,false)
 	var inspected_entry:Dictionary=game.roster[game.selected_roster].moves[0];editable_move_icons[0].selected.emit(str(inspected_entry.name));await process_frame
 	var move_overlay:ColorRect=game.content.find_child("MoveInfoOverlay",true,false);var move_info_labels:Array=move_overlay.find_children("*","Label",true,false);var supported_count:=0

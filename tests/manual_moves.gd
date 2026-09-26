@@ -22,7 +22,7 @@ func run():
    assert(actor.move_cooldowns[0]>0,"Immediate activation failed: %s / %s"%[move,scenario])
    var cast=arena.get_child(arena.get_child_count()-1)
    assert(cast.get("move_name")==move and not cast.done,"Move vanished: %s / %s"%[move,scenario])
-   assert(float(cast.profile.get("delay",0))==0)
+   assert(float(cast.profile.get("delay",0))==(.35 if move=="Perfect Dive" else 0.0),"Only Perfect Dive has an intentional preparation")
    var count:=arena.get_child_count();actor.request_move(0,victim);assert(arena.get_child_count()==count,"Cooldown was bypassed")
  fixture("Water Shot");actor.current_hp=0;actor.request_move(0,victim);assert(actor.move_cooldowns[0]==0)
  arena.free();await process_frame

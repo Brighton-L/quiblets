@@ -17,7 +17,7 @@ func setup(value:Dictionary)->void:
 
 func describe()->String:
 	# Exact effects of the stone: its power plus every bonus stat's fixed change.
-	var lines:Array[String]=["%s %s Power Stone (T%d) • +%d %s"%[stone.quality,stone.type,stone.tier,stone.power,"max HP" if stone.type=="Health" else "Attack"]]
+	var lines:Array[String]=["%s %s Power Stone (T%d) • +%d %s"%[stone.quality,stone.type,stone.tier,GameData.power_stone_stat_gain(stone),"max HP" if stone.type=="Health" else "Attack"]]
 	for bonus in stone.bonuses:lines.append(GameData.bonus_description(bonus))
 	if stone.bonuses.is_empty():lines.append("No bonus stats.")
 	return "\n".join(lines)

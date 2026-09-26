@@ -227,7 +227,7 @@ func build_imported_model(path: String, yaw := IMPORTED_MODEL_YAW, hover := 0.0)
 	if str(GameData.species(species_index).name)=="Miasmum":
 		gas_body=inst;gas_rest_position=inst.position;gas_rest_scale=inst.scale;gas_center=inst.transform*box.get_center()
 	restore_imported_colors(inst)
-	if GameData.species(species_index).get("model_corner_roll",false):
+	if GameData.species(species_index).get("model_float",false) or GameData.species(species_index).get("model_corner_roll",false):
 		# Roll around the body centre rather than the feet, leaving navigation,
 		# facing and the ground anchor independent of the floating animation.
 		floating_center=inst.transform*box.get_center()
@@ -246,11 +246,14 @@ func _process(delta:float)->void:
 
 func update_floating_pose(time:float)->void:
 	if not is_instance_valid(floating_pivot):return
-	# Keep the top face upward while the lowest bottom corner advances clockwise.
-	var turns:=time/3.0;var corner:=floorf(turns);var progress:=smoothstep(0.0,1.0,turns-corner)
-	var angle:=PI*.25+(corner+progress)*PI*.5
-	var tilt:=deg_to_rad(8.0)
-	floating_pivot.rotation=Vector3(tilt*sin(angle),0.0,-tilt*cos(angle))
+	if GameData.species(species_index).get("model_corner_roll",false):
+		# Keep the top face upward while the lowest bottom corner advances clockwise.
+		var turns:=time/3.0;var corner:=floorf(turns);var progress:=smoothstep(0.0,1.0,turns-corner)
+		var angle:=PI*.25+(corner+progress)*PI*.5
+		var tilt:=deg_to_rad(8.0)
+		floating_pivot.rotation=Vector3(tilt*sin(angle),0.0,-tilt*cos(angle))
+	else:
+		floating_pivot.rotation=Vector3.ZERO
 	floating_pivot.position=floating_center+Vector3.UP*sin(time*TAU/6.0)*.25
 
 # Soften chromatic colours consistently across imported and procedural Quiblets.
@@ -266,6 +269,19 @@ func apply_model_glow(mat:StandardMaterial3D)->void:
 
 func model_saturation()->float:
 	return float(GameData.species(species_index).get("model_saturation",MODEL_SATURATION))
+
+func set_psychic_appearance(opacity:float)->void:
+	for mesh in find_children("*","MeshInstance3D",true,false):
+		if mesh.mesh==null:continue
+		for surface in mesh.mesh.get_surface_count():
+			var source:Material=mesh.material_override if mesh.material_override!=null else mesh.get_active_material(surface)
+			if not source is StandardMaterial3D:continue
+			var tinted:StandardMaterial3D=source.duplicate()
+			tinted.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA
+			tinted.albedo_color=tinted.albedo_color.lerp(Color("#c6a7ee"),.35)
+			tinted.albedo_color.a=opacity
+			if mesh.material_override!=null:mesh.material_override=tinted;break
+			mesh.set_surface_override_material(surface,tinted)
 
 func restore_imported_colors(inst: Node3D) -> void:
 	# Purely a rendering tweak; the headless dummy rasterizer has no real material

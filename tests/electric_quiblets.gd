@@ -29,7 +29,7 @@ func run():
  assert(source.current_hp>hp and source.position.x>.5 and source.motion_lock>0)
  hp=source.current_hp;source.take_damage(10,victim);assert(source.current_hp<hp,"Attached caster must remain vulnerable")
  victim.position.z=.8;advance(drain,.3);assert(source.position.z>.1);advance(drain,3);assert(drain.done and source.motion_lock==0)
- fixture();var clamp=cast("Shock Clamp");advance(clamp,.6);assert(victim.statuses.has("root") and source.motion_lock>0);advance(clamp,3);victim.update_statuses(.3);assert(not victim.statuses.has("root") and source.motion_lock==0)
+ fixture();var clamp=cast("Clamp");advance(clamp,.6);assert(victim.statuses.has("root") and source.motion_lock>0);advance(clamp,3);victim.update_statuses(.3);assert(not victim.statuses.has("root") and source.motion_lock==0)
  fixture();var toss=cast("Shock Toss");advance(toss,1.5);assert(victim.position.x>4 and toss.done)
  for move in ["Shock Touch","Zigzag"]:
   fixture();var maneuver=cast(move);advance(maneuver,2)

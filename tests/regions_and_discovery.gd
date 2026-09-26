@@ -37,8 +37,8 @@ func run():
  game._on_expedition_finished(results)
  check(game.discovered_optional_areas.has(17),"Run results should unlock discovery")
  var enemy:=QuibletActor3D.new();enemy.setup(GameData.make_quiblet(1,5),true);exp.place_actor(enemy);enemy.set_physics_process(false);exp.enemies.append(enemy);enemy.position=actor.position
- exp._on_move_used(enemy,"Distract",actor,{})
- check(is_instance_valid(actor.exclamation_icon),"Distract should put the icon above affected opponents")
+ exp._on_move_used(enemy,"Taunt",actor,{})
+ check(is_instance_valid(actor.exclamation_icon),"Taunt should put the icon above affected opponents")
  await create_timer(3.1).timeout
  check(not is_instance_valid(actor.exclamation_icon),"Exclamation should disappear")
  exp.free();game.queue_free();await process_frame

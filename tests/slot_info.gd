@@ -18,7 +18,7 @@ func run()->void:
 	# Fitted stones on the Quiblet info menu.
 	var q:Dictionary=game.roster[0];q.level=100;game.ensure_quiblet_equipment(q)
 	var fitted_stone:=GameData.make_power_stone("Health" if q.power_slot_types[0]!="Attack" else "Attack",2,["Movement Speed"]);q.power_slot_stones[0]=fitted_stone
-	q.moves[0].slots=2;q.moves[0].stones=["echo"]
+	q.moves[0].slots=2;q.moves[0].erase("slot_data");q.moves[0].stones=["echo"]
 	game.selected_roster=0;game.show_quiblet_edit();await process_frame
 	var power_slot:Control=game.content.find_child("PowerStoneSlot0",true,false);var move_slot:Control=game.content.find_child("MoveStoneSlot0_0",true,false);var empty_slot:Control=game.content.find_child("PowerStoneSlot3",true,false)
 	check(power_slot!=null and move_slot!=null and empty_slot!=null,"Test needs the fitted and empty slots on screen")
@@ -36,14 +36,14 @@ func run()->void:
 	var release:=InputEventMouseButton.new();release.button_index=MOUSE_BUTTON_LEFT;release.pressed=false;power_slot._gui_input(release)
 	check(not power_slot.suppress_next_release,"A release after a drag is swallowed once")
 	# Empty Move Stone slots drag between moves; fitted ones do not, and eight is the cap.
-	q.moves[0].slots=2;q.moves[0].stones=["echo"];q.moves[1].slots=1;q.moves[1].stones=[];game.show_quiblet_edit();await process_frame
+	q.moves[0].slots=2;q.moves[0].erase("slot_data");q.moves[0].stones=["echo"];q.moves[1].slots=1;q.moves[1].erase("slot_data");q.moves[1].stones=[];game.show_quiblet_edit();await process_frame
 	var empty_move_slot:Control=game.content.find_child("MoveStoneSlot0_1",true,false);var target_slot:Control=game.content.find_child("MoveStoneSlot1_0",true,false)
 	var slot_drag=empty_move_slot._get_drag_data(Vector2.ZERO)
 	check(slot_drag is Dictionary and slot_drag.get("kind","")=="move_slot" and int(slot_drag.move_index)==0 and game.roster[0].moves[0].slots==2 and game.roster[0].moves[0].stones==["echo"],"Dragging an empty Move Stone slot picks up the slot and changes nothing yet")
 	check(target_slot._can_drop_data(Vector2.ZERO,slot_drag) and not empty_move_slot._can_drop_data(Vector2.ZERO,slot_drag) and game.content.find_child("EditableMoveIcon1",true,false)._can_drop_data(Vector2.ZERO,slot_drag),"An empty slot can land on another move's slots or icon, not on its own move")
 	target_slot._drop_data(Vector2.ZERO,slot_drag);await process_frame
 	check(game.roster[0].moves[0].slots==1 and game.roster[0].moves[0].stones==["echo"] and game.roster[0].moves[1].slots==2,"Dropping moves the slot across and keeps the fitted stone in place")
-	game.roster[0].moves[1].slots=8;game.roster[0].moves[0].slots=2;game.show_quiblet_edit();await process_frame
+	game.roster[0].moves[1].slots=8;game.roster[0].moves[1].erase("slot_data");game.roster[0].moves[0].slots=2;game.roster[0].moves[0].erase("slot_data");game.show_quiblet_edit();await process_frame
 	empty_move_slot=game.content.find_child("MoveStoneSlot0_1",true,false);slot_drag=empty_move_slot._get_drag_data(Vector2.ZERO)
 	check(not game.content.find_child("MoveStoneSlot1_0",true,false)._can_drop_data(Vector2.ZERO,slot_drag),"A move with eight slots refuses another")
 	game.transfer_move_slot(0,1);check(game.roster[0].moves[1].slots==8 and game.roster[0].moves[0].slots==2,"The cap holds on a direct transfer too")
@@ -51,9 +51,9 @@ func run()->void:
 	check(not game.move_slot_is_empty(0,0) and game.move_slot_is_empty(0,1),"Only a slot with nothing fitted counts as empty")
 	game.transfer_move_slot(1,0);await process_frame
 	check(game.roster[0].moves[1].slots==7 and game.roster[0].moves[0].slots==3,"Slots move back the other way")
-	game.roster[0].moves[0].slots=1;game.roster[0].moves[0].stones=["echo"];game.transfer_move_slot(0,1)
+	game.roster[0].moves[0].slots=1;game.roster[0].moves[0].erase("slot_data");game.roster[0].moves[0].stones=["echo"];game.transfer_move_slot(0,1)
 	check(game.roster[0].moves[0].slots==1,"A move whose only slot is fitted has nothing to give")
-	game.roster[0].moves[1].slots=1;game.roster[0].moves[1].stones=[];game.show_quiblet_edit();await process_frame
+	game.roster[0].moves[1].slots=1;game.roster[0].moves[1].erase("slot_data");game.roster[0].moves[1].stones=[];game.show_quiblet_edit();await process_frame
 	# Placed cooking items.
 	for ingredient_name in ["Bumbleberry","Emberpepper"]:
 		game.ingredients[ingredient_name]=6

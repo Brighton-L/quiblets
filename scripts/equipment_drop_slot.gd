@@ -28,7 +28,7 @@ func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
 		return false
 	# An empty Move Stone slot dragged from another move lands on any of this move's slots.
 	if data.get("kind", "") == "move_slot":
-		return slot_kind == "move" and int(data.get("move_index", -1)) != primary_index and controller != null and controller.can_receive_move_slot(primary_index)
+		return slot_kind == "move" and int(data.get("move_index", -1)) != primary_index and controller != null and controller.can_receive_move_slot(primary_index,int(data.move_index),int(data.slot_index))
 	if slot_kind == "charm":
 		return data.get("kind","")=="charm" and controller!=null and controller.charm_slot_accepts(primary_index,str(data.get("charm_type","")))
 	if slot_kind == "power":
@@ -39,7 +39,7 @@ func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
 
 func _drop_data(_at_position: Vector2, data: Variant) -> void:
 	if data.get("kind", "") == "move_slot":
-		if controller != null:controller.transfer_move_slot(int(data.move_index), primary_index)
+		if controller != null:controller.transfer_move_slot(int(data.move_index), primary_index,int(data.slot_index))
 		return
 	equipment_dropped.emit(slot_kind, primary_index, secondary_index, data)
 

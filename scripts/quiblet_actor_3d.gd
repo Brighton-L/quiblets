@@ -26,6 +26,18 @@ var speed := 2.8
 var target: QuibletActor3D
 var move_cooldowns: Array[float] = []
 var move_cooldown_totals: Array[float] = []
+const BASIC_ATTACK=preload("res://scripts/basic_attack_3d.gd")
+var basic_cooldown:=0.0
+var in_combat:=false
+var enemy_cast_recovery:=0.0
+var enemy_move_cursor:=0
+var boss_attacks:=0
+var boss_warning:MeshInstance3D
+var boss_warning_time:=0.0
+var boss_impact_position:=Vector3.ZERO
+var boss_followup:=false
+var boss_phase_two:=false
+
 var recover_time := 0.0
 var recover_total := 0.0
 var recover_amount := 0.0
@@ -43,6 +55,10 @@ var walk_bob:=0.0
 var command_path:Array[Vector3]=[]
 var has_command := false
 var retreating := false
+const ENEMY_RETREAT_DURATION:=.75
+const ENEMY_RETREAT_COOLDOWN:=6.0
+var enemy_retreat_time:=0.0
+var enemy_retreat_cooldown:=0.0
 var selected := false:
 	set(value):
 		selected=value
@@ -74,6 +90,7 @@ func setup(q: Dictionary, is_enemy := false, level_boost := 0, team_slot := -1, 
 	max_hp=GameData.max_hp(data)*(float(scaling.get("hp",.68)) if enemy else 1.0);current_hp=max_hp;attack=GameData.attack(data);damage_multiplier=float(scaling.get("damage",.58)) if enemy else 1.0
 	attack_range=clampf(float(GameData.species(int(data.species)).range)/35.0,2.0,6.2)
 	bonus_totals=GameData.quiblet_bonus_totals(data)
+	for stat in GameData.species(int(data.species)).get("innate_bonuses",{}):bonus_totals[stat]=float(bonus_totals.get(stat,0.0))+float(GameData.species(int(data.species)).innate_bonuses[stat])
 	speed=(2.4+minf(.9,attack_range*.1))*(1.0+bonus_value("speed"))*float(GameData.species(int(data.species)).get("speed_multiplier",1.0))
 	move_cooldowns.resize(data.moves.size())
 	move_cooldown_totals.resize(data.moves.size())
@@ -85,6 +102,7 @@ func setup(q: Dictionary, is_enemy := false, level_boost := 0, team_slot := -1, 
 	if not enemy and team_slot>=0:
 		team_ring=TEAM_RING_SCRIPT.new();team_ring.setup(team_slot);add_child(team_ring)
 	if enemy:model.rotation.y=PI
+	tree_exiting.connect(clear_boss_warning)
 
 func _physics_process(delta: float) -> void:
 	var before:=position
@@ -111,23 +129,44 @@ func process_actor_physics(delta: float) -> void:
 		revive_time=maxf(0.0,revive_time-delta)
 		if revive_time<=0.0:revive_from_knockout()
 		return
-	if current_hp<=0:return
+	if current_hp<=0:
+		clear_boss_warning();return
+	if enemy:
+		enemy_retreat_cooldown=maxf(0.0,enemy_retreat_cooldown-delta)
+		if retreating:
+			enemy_retreat_time=maxf(0.0,enemy_retreat_time-delta)
+			if enemy_retreat_time<=0.0:retreating=false
 	update_statuses(delta)
 	if current_hp<=0:return
-	# Natural recovery: team Quiblets slowly regain HP whenever they are below full.
-	if not enemy and current_hp<max_hp:current_hp=minf(max_hp,current_hp+max_hp*GameData.PASSIVE_REGEN_PER_SECOND*delta)
+	# Natural recovery belongs to exploration, never an ongoing fight.
+	var fighting:=in_combat or (is_instance_valid(target) and target.current_hp>0)
+	if not enemy and not fighting and current_hp<max_hp:current_hp=minf(max_hp,current_hp+max_hp*GameData.PASSIVE_REGEN_PER_SECOND*delta)
 	# Encourage's haste speeds up cooldown recovery while it lasts.
 	var cooldown_rate:float=1.0+(float(statuses.haste.amount) if statuses.has("haste") else 0.0)
+	if statuses.has("drowse"):cooldown_rate*=maxf(.15,1.0-float(statuses.drowse.amount))
 	for i in move_cooldowns.size():move_cooldowns[i]=maxf(0,move_cooldowns[i]-delta*cooldown_rate)
+	basic_cooldown=maxf(0,basic_cooldown-delta*cooldown_rate)
+	enemy_cast_recovery=maxf(0,enemy_cast_recovery-delta)
+	if process_boss_pattern(delta):velocity=Vector3.ZERO;return
 	if actions_locked() or motion_lock>0:
 		velocity=Vector3.ZERO;return
 	if movement_locked():
 		velocity=Vector3.ZERO
-		if is_instance_valid(target):try_use_best_move(horizontal_distance(global_position,target.global_position))
+		if is_instance_valid(target):
+			var gap:=horizontal_distance(global_position,target.global_position)
+			try_basic_attack(gap);try_use_best_move(gap)
 		return
 	if recover_time>0:
 		current_hp=minf(max_hp,current_hp+recover_amount/maxf(recover_total,.01)*delta);recover_time-=delta;return
+	if statuses.has("sleepwalk"):
+		var phase:float=float(statuses.sleepwalk.total)-float(statuses.sleepwalk.time)
+		move_toward_point(global_position+Vector3(cos(phase*1.4),0,sin(phase*1.4))*2.0,delta)
+		return
 	if has_command:
+		if enemy and is_instance_valid(target) and target.current_hp>0:
+			var routed_distance:=horizontal_distance(global_position,target.global_position)
+			try_basic_attack(routed_distance);try_use_best_move(routed_distance)
+			if motion_lock>0 or boss_warning_time>0:return
 		# Routed points already keep clear of cliffs, so no corner steering here: it
 		# would fight the route and leave the Quiblet juddering beside a wall.
 		move_toward_point(desired_point,delta,false)
@@ -142,16 +181,38 @@ func process_actor_physics(delta: float) -> void:
 		velocity=velocity.move_toward(Vector3.ZERO,8*delta);move_and_slide();return
 	var distance:=horizontal_distance(global_position,target.global_position)
 	if retreating:
+		# Backing away at low HP must not turn an enemy into a harmless target,
+		# especially when terrain prevents it reaching the retreat distance.
+		if enemy:
+			try_basic_attack(distance);try_use_best_move(distance)
+			if motion_lock>0 or boss_warning_time>0:velocity=Vector3.ZERO;return
 		var away:Vector3=(global_position-target.global_position);away.y=0
 		move_toward_point(clamp_point(global_position+away.normalized()*4.0),delta)
-		if distance>6.5:retreating=false
+		if distance>(3.0 if enemy else 6.5):retreating=false
 		return
+	# Attack eligibility depends on reach, not whether navigation has settled.
+	# A blocked or kited fighter can still use its ready ranged attacks.
+	try_basic_attack(distance);try_use_best_move(distance)
+	if motion_lock>0 or boss_warning_time>0:velocity=Vector3.ZERO;return
 	var ideal:=minf(attack_range*.78,4.5)
 	if distance>ideal+.35:move_toward_point(target.global_position,delta)
 	elif distance<ideal*.52 and attack_range>3.5:
-		var away:Vector3=global_position-target.global_position;away.y=0;move_toward_point(clamp_point(global_position+away.normalized()*2.3),delta)
+		if enemy:
+			# One short backstep, followed by a stand-and-fight window.
+			try_enemy_retreat()
+			velocity=Vector3.ZERO
+		else:
+			var away:Vector3=global_position-target.global_position;away.y=0;move_toward_point(clamp_point(global_position+away.normalized()*2.3),delta)
 	else:
-		velocity=velocity.move_toward(Vector3.ZERO,10*delta);move_and_slide();try_use_best_move(distance)
+		velocity=velocity.move_toward(Vector3.ZERO,10*delta);move_and_slide()
+
+func try_enemy_retreat()->void:
+	if not enemy or retreating or enemy_retreat_cooldown>0.0:return
+	if current_hp<=0 or not is_instance_valid(target) or target.current_hp<=0:return
+	if horizontal_distance(global_position,target.global_position)>=3.0:return
+	retreating=true
+	enemy_retreat_time=ENEMY_RETREAT_DURATION
+	enemy_retreat_cooldown=ENEMY_RETREAT_DURATION+ENEMY_RETREAT_COOLDOWN
 
 # Do not cut a bend early when that would walk into its inside wall or bank.
 func next_path_segment_clear()->bool:
@@ -199,9 +260,11 @@ func move_toward_point(point: Vector3, delta: float, steer:=true) -> void:
 # air-current Tailwind speeds it up.
 func current_speed()->float:
 	var result:=speed
+	if enemy and retreating:result*=.55
 	if statuses.has("grounded"):result*=.2
 	if statuses.has("slow"):result*=maxf(.15,1.0-float(statuses.slow.amount))
 	if statuses.has("hasten"):result*=1.0+float(statuses.hasten.amount)
+	if statuses.has("drowse"):result*=maxf(.15,1.0-float(statuses.drowse.amount))
 	return result
 
 # The model turns smoothly to face wherever the Quiblet is heading, on every
@@ -221,22 +284,82 @@ func track_progress(before:Vector3,delta:float)->void:
 	stuck_timer+=delta
 	if stuck_timer>=STUCK_SECONDS:stuck_timer=0.0;progress_anchor=global_position;stuck.emit(self)
 
+func try_basic_attack(distance:float)->void:
+	if basic_cooldown>0 or current_hp<=0 or knocked_out or actions_locked() or motion_lock>0 or (has_command and not enemy):return
+	if not is_instance_valid(target) or target.current_hp<=0 or distance>attack_range:return
+	if enemy and boss_warning_time>0:return
+	basic_cooldown=1.4
+	var bolt:=BASIC_ATTACK.new();bolt.setup(self,target);get_parent().add_child(bolt)
+
+func support_move_useful(name:String)->bool:
+	var profile:=BEHAVIORS.profile(name)
+	if profile.get("mode","") in ["heal","heal_field","rest"]:
+		if current_hp<max_hp*.75:return true
+		for ally in get_parent().get_children():
+			if ally is QuibletActor3D and ally.enemy==enemy and ally.current_hp>0 and ally.current_hp<ally.max_hp*.6 and horizontal_distance(global_position,ally.global_position)<4:return true
+		return false
+	var status:=str(profile.get("status",""))
+	if not status.is_empty():return not statuses.has(status)
+	return current_hp<max_hp*.6
+
 func try_use_best_move(distance: float) -> void:
-	# Player moves start only from explicit input. Echo and Link follow-ups still
-	# resolve through the normal executor after a manually activated move.
-	if not enemy or actions_locked() or motion_lock>0:return
-	for i in data.moves.size():
+	if not enemy or actions_locked() or motion_lock>0 or enemy_cast_recovery>0 or boss_warning_time>0:return
+	if get_meta("level_boss",false) and boss_attacks>=2 and distance<=maxf(attack_range,8.0):
+		begin_boss_warning();return
+	# Rotate through the loadout instead of permanently favoring its first move.
+	for offset in data.moves.size():
+		var i:int=(enemy_move_cursor+offset)%data.moves.size()
 		if move_cooldowns[i]>0:continue
 		var entry:Dictionary=data.moves[i];var move_name:String=entry.name;var move:Dictionary=GameData.MOVES[move_name]
 		if BEHAVIORS.is_support(move_name):
-			if current_hp/max_hp<.48:use_move(i,target);return
-		elif distance<=float(move.range)/35.0*pow(1.38,stone_count(entry,"reach")):use_move(i,target);return
+			if not support_move_useful(move_name):continue
+		elif distance>float(move.range)/35.0*pow(1.38,stone_count(entry,"reach")):continue
+		use_move(i,target)
+		if move_cooldowns[i]>0:
+			enemy_move_cursor=(i+1)%data.moves.size();boss_attacks+=1
+			return
+
+func clear_boss_warning()->void:
+	if is_instance_valid(boss_warning):boss_warning.queue_free()
+	boss_warning=null;boss_warning_time=0.0
+
+func begin_boss_warning(followup:=false)->void:
+	if not is_instance_valid(target) or target.current_hp<=0:return
+	boss_phase_two=current_hp<=max_hp*.5 or boss_phase_two
+	boss_followup=followup;boss_impact_position=target.global_position
+	boss_warning_time=.95 if followup else 1.4
+	boss_warning=MeshInstance3D.new();boss_warning.name="BossAttackWarning"
+	var ring:=TorusMesh.new();ring.inner_radius=2.85;ring.outer_radius=3.05;ring.rings=32;ring.ring_segments=8;boss_warning.mesh=ring
+	var material:=StandardMaterial3D.new();material.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED;material.albedo_color=Color("#ff624b");material.no_depth_test=true;boss_warning.material_override=material
+	get_parent().add_child(boss_warning);boss_warning.global_position=boss_impact_position+Vector3.UP*.12
+
+func process_boss_pattern(delta:float)->bool:
+	if not enemy or not get_meta("level_boss",false):return false
+	if boss_warning_time<=0:return false
+	if actions_locked():clear_boss_warning();boss_attacks=0;enemy_cast_recovery=2.5;return true
+	boss_warning_time-=delta
+	if is_instance_valid(boss_warning):boss_warning.scale=Vector3(1,.35+.15*sin(boss_warning_time*16),1)
+	if boss_warning_time>0:return true
+	var followup:=boss_phase_two and not boss_followup
+	for victim in get_parent().get_children():
+		if victim is QuibletActor3D and victim.enemy!=enemy and victim.current_hp>0 and horizontal_distance(victim.global_position,boss_impact_position)<=3.0:
+			victim.take_damage(GameData.boss_slam_damage(attack,int(data.level))*damage_multiplier,self)
+	if is_instance_valid(boss_warning):
+		var impact:=MeshInstance3D.new();impact.mesh=boss_warning.mesh;impact.material_override=boss_warning.material_override.duplicate();impact.material_override.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA
+		get_parent().add_child(impact);impact.global_position=boss_warning.global_position
+		var tween:=impact.create_tween();tween.set_parallel(true);tween.tween_property(impact,"scale",Vector3(1.25,.2,1.25),.3);tween.tween_property(impact.material_override,"albedo_color:a",0.0,.3);tween.chain().tween_callback(impact.queue_free)
+	clear_boss_warning()
+	if followup:begin_boss_warning(true)
+	else:
+		boss_attacks=0;enemy_cast_recovery=2.5;add_status("exposed",2.5,.25,self)
+	return true
 
 # Player input activates immediately; only cooldowns and knockout block it.
 func request_move(index:int,new_target:QuibletActor3D)->void:
 	_execute_move(index,new_target,1.0,false,[],false,false,Vector3.INF,true)
 
 func use_move(index:int,new_target:QuibletActor3D)->void:
+	if enemy and (enemy_cast_recovery>0 or boss_warning_time>0):return
 	if index<0 or index>=data.moves.size() or move_cooldowns[index]>0:return
 	_execute_move(index,new_target,1.0,false,[],false)
 
@@ -266,14 +389,14 @@ func _execute_move(index:int,new_target:QuibletActor3D,effectiveness:float,ignor
 		if not is_instance_valid(new_target) and not manual and not (forced and fallback_aim!=Vector3.INF):return
 	if needs_target and not forced and not manual and horizontal_distance(global_position,new_target.global_position)>float(move.range)/35.0*pow(1.38,stone_count(entry,"reach"))+.5:return
 	if not ignore_cooldown:
-		var cooldown_multiplier:=pow(1.28,stone_count(entry,"heavy"))*pow(.72,stone_count(entry,"rush"))*pow(1.35,stone_count(entry,"echo"))*maxf(.1,1.0-bonus_value("cooldown"))
+		var cooldown_multiplier:=GameData.stone_cooldown_scale(stone_count(entry,"heavy"),stone_count(entry,"rush"),stone_count(entry,"echo"))*maxf(.1,1.0-bonus_value("cooldown"))
 		move_cooldowns[index]=float(move.cooldown)*cooldown_multiplier
 		move_cooldown_totals[index]=move_cooldowns[index]
-	var strength:float=effectiveness*pow(1.35,stone_count(entry,"heavy"))
+	var strength:float=effectiveness*GameData.heavy_stone_damage(stone_count(entry,"heavy"))
 	var cast=MOVE_CAST.new()
 	cast.setup(self,entry,new_target,strength,is_echo)
 	if manual:
-		cast.profile["delay"]=0.0
+		if not cast.profile.get("mandatory_windup",false):cast.profile["delay"]=0.0
 		# Avoid two casts steering the same body in conflicting directions.
 		if cast.profile.mode in ["dash","contact","maneuver"]:
 			for active in get_parent().get_children():
@@ -288,6 +411,10 @@ func _execute_move(index:int,new_target:QuibletActor3D,effectiveness:float,ignor
 		if linked_index>=0 and not chain_visited.has(linked_index):_schedule_followup(linked_index,target_reference,effectiveness*.65,chain_visited,false,.18,generation,aim_point)
 	)
 	get_parent().add_child(cast)
+	if enemy and not forced:
+		var recovery:=1.3 if float(GameData.MOVES[entry.name].cooldown)<6.0 else 2.0
+		if get_meta("level_boss",false) or get_meta("boss_helper",false):recovery*=.85
+		enemy_cast_recovery=maxf(enemy_cast_recovery,recovery)
 
 # Echo and Link follow-ups are part of the move that started them, so a stun,
 # bubble, cocoon, or launch landing in the meantime does not stop them. They
@@ -370,6 +497,8 @@ func take_damage(amount:float,attacker:QuibletActor3D=null,reflectable:bool=true
 	# Power Stone bonuses: the attacker's critical hits, then the victim's damage resistance.
 	if reflectable and is_instance_valid(attacker) and attacker!=self and attacker.bonus_value("crit")>0.0 and randf()<minf(1.0,attacker.bonus_value("crit")):amount*=GameData.CRITICAL_HIT_MULTIPLIER
 	amount*=maxf(0.0,1.0-bonus_value("resist"))
+	if statuses.has("exposed"):amount*=1.0+float(statuses.exposed.amount)
+	if is_instance_valid(attacker) and attacker.locked_on_to(self):amount*=1.0+float(attacker.statuses.lock_on.amount)
 	# Corrode and similar effects lower the victim's defense, so it takes more.
 	if statuses.has("defense"):amount*=maxf(.05,1.0-float(statuses.defense.amount))
 	if statuses.has("defense_down"):amount*=1.0+float(statuses.defense_down.amount)
@@ -388,7 +517,9 @@ func take_damage(amount:float,attacker:QuibletActor3D=null,reflectable:bool=true
 	if reflectable and statuses.has("thorns") and is_instance_valid(attacker) and attacker!=self:
 		attacker.take_damage(incoming*float(statuses.thorns.amount),self,false)
 	var tween:=create_tween();tween.tween_interval(.12);tween.tween_callback(func():if is_instance_valid(model):model.set_hurt(false))
-	if current_hp/max_hp<.22 and randf()<.32:retreating=true
+	if current_hp/max_hp<.22 and randf()<.32:
+		if enemy:try_enemy_retreat()
+		else:retreating=true
 	if current_hp<=0:
 		velocity=Vector3.ZERO;has_command=false;command_path.clear();retreating=false;target=null
 		cast_epoch+=1;statuses.clear()
@@ -462,7 +593,7 @@ func update_statuses(delta:float)->void:
 			if status.age>=status.next_disrupt:
 				status.next_disrupt+=.8
 				if randf()<.45:add_status("stun",.25,1.0,from_actor)
-		elif kind=="cocoon":receive_shared_heal(max_hp*float(status.amount)*active_time)
+		elif kind in ["cocoon","sleep"]:receive_shared_heal(max_hp*float(status.amount)*active_time)
 		status.time-=delta
 		if status.time<=0:statuses.erase(kind)
 	if is_instance_valid(model) and current_hp>0:
@@ -471,13 +602,18 @@ func update_statuses(delta:float)->void:
 	update_status_visual()
 
 func actions_locked()->bool:
-	return statuses.has("paralyzed") or statuses.has("cocoon") or statuses.has("stun") or statuses.has("bubble") or statuses.has("launch")
+	return statuses.has("sleep") or statuses.has("paralyzed") or statuses.has("cocoon") or statuses.has("stun") or statuses.has("bubble") or statuses.has("launch")
 
 func movement_locked()->bool:
 	return actions_locked() or statuses.has("root") or statuses.has("anchored")
 
 func cleanse()->void:
-	for kind in ["burn","leech","root","stun","bubble","smoke","poison","slow","confuse","defense_down","weaken","nauseated","slippery","contaminated","paralyzed"]:statuses.erase(kind)
+	for kind in ["burn","leech","root","stun","bubble","smoke","poison","slow","confuse","defense_down","weaken","nauseated","slippery","contaminated","paralyzed","drowse","feinted","exposed"]:statuses.erase(kind)
+
+func locked_on_to(victim:QuibletActor3D)->bool:
+	if not statuses.has("lock_on"):return false
+	var ref:WeakRef=statuses.lock_on.get("target")
+	return ref!=null and ref.get_ref()==victim
 
 func accepts_hit_from(attacker:QuibletActor3D)->bool:
 	var miss:=0.0
@@ -487,10 +623,19 @@ func accepts_hit_from(attacker:QuibletActor3D)->bool:
 	if is_instance_valid(attacker) and attacker.statuses.has("confuse"):miss=maxf(miss,minf(.9,float(attacker.statuses.confuse.amount)))
 	if bonus_value("evasion")>0.0:miss=1-(1-miss)*(1-minf(1.0,bonus_value("evasion")))
 	if is_instance_valid(attacker) and attacker.statuses.has("nauseated"):miss=maxf(miss,float(attacker.statuses.nauseated.amount))
+	if is_instance_valid(attacker):
+		if attacker.statuses.has("feinted"):
+			var source_ref:WeakRef=attacker.statuses.feinted.source
+			if source_ref!=null and source_ref.get_ref()==self:miss=maxf(miss,float(attacker.statuses.feinted.amount))
+		if attacker.statuses.has("accuracy"):miss*=maxf(0.0,1.0-float(attacker.statuses.accuracy.amount))
+		if attacker.locked_on_to(self):miss*=.2
 	return randf()>=miss
 
 func displace(offset:Vector3)->void:
 	if current_hp>0:global_position=safe_displacement(global_position,global_position+offset*maxf(0.0,1.0-bonus_value("knockback")),.55)
+
+func body_displacement(start:Vector3,end:Vector3,padding:float)->Vector3:
+	return start if statuses.has("anchored") else safe_displacement(start,end,padding)
 
 func safe_displacement(start:Vector3,end:Vector3,padding:float)->Vector3:
 	var clamped:=clamp_point(end);var length:=horizontal_distance(start,clamped)

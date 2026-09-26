@@ -3,12 +3,13 @@ extends Control
 
 signal selected(move_name:String)
 signal move_dropped(source_index:int,target_index:int)
-signal move_slot_dropped(source_index:int,target_index:int)
+signal move_slot_dropped(source_index:int,target_index:int,slot_index:int)
 
 var move_name := ""
 var icon_texture:Texture2D
 var move_index := -1
 var suppress_next_release:=false
+var slot_acceptor:Callable
 
 func setup(value: String,index: int = -1) -> void:
 	move_name = value
@@ -30,11 +31,12 @@ func _get_drag_data(_at_position:Vector2)->Variant:
 	return {"kind":"quiblet_move","move_index":move_index,"move_name":move_name}
 
 func _can_drop_data(_at_position:Vector2,data:Variant)->bool:
+	if data is Dictionary and data.get("kind","")=="move_slot" and slot_acceptor.is_valid():return slot_acceptor.call(data)
 	# Another move swaps places; an empty Move Stone slot from another move joins this move.
 	return move_index>=0 and data is Dictionary and data.get("kind","") in ["quiblet_move","move_slot"] and int(data.get("move_index",-1))!=move_index
 
 func _drop_data(_at_position:Vector2,data:Variant)->void:
-	if data.get("kind","")=="move_slot":move_slot_dropped.emit(int(data.move_index),move_index)
+	if data.get("kind","")=="move_slot":move_slot_dropped.emit(int(data.move_index),move_index,int(data.slot_index))
 	else:move_dropped.emit(int(data.move_index),move_index)
 
 func _notification(what:int)->void:

@@ -26,10 +26,70 @@ static func roll_area_species(area_index:int,rng:RandomNumberGenerator,boss:=fal
 	if pool.is_empty():pool=visitors if matching.is_empty() else matching
 	return pool[rng.randi_range(0,pool.size()-1)]
 
+# Fixed campaign progression. Optional routes inherit their host's place in it.
+const AREA_BASE_LEVELS:=[2,5,9,14,20,27,35,44,54,65,77,90,104,119,128,140]
+const NODE_LEVEL_FRACTIONS:=[0.0,.12,.24,.18,.38,.55,.80,.65]
+const NODE_TARGET_FACTORS:=[1.0,1.025,1.05,.94,1.08,1.12,1.12,1.04]
+const DROP_POWER_ANCHORS:=[[2,30],[9,70],[20,125],[35,220],[54,290],[77,350],[104,410],[136,530],[175,740]]
+
+static func progression_area(area_index:int)->int:
+	return clampi(int(OPTIONAL_AREA_HOSTS.get(area_index,area_index)),0,MAIN_AREA_COUNT-1)
+
 static func expedition_area_level(area_index:int)->int:
-	var index:=clampi(int(OPTIONAL_AREA_HOSTS.get(area_index,area_index)),0,MAIN_AREA_COUNT-1)
-	# Early areas begin close to a fresh Quiblet's level, then rise smoothly.
-	return [2,5,9][index] if index<3 else 13+(index-3)*4
+	return AREA_BASE_LEVELS[progression_area(area_index)]
+
+static func progression_level_span(area_index:int)->int:
+	var area:=progression_area(area_index)
+	return AREA_BASE_LEVELS[area+1]-AREA_BASE_LEVELS[area] if area<15 else 15
+
+static func expedition_node_level(area_index:int,node_index:int)->int:
+	return expedition_area_level(area_index)+roundi(progression_level_span(area_index)*float(NODE_LEVEL_FRACTIONS[clampi(node_index,0,7)]))
+
+static func stage_drop_power(level:int)->int:
+	var previous:Array=DROP_POWER_ANCHORS[0]
+	if level<=int(previous[0]):return int(previous[1])
+	for anchor in DROP_POWER_ANCHORS:
+		if level<=int(anchor[0]):
+			var t:=float(level-int(previous[0]))/float(int(anchor[0])-int(previous[0]))
+			return roundi(exp(lerpf(log(float(previous[1])),log(float(anchor[1])),t)))
+		previous=anchor
+	return int(DROP_POWER_ANCHORS.back()[1])
+
+static func expected_unlocked_power_slots(level:int)->float:
+	var total:=0.0
+	for band in POWER_BOARD_UNLOCK_BANDS:
+		total+=float(band[2])*clampf(float(level-int(band[0])+1)/float(int(band[1])-int(band[0])+1),0.0,1.0)
+	return total
+
+static func progression_member_stats(level:int)->Dictionary:
+	# Equipment entering a stage trails its rewards. Balanced Health/Attack
+	# allocation; no perfect bonuses, charms or signature stone combinations.
+	var slots:=expected_unlocked_power_slots(level)
+	var fitted_power:=stage_drop_power(level)*.82
+	return {"hp":190.0+level*15.0+slots*fitted_power,"attack":35.0+level*3.0+slots*.5*fitted_power,"slots":slots,"stone_power":fitted_power}
+
+static func expedition_target(area_index:int,node_index:int)->Dictionary:
+	var area:=progression_area(area_index);var node:=clampi(node_index,0,7)
+	var level:=expedition_node_level(area,node)
+	var members:=(1 if node<2 else 2) if area==0 else (3 if area<3 else (4 if area<7 else 5))
+	var stats:=progression_member_stats(level)
+	var factor:float=NODE_TARGET_FACTORS[node]*(1.04 if area_index>=MAIN_AREA_COUNT else 1.0)
+	var hp:float=stats.hp*members*factor;var attack_value:float=stats.attack*members*factor
+	return {"level":level,"members":members,"slots":stats.slots,"stone_power":roundi(stats.stone_power),"hp":hp,"attack":attack_value,"power":roundi(hp+attack_value),"drop_power":stage_drop_power(level)}
+
+static func team_power_rating(team:Array)->int:
+	var total:=0
+	for q in team:total+=max_hp(q)+attack(q)
+	return total
+
+static func stage_exp_reward(area_index:int,node_index:int,victory:bool,challenger:=false)->int:
+	var level:=expedition_node_level(area_index,node_index)
+	var progress:=maxf(.55,progression_level_span(area_index)/6.5)
+	progress*=1.4 if node_index==6 else (.6 if node_index in [3,7] else 1.0)
+	var whole:=floori(progress);var reward:=0.0
+	for step in whole:reward+=exp_to_level(level+step)
+	reward+=(progress-whole)*exp_to_level(level+whole)
+	return roundi(reward*(1.8 if challenger and victory else 1.0)*(1.0 if victory else .12))
 
 # One biome per island: colours for the tile floor, worn trail, cube cliffs and
 # rim decorations, plus which decoration kinds grow on rims and wall tops,
@@ -728,13 +788,14 @@ static func expedition_biome(area_index:int)->Dictionary:
 # Difficulty curve. Enemy HP and damage multipliers rise by island (linear
 # between anchors of [area, hp, damage]); damage between opposing sides is
 # scaled by the level gap. Knockouts always revive after a fixed ten seconds.
-const ENEMY_SCALING_ANCHORS:=[[0,.68,.58],[3,.85,.75],[6,1.0,.95],[10,1.25,1.15],[15,1.55,1.4]]
-const LEVEL_GAP_PER_LEVEL:=.035
-const LEVEL_GAP_MIN:=.35
-const LEVEL_GAP_MAX:=2.5
+const ENEMY_SCALING_ANCHORS:=[[0,.68,.58],[3,.80,.75],[6,1.0,.90],[10,1.15,1.0],[15,1.25,1.08]]
+const LEVEL_GAP_PER_LEVEL:=.01
+const LEVEL_GAP_MIN:=.70
+const LEVEL_GAP_MAX:=1.40
 const KNOCKOUT_REVIVE_SECONDS:=10.0
-# Team Quiblets below full health recover this fraction of max HP every second.
+# Team Quiblets recover this fraction per second only outside active encounters.
 const PASSIVE_REGEN_PER_SECOND:=.01
+const WAVE_RECOVERY_FRACTION:=.10
 const EXTRA_ENEMY_AREAS:=[6,12]
 
 static func enemy_scaling(area_index:int)->Dictionary:
@@ -747,14 +808,68 @@ static func enemy_scaling(area_index:int)->Dictionary:
 		previous=anchor
 	return {"hp":float(previous[1]),"damage":float(previous[2])}
 
-# Later islands answer the team's own growth. When the team's average level is
-# above the island's stage level, enemies close a share of that lead
-# (ENEMY_LEVEL_CATCH_UP), and they carry a share of the team's fitted Power
-# Stone strength (ENEMY_STONE_SHARE), so an over-levelled, heavily stoned team
-# still meets resistance instead of one-shotting everything past the midpoint.
-# Both shares are zero on the first islands so early play is untouched.
-const ENEMY_LEVEL_CATCH_UP:=[[0,0.0],[2,0.0],[3,.2],[6,.45],[10,.7],[15,.9]]
-const ENEMY_STONE_SHARE:=[[0,0.0],[2,0.0],[3,.25],[6,.55],[10,.85],[15,1.1]]
+static func boss_role_scaling(area_index:int,dedicated:bool,boss:bool)->Dictionary:
+	var t:=clampf(float(progression_area(area_index))/11.0,0.0,1.0)
+	if boss:return {"hp":lerpf(3.0,4.5,t) if dedicated else lerpf(1.8,2.4,t),"damage":lerpf(1.12,1.18,t) if dedicated else lerpf(1.05,1.15,t)}
+	return {"hp":lerpf(1.1,1.4,t),"damage":lerpf(1.0,1.08,t)}
+
+static func boss_escort_limit(area_index:int)->int:
+	var area:=progression_area(area_index)
+	return 1 if area<3 else (2 if area<7 else 3)
+
+static func boss_slam_damage(attack_value:float,level:int)->float:
+	# A fixed late-game base power used to overwhelm starter HP pools.
+	return move_damage(attack_value,minf(100.0,20.0+maxi(1,level)*.8))*1.8
+
+static func stage_enemy_scaling(area_index:int,node_index:int)->Dictionary:
+	var scaling:=enemy_scaling(area_index)
+	var factor:float=NODE_TARGET_FACTORS[clampi(node_index,0,7)]*(1.04 if area_index>=MAIN_AREA_COUNT else 1.0)
+	return {"hp":float(scaling.hp)*factor,"damage":float(scaling.damage)*factor}
+
+static func average_team_level(team:Array)->int:
+	var total:=0
+	for q in team:total+=int(q.level)
+	return roundi(float(total)/maxi(1,team.size()))
+
+# Surface Tension is the only scaling from the entering team's strength.
+# Regional equipment is fixed by stage, so equipment cannot be counted twice.
+const TENSION_RATE:=.20
+const TENSION_CAPS:=[[0,2.0],[3,3.0],[7,5.0],[11,6.0],[15,8.0]]
+const HEALTH_STONE_MULTIPLIER:=2.0
+const MOVE_ATTACK_FACTOR:=.16
+const BASIC_ATTACK_FACTOR:=.055
+
+static func heavy_stone_damage(count:int)->float:
+	return 1.0+.30*maxi(0,count)
+
+static func stone_cooldown_scale(heavy:int,rush:int,echo:int)->float:
+	return (1.0+.22*maxi(0,heavy))*maxf(.45,pow(.82,maxi(0,rush)))*pow(1.35,maxi(0,echo))
+
+static func move_damage(attack_value:float,power:float)->float:
+	return power+attack_value*MOVE_ATTACK_FACTOR
+
+static func power_stone_stat_gain(stone:Dictionary)->int:
+	return roundi(float(stone.power)*(HEALTH_STONE_MULTIPLIER if stone.type=="Health" else 1.0))
+
+static func basic_attack_damage(attack_value:float)->float:
+	return 8.0+attack_value*BASIC_ATTACK_FACTOR
+
+static func team_equivalent_level(team:Array)->int:
+	if team.is_empty():return 1
+	var total:=0.0
+	for q in team:
+		var level:=maxi(1,int(q.level));var species_data:=species(int(q.species))
+		var base_hp:=float(species_data.base_hp)+level*15.0
+		var base_attack:=float(species_data.base_atk)+level*3.0
+		# Geometric mean values offense and durability without letting one stat
+		# dominate. Only excess strength is converted to equivalent levels.
+		var strength:=sqrt(float(max_hp(q))/base_hp*float(attack(q))/base_attack)
+		total+=level*maxf(1.0,strength)
+	return roundi(total/team.size())
+
+static func stage_enemy_stone_bonus(stage_level:int)->Dictionary:
+	var stats:=progression_member_stats(stage_level)
+	return {"hp":roundi(float(stats.slots)*float(stats.stone_power)),"attack":roundi(float(stats.slots)*.5*float(stats.stone_power))}
 
 static func anchored_value(anchors:Array,area_index:int)->float:
 	var area:=float(clampi(int(OPTIONAL_AREA_HOSTS.get(area_index,area_index)),0,MAIN_AREA_COUNT-1))
@@ -766,16 +881,15 @@ static func anchored_value(anchors:Array,area_index:int)->float:
 		previous=anchor
 	return float(previous[1])
 
-static func enemy_level_catch_up(area_index:int)->float:
-	return anchored_value(ENEMY_LEVEL_CATCH_UP,area_index)
+static func enemy_level_catch_up(_area_index:int)->float:
+	return TENSION_RATE
 
-static func enemy_stone_share(area_index:int)->float:
-	return anchored_value(ENEMY_STONE_SHARE,area_index)
+static func enemy_stone_share(_area_index:int)->float:
+	return 0.0
 
-# The level enemies of this stage use once the team's lead is partly closed.
-static func enemy_level_for_stage(stage_level:int,team_average_level:int,area_index:int)->int:
-	if team_average_level<=stage_level:return stage_level
-	return stage_level+roundi(float(team_average_level-stage_level)*enemy_level_catch_up(area_index))
+static func enemy_level_for_stage(stage_level:int,team_strength_level:int,area_index:int)->int:
+	var bonus:=minf(maxf(0.0,team_strength_level-stage_level)*TENSION_RATE,anchored_value(TENSION_CAPS,area_index))
+	return stage_level+roundi(bonus)
 
 # Fitted Power Stone strength of one Quiblet, split by stone type.
 static func fitted_stone_power(q:Dictionary)->Dictionary:
@@ -799,9 +913,10 @@ static func team_stone_power(team:Array)->Dictionary:
 	return result
 
 # Flat HP and Attack bonuses an enemy on this island carries from the team's stones.
-static func enemy_stone_bonus(team_power:Dictionary,area_index:int)->Dictionary:
-	var share:=enemy_stone_share(area_index)
-	return {"hp":int(float(team_power.get("hp",0))*share),"attack":int(float(team_power.get("attack",0))*share)}
+static func enemy_stone_bonus(_team_power:Dictionary,area_index:int)->Dictionary:
+	# Compatibility for callers without an exact node level. Live expeditions
+	# use stage_enemy_stone_bonus with their actual base stage level.
+	return stage_enemy_stone_bonus(expedition_area_level(area_index))
 
 static func level_gap_factor(attacker_level:int,victim_level:int)->float:
 	return clampf(1.0+LEVEL_GAP_PER_LEVEL*float(attacker_level-victim_level),LEVEL_GAP_MIN,LEVEL_GAP_MAX)
@@ -817,22 +932,24 @@ static func extra_enemies_for_area(area_index:int)->int:
 		if area_index>=int(threshold):extra+=1
 	return extra
 
-static func expected_matchup(team_levels:Array,stage_level:int,area_index:int,team_power:Dictionary={}) -> float:
-	# Time-to-kill ratio of one average team member against one average enemy of
-	# this stage: above 1 the team kills faster than it dies. Uses species-average
-	# bases, the team's stone strength, and the enemies' catch-up level and stone share.
+static func expected_matchup(team_levels:Array,stage_level:int,area_index:int,team_power:Dictionary={},team:Array=[],node_index:int=-1)->float:
 	if team_levels.is_empty():return 0.0
-	var base_hp:=0.0;var base_atk:=0.0
-	for entry in SPECIES:base_hp+=float(entry.base_hp);base_atk+=float(entry.base_atk)
-	base_hp/=SPECIES.size();base_atk/=SPECIES.size()
-	var level:=0.0
-	for value in team_levels:level+=float(value)
-	level/=team_levels.size()
-	var scaling:=enemy_scaling(area_index)
-	var enemy_level:=enemy_level_for_stage(stage_level,roundi(level),area_index);var enemy_bonus:=enemy_stone_bonus(team_power,area_index)
-	var player_hp:=base_hp+level*15.0+float(team_power.get("hp",0));var player_damage:=(50.0+(base_atk+level*3.0+float(team_power.get("attack",0)))*.58)*level_gap_factor(roundi(level),enemy_level)
-	var enemy_hp:=(base_hp+enemy_level*15.0+float(enemy_bonus.hp))*float(scaling.hp);var enemy_damage:=(50.0+(base_atk+enemy_level*3.0+float(enemy_bonus.attack))*.58)*float(scaling.damage)*level_gap_factor(enemy_level,roundi(level))
-	return (player_damage/enemy_hp)/(enemy_damage/player_hp)
+	var hp:=0.0;var attack_value:=0.0
+	if not team.is_empty():
+		for q in team:hp+=max_hp(q);attack_value+=attack(q)
+	else:
+		for level in team_levels:
+			hp+=190+float(level)*15+float(team_power.get("hp",0))*HEALTH_STONE_MULTIPLIER
+			attack_value+=35+float(level)*3+float(team_power.get("attack",0))
+	var target:Dictionary
+	if node_index>=0:target=expedition_target(area_index,node_index)
+	else:
+		var stats:=progression_member_stats(stage_level)
+		var count:=int(expedition_target(area_index,0).members)
+		target={"hp":float(stats.hp)*count,"attack":float(stats.attack)*count}
+	# This is a fixed stat guideline, not a simulated win probability. The
+	# geometric mean prevents stacking only HP from looking fully prepared.
+	return sqrt(hp/maxf(1,float(target.hp))*attack_value/maxf(1,float(target.attack)))
 
 # Material follows the number of distinct bonus stats on the stone: Regular (0),
 # Bronze (1), Silver (2), Gold (3), Diamond (4), Obsidian (5 or more). Drops roll
@@ -858,10 +975,9 @@ const POWER_STONE_BONUSES:={
 	"Evasion":{"stat":"evasion","amount":.04,"text":"+4% chance to dodge a move","template":"+%d%% chance to dodge a move"}
 }
 const CRITICAL_HIT_MULTIPLIER:=1.5
-# Special items only drop from expedition victories and are deliberately rare:
-# a small chance on any win, a larger one for Boss levels, and a common one
-# while a Fortune Charm is active. Weights pick which item drops.
-const SPECIAL_ITEM_DROP_CHANCE:={"level":.03,"boss":.08,"fortune":.48}
+# Clears have the strongest special-item roll. Every defeated enemy also gets
+# a small independent roll; caches retain their separate existing rates.
+const SPECIAL_ITEM_DROP_CHANCE:={"level":.12,"boss":.25,"fortune":.60,"enemy":.01,"enemy_fortune":.03,"cache":.08,"cache_fortune":.48}
 # Treasure Keys roll separately on every victory so they stay fairly common
 # compared with the other specials; the cache they open is the rare part.
 const TREASURE_KEY_DROP_CHANCE:={"level":.12,"boss":.25,"fortune":.35}
@@ -869,10 +985,28 @@ const TREASURE_CACHE_LEVEL_CHANCE:=.45
 const SPECIAL_ITEM_DROP_WEIGHTS:={
 	"Memory Fruit":4,"Move Crystal":4,"Echo Crystal":3,"Growth Fruit":4,
 	"Bountiful Berry":3,"Empty Leftover Jar":4,"Fortune Charm":2,"Challenger's Charm":2,
-	"Health Charm":1,"Attack Charm":1,"Prodigy Fruit":1,"Combiner Charm":4
+	"Prodigy Fruit":1
 }
 
+# Equipment/combining charms roll independently of the rare special-item pool.
+# Each pair is Attack/Health chance, then Combiner chance. Fortune doubles both.
+const INDEPENDENT_DROP_CHARMS:=["Attack Charm","Health Charm","Combiner Charm"]
+const CHARM_DROP_CHANCES:={"enemy":Vector2(.01,.003),"level":Vector2(.10,.03),"boss":Vector2(.18,.05),"cache":Vector2(.10,.03)}
+
+static func charm_drop_chance(item:String,source:String,fortune:bool)->float:
+	if not INDEPENDENT_DROP_CHARMS.has(item):return 0.0
+	var chances:Vector2=CHARM_DROP_CHANCES.get(source,CHARM_DROP_CHANCES.level)
+	return minf(1.0,(chances.y if item=="Combiner Charm" else chances.x)*(2.0 if fortune else 1.0))
+
+static func roll_drop_charms(source:String,fortune:bool,rng:RandomNumberGenerator=null)->Array[String]:
+	var result:Array[String]=[]
+	for item in INDEPENDENT_DROP_CHARMS:
+		if (rng.randf() if rng!=null else randf())<charm_drop_chance(item,source,fortune):result.append(item)
+	return result
+
 static func special_item_drop_chance(stage_kind:String,fortune:bool)->float:
+	if stage_kind=="enemy":return float(SPECIAL_ITEM_DROP_CHANCE.enemy_fortune if fortune else SPECIAL_ITEM_DROP_CHANCE.enemy)
+	if stage_kind=="cache":return float(SPECIAL_ITEM_DROP_CHANCE.cache_fortune if fortune else SPECIAL_ITEM_DROP_CHANCE.cache)
 	if fortune:return float(SPECIAL_ITEM_DROP_CHANCE.fortune)
 	return float(SPECIAL_ITEM_DROP_CHANCE.boss) if stage_kind=="boss" else float(SPECIAL_ITEM_DROP_CHANCE.level)
 
@@ -883,7 +1017,7 @@ static func treasure_key_drop_chance(stage_kind:String,fortune:bool)->float:
 static func roll_treasure_key(stage_kind:String,fortune:bool,rng:RandomNumberGenerator=null)->bool:
 	return (rng.randf() if rng!=null else randf())<treasure_key_drop_chance(stage_kind,fortune)
 
-# Returns the special item a victorious expedition drops, or "" for none.
+# Returns one weighted special item for a clear, enemy or cache, or "" for none.
 static func roll_special_item(stage_kind:String,fortune:bool,rng:RandomNumberGenerator=null)->String:
 	var roll:=rng.randf() if rng!=null else randf()
 	if roll>=special_item_drop_chance(stage_kind,fortune):return ""
@@ -977,14 +1111,14 @@ static func power_stone_drop_average(tier:int)->int:
 	var power_range:Vector2i=POWER_STONE_RANGES[clampi(tier,1,POWER_STONE_RANGES.size())-1]
 	return roundi((power_range.x+power_range.y)*.5)
 
-const REVITALIZE_MAX_POWER:=630
+const REVITALIZE_MAX_POWER:=740
 const COMBINE_MIN_STONES:=2
 const COMBINE_MAX_STONES:=4
 
-# Revitalizer follows reached expedition levels directly, independently of loot tiers.
+# Revitalizer follows the actual stage-drop average, independently of presentation tiers.
 # A fixed progress baseline prevents repeated upgrades from farming random bonuses.
 static func revitalizer_base_power(stage_level:int)->int:
-	return clampi(stage_level*6,20,REVITALIZE_MAX_POWER)
+	return stage_drop_power(stage_level)
 
 static func revitalized_power(stone:Dictionary,stage_level:int)->int:
 	return maxi(int(stone.power),revitalizer_base_power(stage_level))
@@ -1107,6 +1241,12 @@ static func make_power_stone(stone_type:String,tier:int,bonuses:Array=[])->Dicti
 	var power_range:Vector2i=POWER_STONE_RANGES[tier-1]
 	return normalize_power_stone({"type":stone_type,"tier":tier,"power":randi_range(power_range.x,power_range.y),"bonuses":bonuses.duplicate(true)})
 
+static func make_stage_power_stone(stone_type:String,stage_level:int,bonuses:Array=[],rng:RandomNumberGenerator=null)->Dictionary:
+	var average:=stage_drop_power(stage_level)
+	var low:=roundi(average*.90);var high:=roundi(average*1.10)
+	var power:=rng.randi_range(low,high) if rng!=null else randi_range(low,high)
+	return normalize_power_stone({"type":stone_type,"tier":power_stone_tier_for_power(power),"power":power,"bonuses":bonuses.duplicate(true)})
+
 static func power_stone_tier_for_level(level:int)->int:
 	# Keep the existing level * 6 progression as the tier selector. Roll the actual
 	# power only after the tier is chosen, using its inclusive configured range.
@@ -1129,7 +1269,7 @@ const SPECIES := [
 	{"name":"Frondle", "visual_scale":1.2, "model":"res://models/Frondle.glb", "model_yaw":PI*1.5, "element":"Green", "color":Color("#4f9f68"), "accent":Color("#c9e785"), "shape":"crest", "base_hp":196, "base_atk":34, "range":125.0, "family":"spriggle"},
 	{"name":"Vinee", "element":"Green", "color":Color("#65ad65"), "accent":Color("#e1ef8b"), "shape":"tail", "base_hp":174, "base_atk":37, "range":100.0, "family":"vinee"},
 	{"name":"Bloomie", "element":"Green", "color":Color("#8dcf75"), "accent":Color("#f2b7d2"), "shape":"tuft", "base_hp":185, "base_atk":24, "range":145.0, "family":"bloomie", "model":"res://models/Bloomie.glb", "model_yaw":PI*1.5},
-	{"name":"Sparko", "element":"Fire", "color":Color("#f07a4d"), "accent":Color("#ffd25f"), "shape":"tail", "base_hp":140, "base_atk":39, "range":145.0, "family":"sparko", "evolves_to":7, "evolve_level":18},
+	{"name":"Flaret", "element":"Fire", "color":Color("#f07a4d"), "accent":Color("#ffd25f"), "shape":"tail", "base_hp":140, "base_atk":39, "range":145.0, "family":"sparko", "evolves_to":7, "evolve_level":18},
 	{"name":"Scorchit", "element":"Fire", "color":Color("#d94b3f"), "accent":Color("#ffad48"), "shape":"horn", "base_hp":192, "base_atk":43, "range":105.0, "family":"sparko"},
 	{"name":"Fistor", "element":"Psychic", "color":Color("#a06fd6"), "accent":Color("#e7d3ff"), "shape":"fists", "base_hp":174, "base_atk":34, "range":150.0, "family":"fistor"},
 	{"name":"Carapuff", "element":"Psychic", "color":Color("#c39be8"), "accent":Color("#f0e4ff"), "shape":"puff", "base_hp":178, "base_atk":35, "range":160.0, "family":"carapuff"},
@@ -1151,18 +1291,36 @@ const SPECIES := [
 	{"name": "Zippet", "element": "Electric", "shape": "sphere", "base_hp": 140, "base_atk": 37, "range": 95.0, "family": "zippet", "speed_multiplier": 1.35,"color":Color("#e5bf48"),"accent":Color("#fff0a0")},
 	{"name": "Voltick", "element": "Electric", "shape": "horn", "base_hp": 245, "base_atk": 36, "range": 85.0, "family": "voltick", "model": "res://models/Voltick.glb", "model_yaw":PI*1.5, "visual_scale":0.8, "speed_multiplier": 0.85,"color":Color("#e5bf48"),"accent":Color("#fff0a0")},
 	{"name": "Electrish", "element": "Electric", "shape": "puff", "base_hp": 170, "base_atk": 35, "range": 150.0, "family": "electrish", "model": "res://models/Electrish.glb", "model_yaw":PI*1.5, "visual_scale":1.15, "model_hover": 0.6,"color":Color("#e5bf48"),"accent":Color("#fff0a0")},
-	{"name": "Lombat", "element": "Air", "elements": ["Air", "Poison"], "shape": "ears", "base_hp": 170, "base_atk": 32, "range": 100.0, "family": "lombat", "evolves_to": 29, "evolve_level": 22, "model": "res://models/Lombat.glb", "model_yaw":PI*0.5,"color":Color("#ad8bc0"),"accent":Color("#dbc6e8")},
-	{"name": "Lombera", "element": "Air", "elements": ["Air", "Poison"], "shape": "ears", "base_hp": 225, "base_atk": 43, "range": 115.0, "family": "lombat", "visual_scale": 1.2, "model": "res://models/Lombera.glb", "model_yaw":PI*0.5,"color":Color("#ad8bc0"),"accent":Color("#dbc6e8")},
-	{"name": "Snobble", "element": "Ice", "shape": "sphere", "base_hp": 250, "base_atk": 36, "range": 85.0, "family": "snobble", "speed_multiplier": 0.85, "model": "res://models/Snobble.glb", "model_yaw":PI*0.5,"color":Color("#bde7ee"),"accent":Color("#f4ffff")}
+	{"name": "Lombat", "element": "Air", "elements": ["Air", "Poison"], "shape": "ears", "base_hp": 170, "base_atk": 32, "range": 100.0, "family": "lombat", "evolves_to": 29, "evolve_level": 22, "model": "res://models/Lombat.glb", "model_yaw":PI*1.5,"color":Color("#ad8bc0"),"accent":Color("#dbc6e8")},
+	{"name": "Lombera", "element": "Air", "elements": ["Air", "Poison"], "shape": "ears", "base_hp": 225, "base_atk": 43, "range": 115.0, "family": "lombat", "visual_scale": 1.2, "model": "res://models/Lombera.glb", "model_yaw":PI*1.5,"color":Color("#ad8bc0"),"accent":Color("#dbc6e8")},
+	{"name": "Snobble", "element": "Ice", "shape": "sphere", "base_hp": 250, "base_atk": 36, "range": 85.0, "family": "snobble", "speed_multiplier": 0.85, "model": "res://models/Snobble.glb", "model_yaw":PI*1.5,"color":Color("#bde7ee"),"accent":Color("#f4ffff")},
+	{"name": "Dromble", "element": "Psychic", "shape": "sphere", "base_hp": 255, "base_atk": 34, "range": 160.0, "family": "dromble", "speed_multiplier": 0.65, "innate_bonuses": {"resist": 0.15}, "model": "res://models/Dromble.glb","model_yaw":PI*1.5,"color":Color("#bdb8c8"),"accent":Color("#e2dce9")},
+	{"name": "Dartlet", "element": "Air", "elements": ["Air", "Psychic"], "shape": "sphere", "base_hp": 130, "base_atk": 36, "range": 110.0, "family": "dartlet", "evolves_to": 33, "evolve_level": 24, "speed_multiplier": 1.65, "innate_bonuses": {"evasion": 0.15}, "model": "res://models/Dartlet.glb", "visual_scale": 0.275, "model_hover": 3.5, "model_float": true,"model_yaw":PI*1.5,"color":Color("#95604d"),"accent":Color("#e2dce9")},
+	{"name": "Dartle", "element": "Air", "elements": ["Air", "Psychic"], "shape": "sphere", "base_hp": 185, "base_atk": 52, "range": 120.0, "family": "dartlet", "speed_multiplier": 1.9, "innate_bonuses": {"evasion": 0.2}, "model": "res://models/Dartle.glb", "visual_scale": 0.35, "model_hover": 3.5, "model_float": true,"model_yaw":PI*1.5,"color":Color("#95604d"),"accent":Color("#e2dce9")}
 ]
 
 const MOVES := {
+	"Armor":{"icon":"res://textures/Moves/EarGaurd.png","power":0.0,"cooldown":9.0,"range":0.0,"color":Color("#a8cbe3"),"kind":"recover","desc":"Reduces incoming damage by 45% for 6 seconds while allowing movement. Sharing protects nearby allies."},
+	"Mach Pass":{"power": 160.0, "cooldown": 19.0, "range": 390.0, "kind": "dash", "desc": "Accelerates backward, then passes through enemies. A lighter pressure wave follows with strong knockback.","color":Color("#baa1e4")},
+	"Perfect Dive":{"power": 155.0, "cooldown": 13.0, "range": 270.0, "kind": "dash", "desc": "Briefly lines up while vulnerable, then performs a fast tracking dive.","color":Color("#baa1e4")},
+	"Lock On":{"power": 0.0, "cooldown": 10.0, "range": 240.0, "kind": "recover", "desc": "Focuses on one target, raising accuracy and damage against it.","color":Color("#baa1e4")},
+	"Decoy":{"power": 0.0, "cooldown": 16.0, "range": 0.0, "kind": "recover", "desc": "Creates a non-attacking clone that draws attacks until destroyed or its time expires.","color":Color("#baa1e4")},
+	"Feint":{"power": 65.0, "cooldown": 8.0, "range": 170.0, "kind": "dash", "desc": "An afterimage flies forward while the user banks around its target. The target is less accurate against the user.","color":Color("#baa1e4")},
+	"Focus":{"power": 0.0, "cooldown": 9.0, "range": 0.0, "kind": "recover", "desc": "Raises accuracy and attack power. Sharing passes only the attack buff.","color":Color("#baa1e4")},
+	"Flyby":{"power": 80.0, "cooldown": 7.0, "range": 260.0, "kind": "dash", "desc": "Flies straight through enemies, damaging every enemy along the path.","color":Color("#baa1e4")},
+	"Wing Clip":{"power": 55.0, "cooldown": 3.5, "range": 120.0, "kind": "dash", "desc": "Swoops past an enemy with a wing strike and light knockback.","color":Color("#baa1e4")},
+	"Daydream":{"power": 0.0, "cooldown": 18.0, "range": 0.0, "kind": "recover", "desc": "Creates harmless false Drombles, greatly increasing evasion.","color":Color("#baa1e4")},
+	"Dream Haze":{"power": 22.0, "cooldown": 10.0, "range": 0.0, "kind": "burst", "desc": "A Psychic haze slows nearby enemies and may confuse them.","color":Color("#baa1e4")},
+	"Sleepwalk":{"power": 0.0, "cooldown": 9.0, "range": 0.0, "kind": "recover", "desc": "Wanders asleep with increased evasion and movement speed.","color":Color("#baa1e4")},
+	"Doze":{"icon":"res://textures/Moves/Doze.png","power": 0.0, "cooldown": 10.0, "range": 0.0, "kind": "recover", "desc": "Sleeps briefly, gradually restoring HP.","color":Color("#baa1e4")},
+	"Drowse":{"power": 0.0, "cooldown": 8.0, "range": 190.0, "kind": "projectile", "desc": "Slows movement and attack cooldown recovery.","color":Color("#baa1e4")},
+	"Confuse":{"power": 0.0, "cooldown": 7.0, "range": 190.0, "kind": "projectile", "desc": "Scrambles an enemy\u2019s perception for a short time.","color":Color("#baa1e4")},
+	"Psy Push":{"power": 55.0, "cooldown": 5.0, "range": 160.0, "kind": "cone", "desc": "Psychic force damages and pushes enemies away.","color":Color("#baa1e4")},
 	"Ear Slap":{"power": 62.0, "cooldown": 4.0, "range": 90.0, "kind": "burst", "desc": "Swings an enormous ear into an enemy, knocking it backward.","color":Color("#b5cedf")},
 	"Dive":{"power": 82.0, "cooldown": 6.0, "range": 170.0, "kind": "burst", "desc": "Leaps upward and dives into an enemy.","color":Color("#b5cedf")},
 	"Fan":{"power": 26.0, "cooldown": 7.0, "range": 170.0, "kind": "burst", "desc": "Sustained ear flaps send a stream of wind forward, repeatedly pushing enemies away.","color":Color("#b5cedf")},
 	"Poison Bite":{"power": 65.0, "cooldown": 5.0, "range": 90.0, "kind": "burst", "desc": "Lunges forward for a venomous bite with a strong Poison chance.","color":Color("#b5cedf")},
 	"Keen Ears":{"power": 0.0, "cooldown": 8.0, "range": 0.0, "kind": "recover", "desc": "Focuses its hearing to evade attacks. Sharing spreads the evasion buff to teammates.","color":Color("#b5cedf")},
-	"Ear Guard":{"power": 0.0, "cooldown": 9.0, "range": 0.0, "kind": "recover", "desc": "Wraps itself in its ears, reducing incoming damage for a short time.","color":Color("#b5cedf")},
 	"Thunderflap":{"power": 135.0, "cooldown": 15.0, "range": 160.0, "kind": "burst", "desc": "A tremendous ear clap releases a pressure wave with very strong knockback.","color":Color("#b5cedf")},
 	"Venom Fang":{"power": 100.0, "cooldown": 8.0, "range": 190.0, "kind": "burst", "desc": "Swoops through an enemy with a powerful bite and a very high Poison chance.","color":Color("#b5cedf")},
 	"Toxic Gust":{"power": 58.0, "cooldown": 8.0, "range": 190.0, "kind": "projectile", "desc": "Blasts a broad moving cloud of poisonous fumes forward.","color":Color("#b5cedf")},
@@ -1171,7 +1329,6 @@ const MOVES := {
 	"Tusk Jab":{"power": 90.0, "cooldown": 4.8, "range": 90.0, "kind": "burst", "desc": "Jabs forward with both tusks for heavy physical damage.","color":Color("#a8e8f3")},
 	"Snowplow":{"power": 45.0, "cooldown": 8.0, "range": 175.0, "kind": "burst", "desc": "Slides forward while continuously pushing enemies ahead of itself.","color":Color("#a8e8f3")},
 	"Frost Breath":{"power": 35.0, "cooldown": 7.0, "range": 150.0, "kind": "burst", "desc": "Breathes a sustained cone of freezing air, repeatedly damaging and slowing enemies.","color":Color("#a8e8f3")},
-	"Ice Armor":{"power": 0.0, "cooldown": 9.0, "range": 0.0, "kind": "recover", "desc": "Coats itself in ice to reduce incoming damage. Sharing spreads the defense buff.","color":Color("#a8e8f3")},
 	"Avalanche":{"power": 140.0, "cooldown": 12.0, "range": 190.0, "kind": "burst", "desc": "Snow and ice crash down on a targeted area, dealing heavy damage.","color":Color("#a8e8f3")},
 	"Tuskberg":{"power": 150.0, "cooldown": 14.0, "range": 175.0, "kind": "burst", "desc": "Tears a huge chunk of ice from beneath the target, damaging and launching nearby enemies.","color":Color("#a8e8f3")},
 	"Shock Bite":{"power": 48.0, "cooldown": 4.0, "range": 100.0, "kind": "burst", "desc": "Lunges and bites, with a small chance to Paralyze.","color":Color("#f4d456")},
@@ -1182,7 +1339,7 @@ const MOVES := {
 	"Discharge":{"power": 85.0, "cooldown": 10.0, "range": 155.0, "kind": "burst", "desc": "Charges, then releases a powerful radial electrical blast.","color":Color("#f4d456")},
 	"Slither":{"power": 0.0, "cooldown": 4.0, "range": 170.0, "kind": "burst", "desc": "Wriggles forward rapidly to reposition without dealing damage.","color":Color("#f4d456")},
 	"Shock Toss":{"power": 45.0, "cooldown": 7.0, "range": 100.0, "kind": "burst", "desc": "Grabs and shocks an enemy, then throws it away.","color":Color("#f4d456")},
-	"Amp Drain":{"power": 25.0, "cooldown": 9.0, "range": 110.0, "kind": "burst", "desc": "Clamps onto an enemy and drains HP through repeated shocks while remaining vulnerable.","color":Color("#f4d456")},
+	"Amp Drain":{"icon":"res://textures/Moves/AmpDrain.png","power": 25.0, "cooldown": 9.0, "range": 110.0, "kind": "burst", "desc": "Clamps onto an enemy and drains HP through repeated shocks while remaining vulnerable.","color":Color("#f4d456")},
 	"Zap":{"power": 30.0, "cooldown": 1.8, "range": 200.0, "kind": "projectile", "desc": "Fires a small, fast electrical bolt.","color":Color("#f4d456")},
 	"Shock Touch":{"power": 38.0, "cooldown": 4.5, "range": 125.0, "kind": "burst", "desc": "Darts into an enemy for a shock, then backs away.","color":Color("#f4d456")},
 	"Zip":{"power": 43.0, "cooldown": 4.0, "range": 190.0, "kind": "burst", "desc": "Dashes forward almost instantly, damaging enemies it passes through.","color":Color("#f4d456")},
@@ -1197,7 +1354,6 @@ const MOVES := {
 	"Ground Scrape":{"power": 45.0, "cooldown": 6.0, "range": 160.0, "kind": "burst", "desc": "Charges with its horns scraping the ground, spraying damaging sparks.","color":Color("#f4d456")},
 	"Grounded":{"power": 0.0, "cooldown": 9.0, "range": 0.0, "kind": "recover", "desc": "Plants its legs, greatly resisting knockback and electrical disruption for a short time.","color":Color("#f4d456")},
 	"Horn Lift":{"power": 50.0, "cooldown": 5.0, "range": 90.0, "kind": "burst", "desc": "Gets under an enemy and flicks it into the air with its horns.","color":Color("#f4d456")},
-	"Shock Clamp":{"power": 32.0, "cooldown": 8.0, "range": 100.0, "kind": "burst", "desc": "Locks an enemy between its horns and repeatedly shocks it, restricting both combatants movement.","color":Color("#f4d456")},
 	"Tentacle Zap":{"power": 38.0, "cooldown": 2.5, "range": 140.0, "kind": "burst", "desc": "Lashes an enemy with an electrified tentacle.","color":Color("#f4d456")},
 	"Nerve Sting":{"power": 22.0, "cooldown": 5.0, "range": 135.0, "kind": "burst", "desc": "Jabs with a conductive tentacle tip, with a high Paralysis chance.","color":Color("#f4d456")},
 	"Shock Net":{"power": 30.0, "cooldown": 7.0, "range": 150.0, "kind": "burst", "desc": "Spreads its tentacles into an electrified area that repeatedly damages and disrupts movement.","color":Color("#f4d456")},
@@ -1257,8 +1413,8 @@ const MOVES := {
 	"Thorn Burst":{"icon":"res://textures/Moves/ThornBurst.png","power":52.0,"cooldown":4.0,"range":165.0,"color":Color("#65b96d"),"kind":"burst","desc":"Causes sharp thorns to erupt from the ground around a targeted location."},
 	"Sprout":{"power":40.0,"cooldown":3.0,"range":170.0,"color":Color("#65b96d"),"kind":"burst","desc":"Rapidly grows a plant underneath an enemy, striking it from below."},
 	"Seed Pop":{"power":38.0,"cooldown":2.5,"range":190.0,"color":Color("#65b96d"),"kind":"projectile","desc":"Fires a seed that sticks where it lands and bursts shortly afterward."},
-	"Healing Bloom":{"icon":"res://textures/Moves/HealingBloom.png","power":0.0,"cooldown":7.0,"range":0.0,"color":Color("#65b96d"),"kind":"recover","desc":"Grows a flower that periodically heals nearby allies."},
-	"Pollen Puff":{"power":0.0,"cooldown":5.0,"range":0.0,"color":Color("#65b96d"),"kind":"recover","desc":"Releases healing pollen that restores HP to the user and nearby allies."},
+	"Healing Bloom":{"icon":"res://textures/Moves/HealingBloom.png","power":0.0,"cooldown":7.0,"range":0.0,"color":Color("#65b96d"),"kind":"recover","desc":"Grows a flower that restores 2.5% max HP every half-second for 4 seconds before Move Stone and healing bonuses."},
+	"Pollen Puff":{"icon":"res://textures/Moves/PollenPuff.png","power":0.0,"cooldown":6.5,"range":0.0,"color":Color("#65b96d"),"kind":"recover","desc":"Restores 18% of max HP to the user and nearby allies before Move Stone and healing bonuses."},
 	"Soothing Scent":{"icon":"res://textures/Moves/SoothingScent.png","power":0.0,"cooldown":6.0,"range":0.0,"color":Color("#65b96d"),"kind":"recover","desc":"Removes negative status effects from the user."},
 	"Overgrowth":{"power":76.0,"cooldown":7.0,"range":150.0,"color":Color("#65b96d"),"kind":"burst","desc":"Causes a huge mass of vegetation to erupt, damaging and pushing enemies."},
 	"Spore Cloud":{"power":24.0,"cooldown":6.0,"range":130.0,"color":Color("#65b96d"),"kind":"burst","desc":"Releases spores that inflict a disabling status on enemies caught inside."},
@@ -1267,15 +1423,14 @@ const MOVES := {
 	"Root Slam":{"power":72.0,"cooldown":6.0,"range":155.0,"color":Color("#65b96d"),"kind":"burst","desc":"Grows a massive root that rises and slams down onto an area."},
 	"Vine Swing":{"power":38.0,"cooldown":3.0,"range":180.0,"color":Color("#65b96d"),"kind":"burst","desc":"Attaches a vine to a target or location and rapidly pulls the user toward it."},
 	"Growth Spurt":{"power":0.0,"cooldown":8.0,"range":0.0,"color":Color("#65b96d"),"kind":"recover","desc":"Temporarily makes the user larger, increasing the size and force of physical attacks."},
-	"Cocoon":{"power":0.0,"cooldown":9.0,"range":0.0,"color":Color("#65b96d"),"kind":"recover","desc":"Encases the user and gradually heals it while preventing other actions."},
-	"Leech Bloom":{"power":46.0,"cooldown":5.0,"range":155.0,"color":Color("#65b96d"),"kind":"projectile","desc":"Grows a parasitic bloom that damages a target and restores HP to the user."},
+	"Cocoon":{"icon":"res://textures/Moves/HunkerDown.png","power":0.0,"cooldown":9.0,"range":0.0,"color":Color("#65b96d"),"kind":"recover","desc":"Encases the user and gradually heals it while preventing other actions."},
+	"Leech Bloom":{"icon":"res://textures/Moves/LeechBloom.png","power":46.0,"cooldown":5.0,"range":155.0,"color":Color("#65b96d"),"kind":"projectile","desc":"Grows a parasitic bloom that damages a target and restores HP to the user."},
 	"Last Bloom":{"power":0.0,"cooldown":11.0,"range":0.0,"color":Color("#65b96d"),"kind":"recover","desc":"Creates a powerful bloom that greatly heals the user and nearby allies."},
 	"Fireball":{"icon":"res://textures/Moves/Fireball.png","power":36.0,"cooldown":1.6,"range":205.0,"color":Color("#ef654c"),"kind":"projectile","desc":"Fires a basic ball of flame that explodes on impact."},
 	"Flame Burst":{"power":46.0,"cooldown":2.7,"range":95.0,"color":Color("#ef654c"),"kind":"burst","desc":"Releases a concentrated blast of fire directly in front of the user."},
 	"Spark Burst":{"power":42.0,"cooldown":3.0,"range":100.0,"color":Color("#ef654c"),"kind":"burst","desc":"Releases fire outward around the user."},
 	"Flare":{"icon":"res://textures/Moves/Flare.png","power":54.0,"cooldown":4.0,"range":110.0,"color":Color("#ef654c"),"kind":"burst","desc":"Creates a sudden fiery explosion around the user with knockback."},
 	"Flame Dash":{"icon":"res://textures/Moves/FlameDash.png","power":48.0,"cooldown":3.2,"range":120.0,"color":Color("#ef654c"),"kind":"burst","desc":"Engulfs the user in fire and dashes through enemies."},
-	"Blazing Rush":{"power":66.0,"cooldown":5.0,"range":145.0,"color":Color("#ef654c"),"kind":"burst","desc":"Performs a longer, heavier fiery charge through enemies."},
 	"Flame Wave":{"power":64.0,"cooldown":5.0,"range":180.0,"color":Color("#ef654c"),"kind":"burst","desc":"Sends a broad moving wall of fire forward."},
 	"Firestorm":{"power":72.0,"cooldown":7.0,"range":190.0,"color":Color("#ef654c"),"kind":"burst","desc":"Causes repeated flame eruptions throughout a targeted area."},
 	"Inferno":{"icon":"res://textures/Moves/Inferno.png","power":100.0,"cooldown":11.0,"range":120.0,"color":Color("#ef654c"),"kind":"burst","desc":"Creates an enormous explosion around the user with a very long cooldown."},
@@ -1296,12 +1451,10 @@ const MOVES := {
 	"Telekinesis":{"power":30.0,"cooldown":4.5,"range":175.0,"color":Color("#b07fe0"),"kind":"burst","desc":"Lifts or moves an enemy briefly using psychic force."},
 	"Psychic Push":{"power":46.0,"cooldown":3.2,"range":110.0,"color":Color("#b07fe0"),"kind":"burst","desc":"Sends a burst of psychic force forward, damaging and pushing enemies away."},
 	"Psychic Pull":{"power":28.0,"cooldown":4.5,"range":190.0,"color":Color("#b07fe0"),"kind":"projectile","desc":"Pulls a targeted enemy toward Carapuff."},
-	"Psy Barrier":{"power":0.0,"cooldown":7.0,"range":0.0,"color":Color("#b07fe0"),"kind":"recover","desc":"Creates a temporary psychic barrier that reduces incoming damage."},
 	"Gravity Well":{"power":40.0,"cooldown":6.0,"range":180.0,"color":Color("#b07fe0"),"kind":"burst","desc":"Creates a psychic field that pulls nearby enemies toward its center."},
 	"Mind Squeeze":{"power":40.0,"cooldown":4.8,"range":185.0,"color":Color("#b07fe0"),"kind":"burst","desc":"Surrounds an enemy in psychic force and repeatedly compresses them for damage."},
 	"Psy Wall":{"power":24.0,"cooldown":5.5,"range":170.0,"color":Color("#b07fe0"),"kind":"burst","desc":"Creates a temporary wall of psychic energy that blocks or hinders movement."},
 	"Psy Bounce":{"power":50.0,"cooldown":4.0,"range":150.0,"color":Color("#b07fe0"),"kind":"burst","desc":"Uses psychic force to launch Carapuff rapidly to another position, damaging enemies it collides with."},
-	"Puff Grab":{"power":78.0,"cooldown":7.0,"range":165.0,"color":Color("#8a5fd0"),"kind":"burst","desc":"Shapes its psychic puff into a large grabbing appendage that picks up and throws an enemy."},
 	"Mind Pop":{"power":104.0,"cooldown":11.0,"range":130.0,"color":Color("#8a5fd0"),"kind":"burst","desc":"Compresses its psychic puff into a tiny point, then releases it in a large psychic explosion."},
 	"Quake":{"power":44.0,"cooldown":4.0,"range":120.0,"color":Color("#c8965a"),"kind":"burst","desc":"Slams the ground and sends a damaging shockwave outward."},
 	"Rock Toss":{"power":40.0,"cooldown":2.2,"range":195.0,"color":Color("#c8965a"),"kind":"projectile","desc":"Digs up a chunk of rock and throws it at an enemy."},
@@ -1315,24 +1468,18 @@ const MOVES := {
 	"Dust-Up":{"power":60.0,"cooldown":6.5,"range":120.0,"color":Color("#a9743d"),"kind":"burst","desc":"Burrows near enemies, then erupts with a huge dusty blast that deals moderate damage and may inflict Confused."},
 	"Tunneling Charge":{"power":72.0,"cooldown":6.0,"range":170.0,"color":Color("#a9743d"),"kind":"burst","desc":"Travels rapidly underground in a straight line, damaging or disturbing enemies above the tunnel before emerging at the end."},
 	"Stone Wall":{"power":22.0,"cooldown":5.5,"range":150.0,"color":Color("#c8965a"),"kind":"burst","desc":"Rearranges part of its body into a temporary blocking wall."},
-	"Rock Armor":{"power":0.0,"cooldown":7.0,"range":0.0,"color":Color("#c8965a"),"kind":"recover","desc":"Packs its rocks tightly around itself to reduce incoming damage."},
 	"Boulder Roll":{"power":58.0,"cooldown":4.5,"range":145.0,"color":Color("#c8965a"),"kind":"burst","desc":"Rearranges into a rounder form and rolls through enemies."},
 	"Earth Pillar":{"power":60.0,"cooldown":5.5,"range":175.0,"color":Color("#c8965a"),"kind":"burst","desc":"Raises a pillar of stone beneath a target, damaging and launching them."},
 	"Stone Spikes":{"power":52.0,"cooldown":4.0,"range":165.0,"color":Color("#c8965a"),"kind":"burst","desc":"Causes sharp rocks to erupt from the ground in a target area."},
-	"Brace":{"power":0.0,"cooldown":7.5,"range":0.0,"color":Color("#c8965a"),"kind":"recover","desc":"Braces for protection. Snobble gains damage reduction and anchors itself; Sharing passes its defense boost, not its anchoring."},
+	"Brace":{"power":0.0,"cooldown":7.5,"range":0.0,"color":Color("#c8965a"),"kind":"recover","desc":"Reduces incoming damage by 60% for 6 seconds, prevents movement, and grants knockback immunity. Sharing passes damage reduction without anchoring allies."},
 	"Crush":{"power":66.0,"cooldown":5.0,"range":150.0,"color":Color("#c8965a"),"kind":"burst","desc":"Splits apart around an enemy, then slams its rocks back together on the target."},
 	"Barricade":{"power":20.0,"cooldown":6.0,"range":160.0,"color":Color("#c8965a"),"kind":"burst","desc":"Spreads several rock pieces into a temporary obstacle line."},
 	"Rock Scatter":{"power":72.0,"cooldown":7.0,"range":150.0,"color":Color("#a9743d"),"kind":"burst","desc":"Explodes its body outward into multiple rock projectiles, then snaps itself back together."},
-	"Guard":{"power":0.0,"cooldown":6.0,"range":0.0,"color":Color("#d8c39a"),"kind":"recover","desc":"Braces behind its shell and greatly reduces incoming damage for a short time."},
-	"Taunt":{"power":0.0,"cooldown":6.0,"range":0.0,"color":Color("#d8c39a"),"kind":"recover","desc":"Makes nearby enemies prioritize Shellmie as their target."},
-	"Fortify":{"power":0.0,"cooldown":7.5,"range":0.0,"color":Color("#d8c39a"),"kind":"recover","desc":"Greatly increases defense but reduces movement speed temporarily."},
-	"Cover":{"power":0.0,"cooldown":7.0,"range":0.0,"color":Color("#d8c39a"),"kind":"recover","desc":"Protects a chosen nearby ally by taking part of the damage they would receive."},
+	"Guard":{"power":0.0,"cooldown":6.0,"range":0.0,"color":Color("#d8c39a"),"kind":"recover","desc":"Absorbs damage equal to 40% of maximum HP for up to 6 seconds. Sharing grants weaker shields to nearby allies."},
+	"Taunt":{"icon":"res://textures/Moves/Distract.png","power":0.0,"cooldown":6.0,"range":0.0,"color":Color("#d8c39a"),"kind":"recover","desc":"Makes nearby enemies prioritize the user as their target for 5 seconds."},
 	"Body Block":{"power":40.0,"cooldown":5.0,"range":140.0,"color":Color("#d8c39a"),"kind":"burst","desc":"Rushes toward an ally in danger and knocks nearby enemies away."},
 	"Shell Bash":{"power":56.0,"cooldown":4.0,"range":130.0,"color":Color("#d8c39a"),"kind":"burst","desc":"Charges shell-first into an enemy, dealing damage and strong knockback."},
 	"Spin":{"power":44.0,"cooldown":4.5,"range":100.0,"color":Color("#d8c39a"),"kind":"burst","desc":"Spins its shell rapidly, damaging and pushing away nearby enemies."},
-	"Hunker Down":{"power":0.0,"cooldown":9.0,"range":0.0,"color":Color("#d8c39a"),"kind":"recover","desc":"Fully retreats into its shell, becoming extremely resistant but unable to move or attack."},
-	"Shelter":{"power":0.0,"cooldown":8.0,"range":0.0,"color":Color("#d8c39a"),"kind":"recover","desc":"Uses its oversized shell as cover, reducing damage taken by nearby allies positioned behind or close to it."},
-	"Distract":{"icon":"res://textures/Moves/Distract.png","power":0.0,"cooldown":5.5,"range":0.0,"color":Color("#d8c39a"),"kind":"recover","desc":"Makes a ridiculous display or noise that causes nearby enemies to target Mimbit temporarily."},
 	"Cheer":{"power":0.0,"cooldown":7.0,"range":0.0,"color":Color("#d8c39a"),"kind":"recover","desc":"Temporarily increases nearby allies' attack power."},
 	"Encourage":{"power":0.0,"cooldown":7.0,"range":0.0,"color":Color("#d8c39a"),"kind":"recover","desc":"Reduces a chosen ally's current move cooldowns."},
 	"Copycat":{"power":24.0,"cooldown":5.0,"range":200.0,"color":Color("#d8c39a"),"kind":"burst","desc":"Repeats a weaker version of the last move used by an allied Quiblet, using Mimbit's own Move Stones."},
@@ -1357,7 +1504,7 @@ const MOVES := {
 	"Vacuum":{"power":30.0,"cooldown":5.0,"range":120.0,"color":Color("#a7d3e4"),"kind":"burst","desc":"Takes a huge breath inward, pulling nearby enemies toward itself."},
 	"Crosswind":{"power":42.0,"cooldown":4.0,"range":130.0,"color":Color("#a7d3e4"),"kind":"burst","desc":"Blasts enemies sideways across the battlefield."},
 	"Updraft":{"power":44.0,"cooldown":4.5,"range":175.0,"color":Color("#a7d3e4"),"kind":"burst","desc":"Fires air upward beneath enemies, launching them briefly into the air."},
-	"Tailwind":{"power":0.0,"cooldown":6.0,"range":0.0,"color":Color("#a7d3e4"),"kind":"recover","desc":"Stirs up a tailwind that boosts nearby allies' movement speed for a short time."},
+	"Tailwind":{"icon":"res://textures/Moves/Tailwind.png","power":0.0,"cooldown":6.0,"range":0.0,"color":Color("#a7d3e4"),"kind":"recover","desc":"Stirs up a tailwind that boosts nearby allies' movement speed for a short time."},
 	"Whirlwind":{"power":46.0,"cooldown":4.5,"range":160.0,"color":Color("#a7d3e4"),"kind":"burst","desc":"Creates a small moving tornado that damages and carries enemies."},
 	"Wind Wall":{"power":30.0,"cooldown":5.0,"range":120.0,"color":Color("#a7d3e4"),"kind":"burst","desc":"Produces a sustained gust that pushes enemies and some projectiles away."},
 	"Downdraft":{"power":54.0,"cooldown":5.0,"range":165.0,"color":Color("#a7d3e4"),"kind":"burst","desc":"Slams compressed air downward onto a target area."},
@@ -1377,29 +1524,32 @@ const MOVES := {
 	"Shatter":{"power":72.0,"cooldown":6.5,"range":120.0,"color":Color("#8fd0e6"),"kind":"burst","desc":"Creates a violent burst of ice shards around Cysicle, dealing heavy nearby damage."},
 	"Honk":{"power":18.0,"cooldown":4.0,"range":120.0,"color":Color("#e8b45a"),"kind":"burst","desc":"Lets out a loud honk that briefly lowers nearby enemies' attack and interrupts what they're doing."},
 	"Wingbeat":{"power":38.0,"cooldown":3.0,"range":110.0,"color":Color("#e8b45a"),"kind":"burst","desc":"Flaps hard and pushes nearby enemies away."},
-	"Feather Guard":{"power":0.0,"cooldown":6.5,"range":0.0,"color":Color("#e8b45a"),"kind":"recover","desc":"Fluffs up its feathers and takes reduced damage for a short time."},
 	"Scare":{"icon":"res://textures/Moves/Scare.png","power":0.0,"cooldown":6.0,"range":175.0,"color":Color("#e8b45a"),"kind":"burst","desc":"Jumps in front of an enemy, spreads its wings and feathers, and causes it to flee and stop targeting an ally for a few seconds. Deals no damage."},
-	"Escort":{"power":0.0,"cooldown":7.0,"range":0.0,"color":Color("#e8b45a"),"kind":"recover","desc":"Flies beside a chosen ally for a short time, shielding it and helping intercept nearby attackers."},
 	"Alarm Honk":{"power":0.0,"cooldown":7.0,"range":0.0,"color":Color("#e8b45a"),"kind":"recover","desc":"Warns the team, briefly raising allies' evasion so fewer incoming attacks connect."},
 	"Peck":{"power":40.0,"cooldown":5.0,"range":220.0,"color":Color("#e8b45a"),"kind":"burst","desc":"Rapidly dashes to one enemy and pecks it hard, then immediately dashes to the next living enemy, until every currently alive enemy has been hit exactly once."},
-	"Double Honk":{"power":22.0,"cooldown":5.0,"range":150.0,"color":Color("#e8b45a"),"kind":"burst","desc":"Each head honks in a different direction, lowering attack and interrupting enemies across a wider area."},
-	"Two-Headed Watch":{"power":0.0,"cooldown":7.5,"range":0.0,"color":Color("#e8b45a"),"kind":"recover","desc":"Protects and watches two allied Quiblets at once, shielding them and reacting when either is attacked."},
 	"Cross Peck":{"power":46.0,"cooldown":6.0,"range":220.0,"color":Color("#d9933f"),"kind":"burst","desc":"The two heads rapidly peck nearby targets at the same time, striking every living enemy once."},
 	"Gaggle Rush":{"power":56.0,"cooldown":6.5,"range":170.0,"color":Color("#d9933f"),"kind":"burst","desc":"Both heads honk and flap as Gaggle barrels through the enemy group, disrupting and weakening several enemies at once."}
 }
 
 # Resolve retired move names when existing Quiblets are loaded into memory.
 const RETIRED_MOVES:={"Bubble Shot":"Water Jet","Bubble Burst":"Water Burst","Bubble Trap":"Whirlpool","Bubble Shield":"Guard","Big Bubble":"Tidal Wave","Fire Trail":"Flame Dash","Combust":"Meteor Ember"}
+const RETIRED_CONSOLIDATED_MOVES:={"Hunker Down": "Cocoon", "Distract": "Taunt", "Double Honk": "Honk", "Shock Clamp": "Clamp", "Puff Grab": "Telekinesis", "Blazing Rush": "Flame Dash"}
+const RETIRED_DEFENSE_MOVES:={"Feather Guard": "Guard", "Psy Barrier": "Guard", "Rock Armor": "Guard", "Fortify": "Guard", "Cover": "Guard", "Escort": "Guard", "Shelter": "Guard", "Two-Headed Watch": "Guard", "Ice Armor": "Armor", "Ear Guard": "Armor"}
+
+static func replacement_move(name:String,species_index:int)->String:
+	if name=="Psy Barrier" and species(species_index).name=="Dromble":return "Armor"
+	return str(RETIRED_DEFENSE_MOVES.get(name,RETIRED_CONSOLIDATED_MOVES.get(name,RETIRED_MOVES.get(name,name))))
+
 
 static func replace_retired_moves(q:Dictionary)->void:
 	var replacements:Dictionary={}
 	var used:Array=[]
 	for entry in q.get("moves",[]):
-		if not RETIRED_MOVES.has(str(entry.name)):used.append(str(entry.name))
+		if replacement_move(str(entry.name),int(q.species))==str(entry.name):used.append(str(entry.name))
 	for entry in q.get("moves",[]):
 		var old:=str(entry.name)
-		if not RETIRED_MOVES.has(old):continue
-		var replacement:String=RETIRED_MOVES[old]
+		var replacement:String=replacement_move(old,int(q.species))
+		if replacement==old:continue
 		if used.has(replacement):
 			for candidate in learnset(int(q.species)):
 				if not used.has(candidate):replacement=candidate;break
@@ -1415,55 +1565,58 @@ static func replace_retired_moves(q:Dictionary)->void:
 					if replacements.has(target):entry.stones[i]=prefix+str(replacements[target])
 	var memory:Array=[]
 	for value in q.get("memory",[]):
-		var name:String=replacements.get(str(value),RETIRED_MOVES.get(str(value),str(value)))
+		var name:String=replacements.get(str(value),replacement_move(str(value),int(q.species)))
 		if not memory.has(name):memory.append(name)
 	if q.has("memory"):q.memory=memory
 
 const LEARNSETS := [
-	["Water Shot","Water Jet","Splash Dash","Backwash","Water Burst","Rain Drop","Spray"],
-	["Water Shot","Water Jet","Hydro Shot","Breaker","Riptide","Undertow","Whirlpool","Wave Rush","Tidal Wave","Water Spout","Downpour","Tsunami"],
-	["Leaf Shot","Seed Pop","Sprout","Thorn Burst","Spore Cloud","Seed Mine","Soothing Scent"],
-	["Leaf Shot","Vine Whip","Vine Spear","Rootbind","Thorn Burst","Sprout","Seed Pop","Overgrowth","Root Slam","Growth Spurt","Seed Mine"],
-	["Vine Whip","Vine Spear","Vine Grab","Rootbind","Thorn Burst","Sprout","Seed Mine","Root Slam","Leech Bloom"],
-	["Healing Bloom","Pollen Puff","Soothing Scent","Spore Cloud","Thorn Armor","Cocoon","Last Bloom"],
-	["Fireball","Flame Burst","Spark Burst","Flare","Flame Dash","Flame Pillar","Ignite"],
-	["Fireball","Flame Burst","Flare","Flame Dash","Blazing Rush","Flame Wave","Firestorm","Inferno","Flame Pillar","Ignite","Meteor Ember"],
-	["Mind Jab","Psycho Punch","Fist Barrage","Helping Hand"],
-	["Psy Bolt","Psychic Push","Telekinesis","Psychic Pull","Psy Barrier","Gravity Well","Mind Squeeze","Psy Wall","Psy Bounce","Puff Grab","Mind Pop"],
-	["Rock Toss","Quake","Mud Shot","Pitfall","Sinkhole","Burrow","Groundbreaker","Dust Cloud","Dig Punch","Dust-Up","Tunneling Charge"],
-	["Rock Toss","Quake","Stone Spikes","Stone Wall","Rock Armor","Boulder Roll","Earth Pillar","Brace","Crush","Barricade","Rock Scatter"],
-	["Shell Bash","Guard","Taunt","Spin","Fortify","Cover","Body Block","Hunker Down","Shelter"],
-	["Distract","Cheer","Encourage","Copycat"],
-	["Web Shot","Web Snare","Web Yank","Web Line","Web Trap","Silk Sling","Tangle","Cocoon"],
-	["Poison Spit","Gunk Glob","Corrode","Blinding Gunk","Toxic Pop","Noxious Cloud","Acid Rain","Nauseate","Fume Burst","Poison Bomb"],
-	["Gust","Air Burst","Updraft","Vacuum","Crosswind","Tailwind","Whirlwind","Wind Wall","Downdraft","Cyclone","Deflate"],
-	["Icicle Shot","Ice Spike","Cold Snap","Ice Wall","Frost Patch","Ice Cage","Glacier Rush","Hail","Iceberg","Icicle Mine","Shatter"],
-	["Wingbeat","Honk","Peck","Feather Guard","Tailwind","Scare","Escort","Alarm Honk"],
-	["Wingbeat","Honk","Peck","Feather Guard","Tailwind","Scare","Escort","Alarm Honk","Double Honk","Two-Headed Watch","Cross Peck","Gaggle Rush"],
+	["Water Shot", "Water Jet", "Splash Dash", "Backwash", "Water Burst", "Rain Drop", "Spray"],
+	["Water Shot", "Water Jet", "Hydro Shot", "Breaker", "Riptide", "Undertow", "Whirlpool", "Wave Rush", "Tidal Wave", "Water Spout", "Downpour", "Tsunami"],
+	["Leaf Shot", "Seed Pop", "Sprout", "Thorn Burst", "Spore Cloud", "Seed Mine", "Soothing Scent"],
+	["Leaf Shot", "Vine Whip", "Vine Spear", "Rootbind", "Thorn Burst", "Sprout", "Seed Pop", "Overgrowth", "Root Slam", "Growth Spurt", "Seed Mine"],
+	["Vine Whip", "Vine Spear", "Vine Grab", "Rootbind", "Thorn Burst", "Sprout", "Seed Mine", "Root Slam", "Leech Bloom"],
+	["Healing Bloom", "Pollen Puff", "Soothing Scent", "Spore Cloud", "Thorn Armor", "Cocoon", "Last Bloom"],
+	["Fireball", "Flame Burst", "Spark Burst", "Flare", "Flame Dash", "Flame Pillar", "Ignite"],
+	["Fireball", "Flame Burst", "Flare", "Flame Dash", "Flame Wave", "Firestorm", "Inferno", "Flame Pillar", "Ignite", "Meteor Ember"],
+	["Mind Jab", "Psycho Punch", "Fist Barrage", "Helping Hand"],
+	["Psy Bolt", "Psychic Push", "Telekinesis", "Psychic Pull", "Guard", "Gravity Well", "Mind Squeeze", "Psy Wall", "Psy Bounce", "Mind Pop"],
+	["Rock Toss", "Quake", "Mud Shot", "Pitfall", "Sinkhole", "Burrow", "Groundbreaker", "Dust Cloud", "Dig Punch", "Dust-Up", "Tunneling Charge"],
+	["Rock Toss", "Quake", "Stone Spikes", "Stone Wall", "Guard", "Boulder Roll", "Earth Pillar", "Brace", "Crush", "Barricade", "Rock Scatter"],
+	["Shell Bash", "Guard", "Taunt", "Spin", "Body Block", "Cocoon"],
+	["Taunt", "Cheer", "Encourage", "Copycat"],
+	["Web Shot", "Web Snare", "Web Yank", "Web Line", "Web Trap", "Silk Sling", "Tangle", "Cocoon"],
+	["Poison Spit", "Gunk Glob", "Corrode", "Blinding Gunk", "Toxic Pop", "Noxious Cloud", "Acid Rain", "Nauseate", "Fume Burst", "Poison Bomb"],
+	["Gust", "Air Burst", "Updraft", "Vacuum", "Crosswind", "Tailwind", "Whirlwind", "Wind Wall", "Downdraft", "Cyclone", "Deflate"],
+	["Icicle Shot", "Ice Spike", "Cold Snap", "Ice Wall", "Frost Patch", "Ice Cage", "Glacier Rush", "Hail", "Iceberg", "Icicle Mine", "Shatter"],
+	["Wingbeat", "Honk", "Peck", "Guard", "Tailwind", "Scare", "Alarm Honk"],
+	["Wingbeat", "Honk", "Peck", "Guard", "Tailwind", "Scare", "Alarm Honk", "Cross Peck", "Gaggle Rush"],
 	["Gulp", "Poison Spit", "Poison Bomb", "Slosh", "Acid Spray", "Nectar", "Belch", "Sour Shot", "Dribble", "Lid Smack"],
 	["Rollout", "Unfurl", "Rock Toss", "Brace", "Rockslide", "Pound", "Rolling Smash", "Stone Skip", "Rock Ring", "Pebble Spray"],
 	["Noxious Cloud", "Fume Burst", "Poison Spit", "Smog", "Nauseate", "Toxic Drift", "Contaminate", "Fume Shot", "Pressure Cloud", "Miasmum"],
 	["Toxic Touch", "Gunk Glob", "Sludge Wave", "Slime Slide", "Slip Slime", "Poison Coat", "Acid Splash", "Nauseate", "Mud Shot", "Slick Escape"],
 	["Shock Bite", "Latch", "Live Wire", "Static Pulse", "Tail Zap", "Discharge", "Slither", "Shock Toss", "Amp Drain"],
 	["Zap", "Shock Touch", "Zip", "Jolt Kick", "Static Pulse", "Flashstep", "Friction Dash", "Thunderclap", "Zigzag"],
-	["Horn Zap", "Spark Ram", "Clamp", "Shock Toss", "Ground Scrape", "Static Pulse", "Discharge", "Grounded", "Horn Lift", "Shock Clamp"],
+	["Horn Zap", "Spark Ram", "Clamp", "Shock Toss", "Ground Scrape", "Static Pulse", "Discharge", "Grounded", "Horn Lift"],
 	["Tentacle Zap", "Static Pulse", "Nerve Sting", "Shock Net", "Live Wire", "Jelly Drift", "Discharge", "Jolt Grab"],
-	["Ear Slap", "Gust", "Air Burst", "Dive", "Fan", "Poison Bite", "Noxious Cloud", "Keen Ears", "Ear Guard", "Thunderflap"],
-	["Ear Slap", "Gust", "Air Burst", "Dive", "Fan", "Poison Bite", "Noxious Cloud", "Keen Ears", "Ear Guard", "Thunderflap", "Venom Fang", "Toxic Gust", "Sonic Boom"],
-	["Ice Slide", "Tusk Jab", "Snowplow", "Frost Breath", "Cold Snap", "Ice Armor", "Brace", "Avalanche", "Pound", "Tuskberg"]
+	["Ear Slap", "Gust", "Air Burst", "Dive", "Fan", "Poison Bite", "Noxious Cloud", "Keen Ears", "Armor", "Thunderflap"],
+	["Ear Slap", "Gust", "Air Burst", "Dive", "Fan", "Poison Bite", "Noxious Cloud", "Keen Ears", "Armor", "Thunderflap", "Venom Fang", "Toxic Gust", "Sonic Boom"],
+	["Ice Slide", "Tusk Jab", "Snowplow", "Frost Breath", "Cold Snap", "Armor", "Brace", "Avalanche", "Pound", "Tuskberg"],
+	["Psy Bolt", "Psy Push", "Confuse", "Drowse", "Doze", "Armor", "Sleepwalk", "Dream Haze", "Daydream"],
+	["Wing Clip", "Dive", "Gust", "Air Burst", "Flyby", "Tailwind", "Focus", "Feint", "Confuse", "Decoy"],
+	["Wing Clip", "Dive", "Gust", "Air Burst", "Flyby", "Tailwind", "Focus", "Feint", "Confuse", "Decoy", "Lock On", "Perfect Dive", "Mach Pass"]
 ]
 
 const MOVE_STONES := [
 	{"name":"Echo Stone","color":"🟣","desc":"Repeats the entire move shortly after it finishes. Other equipped stones apply to the repeat, but the move’s cooldown is 35% longer.","effect":"echo","texture":"res://textures/MoveStones/EchoStone.png"},
-	{"name":"Heavy Stone","color":"🟠","desc":"Increases power or effect strength by 35%, but increases cooldown by 28%.","effect":"heavy","texture":"res://textures/MoveStones/HeavyStone.png"},
+	{"name":"Heavy Stone","color":"🟠","desc":"Adds 30% power or effect strength and 22% cooldown per stone. These increases stack additively.","effect":"heavy","texture":"res://textures/MoveStones/HeavyStone.png"},
 	{"name":"Reach Stone","color":"🩵","desc":"Increases range and travel distance by 38%.","effect":"reach","texture":"res://textures/MoveStones/ReachStone.png"},
 	{"name":"Chain Stone","color":"🟡","desc":"Jumps from a hit target to another nearby target at 60% effectiveness.","effect":"chain","texture":"res://textures/MoveStones/ChainStone.png"},
 	{"name":"Sharing Stone","color":"🩷","desc":"Shares compatible healing or support effects with nearby allies at 55% effectiveness.","effect":"sharing","texture":"res://textures/MoveStones/SharingStone.png"},
 	{"name":"Split Stone","color":"🔴","desc":"Creates three independent copies at 46% effectiveness each.","effect":"split","texture":"res://textures/MoveStones/SplitStone.png"},
-	{"name":"Rush Stone","color":"🔵","desc":"Reduces cooldown by 28% with no power or effect-strength penalty.","effect":"rush","texture":"res://textures/MoveStones/RushStone.png"},
+	{"name":"Rush Stone","color":"🔵","desc":"Reduces cooldown by 18% per stone, up to 55% total from Rush Stones. No power penalty.","effect":"rush","texture":"res://textures/MoveStones/RushStone.png"},
 	{"name":"Seeking Stone","color":"🟩","desc":"Compatible projectiles home and curve toward their targets.","effect":"seeking","texture":"res://textures/MoveStones/SeekingStone.png"},
-	{"name":"Lingering Stone","color":"🟪","desc":"Compatible effects last 65% longer. Damaging areas gain a lingering pulse.","effect":"lingering","texture":"res://textures/MoveStones/LingeringStone.png"},
-	{"name":"Blast Stone","color":"🟤","desc":"Increases compatible effect area and size by 65%.","effect":"blast","texture":"res://textures/MoveStones/BlastStone.png"},
+	{"name":"Lingering Stone","color":"🟪","desc":"Adds 35% duration per stone. Longer damaging fields deal less damage per pulse but more total damage.","effect":"lingering","texture":"res://textures/MoveStones/LingeringStone.png"},
+	{"name":"Blast Stone","color":"🟤","desc":"Adds 30% to compatible effect radius and size per stone.","effect":"blast","texture":"res://textures/MoveStones/BlastStone.png"},
 	{"name":"Force Stone","color":"💚","desc":"Greatly increases knockback and displacement.","effect":"force","texture":"res://textures/MoveStones/ForceStone.png"},
 	{"name":"Drain Stone","color":"🩸","desc":"Heals the user for 15% of damage dealt by the move.","effect":"drain","texture":"res://textures/MoveStones/DrainStone.png"},
 	{"name":"Link Stone","color":"⬜","desc":"Links this move to another linked move. The next move activates at 65% effectiveness and ignores cooldown. Link chains cannot revisit a move.","effect":"link","texture":"res://textures/MoveStones/LinkStone.png"}
@@ -1537,7 +1690,7 @@ static func reward_sparkle_level(reward:Dictionary)->int:
 
 # Training. Helpers are consumed unless preserved by the added ingredients.
 # Move training rolls a success chance from helper relationships only; EXP
-# training always succeeds and converts a share of each helper's lifetime EXP.
+# training always succeeds, with gap-based catch-up or a cubic level-ratio reward.
 # Relationships: same species, same evolution family, same type, none.
 const MOVE_TRAINING_BASE_CHANCE:=5.0
 const MOVE_TRAINING_MAX_CHANCE:=95.0
@@ -1616,14 +1769,14 @@ static func move_training_chance(trainee:Dictionary,helpers:Array)->float:
 static func exp_training_helper_reward(trainee:Dictionary,helper:Dictionary)->int:
 	var trainee_level:=maxi(1,int(trainee.level));var helper_level:=maxi(1,int(helper.level))
 	var factor:=float(EXP_TRAINING_RELATIONSHIP_FACTORS[quiblet_relationship(trainee,helper)])
-	var effective_target:=float(helper_level)*factor
-	if float(trainee_level)<effective_target:
-		var target_level:=float(trainee_level)+.90*(effective_target-float(trainee_level))
+	if helper_level>trainee_level:
+		var target_level:=float(trainee_level)+float(helper_level-trainee_level)*factor
 		var whole_level:=floori(target_level);var reward:=0.0
 		for level in range(trainee_level,whole_level):reward+=exp_to_level(level)
 		reward+=(target_level-float(whole_level))*exp_to_level(whole_level)
 		return roundi(reward)
-	return roundi(float(exp_to_level(trainee_level))*3.0*factor*(float(helper_level)/float(trainee_level)))
+	var level_ratio:=float(helper_level)/float(trainee_level)
+	return roundi(float(exp_to_level(trainee_level))*1.2*factor*pow(level_ratio,3.0))
 
 static func exp_training_reward(trainee:Dictionary,helpers:Array)->int:
 	var total:=0
@@ -1718,15 +1871,15 @@ const RECIPE_COLOR_GROUPS := {"Red": [6, 7], "Blue": [0, 1, 16, 17, 30], "Yellow
 
 # Listed order is the hidden final tiebreaker; specificity and fit take precedence.
 const RECIPES := [
-	{"name": "Plain Stew", "need": {}, "priority": 0, "desc": "A simple stew made when no other recipe matches.", "pool": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30], "attracts": "Any Quiblet", "attraction_kind": "any", "attraction_target": "Any","color":Color("#b98c64")},
+	{"name": "Plain Stew", "need": {}, "priority": 0, "desc": "A simple stew made when no other recipe matches.", "pool": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33], "attracts": "Any Quiblet", "attraction_kind": "any", "attraction_target": "Any","color":Color("#b98c64")},
 	{"name": "Deep Dish", "need": {"juicy": 3, "soft": 2, "sweet": 2}, "priority": 99, "desc": "A stew that attracts Water type Quiblets.", "pool": [0, 1], "attracts": "Water type Quiblets", "attraction_kind": "type", "attraction_target": "Water","color":Color("#55abc7")},
 	{"name": "Garden Variety", "need": {"earthy": 2, "soft": 2, "dry": 1, "plant": 1}, "priority": 98, "desc": "A stew that attracts Green type Quiblets.", "pool": [2, 3, 4, 5], "attracts": "Green type Quiblets", "attraction_kind": "type", "attraction_target": "Green","color":Color("#69a45e")},
 	{"name": "Hot Stuff", "need": {"spicy": 3, "dry": 2, "savory": 1}, "priority": 97, "desc": "A stew that attracts Fire type Quiblets.", "pool": [6, 7], "attracts": "Fire type Quiblets", "attraction_kind": "type", "attraction_target": "Fire","color":Color("#df6246")},
 	{"name": "Shock Stock", "need": {"sour": 3, "dry": 2, "spicy": 2}, "priority": 96, "desc": "A stew that attracts Electric type Quiblets.", "pool": [24, 25, 26, 27], "attracts": "Electric type Quiblets", "attraction_kind": "type", "attraction_target": "Electric","color":Color("#e1c53c")},
-	{"name": "Food for Thought", "need": {"sweet": 3, "bitter": 2, "soft": 2}, "priority": 95, "desc": "A stew that attracts Psychic type Quiblets.", "pool": [8, 9], "attracts": "Psychic type Quiblets", "attraction_kind": "type", "attraction_target": "Psychic","color":Color("#9a78c7")},
+	{"name": "Food for Thought", "need": {"sweet": 3, "bitter": 2, "soft": 2}, "priority": 95, "desc": "A stew that attracts Psychic type Quiblets.", "pool": [8, 9, 31, 32, 33], "attracts": "Psychic type Quiblets", "attraction_kind": "type", "attraction_target": "Psychic","color":Color("#9a78c7")},
 	{"name": "Rock Bottom Broth", "need": {"earthy": 3, "hard": 2, "soft": 2, "savory": 2}, "priority": 94, "desc": "A stew that attracts Earth type Quiblets.", "pool": [10, 11, 21], "attracts": "Earth type Quiblets", "attraction_kind": "type", "attraction_target": "Earth","color":Color("#777c86")},
 	{"name": "Midnight Snack", "need": {"bitter": 3, "spicy": 2, "dry": 2}, "priority": 93, "desc": "A stew that attracts Poison type Quiblets.", "pool": [15, 20, 22, 23, 28, 29], "attracts": "Poison type Quiblets", "attraction_kind": "type", "attraction_target": "Poison","color":Color("#7f598e")},
-	{"name": "Light Bite", "need": {"dry": 2, "soft": 3, "sweet": 2}, "priority": 92, "desc": "A stew that attracts Air type Quiblets.", "pool": [16, 18, 19, 28, 29], "attracts": "Air type Quiblets", "attraction_kind": "type", "attraction_target": "Air","color":Color("#acdce2")},
+	{"name": "Light Bite", "need": {"dry": 2, "soft": 3, "sweet": 2}, "priority": 92, "desc": "A stew that attracts Air type Quiblets.", "pool": [16, 18, 19, 28, 29, 32, 33], "attracts": "Air type Quiblets", "attraction_kind": "type", "attraction_target": "Air","color":Color("#acdce2")},
 	{"name": "Peak Cuisine", "need": {"hard": 2, "juicy": 3, "sour": 2}, "priority": 91, "desc": "A stew that attracts Ice type Quiblets.", "pool": [17, 30], "attracts": "Ice type Quiblets", "attraction_kind": "type", "attraction_target": "Ice","color":Color("#aedfeb")},
 	{"name": "Mystery Meat", "need": {"savory": 3, "sweet": 2, "hard": 1}, "priority": 90, "desc": "A stew that attracts Normal type Quiblets.", "pool": [12, 13, 14], "attracts": "Normal type Quiblets", "attraction_kind": "type", "attraction_target": "Normal","color":Color("#b9a889")},
 	{"name": "Red Hot Pot", "need": {"spicy": 3, "soft": 2, "fruit": 2}, "priority": 89, "desc": "A stew that attracts Red-colored Quiblets.", "pool": [6, 7], "attracts": "Red-colored Quiblets", "attraction_kind": "color", "attraction_target": "Red","color":Color("#e75049")},
@@ -1808,7 +1961,7 @@ static func make_quiblet(species_index: int, level: int, nickname: String = "",r
 	var move_list: Array = []
 	for move_name in initial_moves:
 		move_list.append({"name":move_name,"slots":1,"stones":[]})
-	return {
+	var quiblet:Dictionary={
 		"uid":uid,
 		"species":species_index, "nickname":nickname, "level":level, "exp":0,
 		"hp_bonus":0, "atk_bonus":0, "moves":move_list, "memory":initial_moves.duplicate(),
@@ -1817,6 +1970,9 @@ static func make_quiblet(species_index: int, level: int, nickname: String = "",r
 		"power_slot_types":board.types,"power_slot_unlocks":board.unlocks,
 		"power_slot_stones":[{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}]
 	}
+
+	preload("res://scripts/move_slots.gd").ensure(quiblet)
+	return quiblet
 
 # Power Stone board. Every Quiblet rolls one fixed 4×4 board when it is created:
 # each position is Attack, Health, or Flex (45/45/10, with at least one Attack
@@ -1893,7 +2049,7 @@ static func max_hp(q: Dictionary) -> int:
 	var stone_power:=0
 	for stone in q.get("power_slot_stones",[]):
 		if stone is Dictionary and stone.get("type","")=="Health":stone_power+=int(stone.get("power",0))
-	return int((int(s.base_hp) + int(q.level) * 15 + int(q.hp_bonus)+stone_power) * (1.0 + charm_scale * 0.065) * (1.0+float(quiblet_bonus_totals(q).get("max_hp",0.0))))
+	return int((int(s.base_hp) + int(q.level) * 15 + int(q.hp_bonus)+stone_power*HEALTH_STONE_MULTIPLIER) * (1.0 + charm_scale * 0.065) * (1.0+float(quiblet_bonus_totals(q).get("max_hp",0.0))))
 
 static func attack(q: Dictionary) -> int:
 	var s := species(int(q.species))

@@ -96,6 +96,10 @@ const SET_MAX_WALK_DISTANCE:=32.0
 const ENCOUNTER_REUSE_RADIUS:=11.0
 var encounter_style:="clearing"
 const SCATTER_ALERT_RADIUS:=3.2
+# Zero chooses a fresh layout for each build. Tests may supply a seed explicitly.
+var map_seed:int=0
+var generated_map_seed:int=0
+var terrain_wave_offset:=Vector2.ZERO
 var spawn_points:Array[Vector2]=[]
 var used_spawn_points:Array[int]=[]
 const BOSS_INTRO_PAN_SECONDS:=4.5
@@ -130,28 +134,33 @@ const BOSS_STAGE_WAVES:=4
 const BOSS_STAGE_EXTRA_ENEMIES:=1
 const BOSS_STAGE_ENEMY_LEVEL_BOOST:=1
 const BOSS_STAGE_BOSS_LEVEL_BOOST:=5
-const BOSS_STAGE_BOSS_HP_MULTIPLIER:=4.0
-const BOSS_STAGE_BOSS_DAMAGE_MULTIPLIER:=1.7
 const BOSS_STAGE_BOSS_SCALE:=1.9
 
-# Enemy strength answers the team: see GameData.enemy_level_for_stage and enemy_stone_bonus.
+# Stage progression sets enemy strength; only a small capped level adjustment follows the team.
 var team_average_level:=0
 var enemy_bonus:={"hp":0,"attack":0}
 
 func enemy_level(wave_offset:int)->int:
 	return maxi(1,GameData.enemy_level_for_stage(stage_level,team_average_level,stage_area_index)+wave_offset)
 
-func make_enemy(species_index:int,level:int)->Dictionary:
+func make_enemy(species_index:int,level:int,boss:=false)->Dictionary:
 	var q:=GameData.make_quiblet(species_index,level)
 	q.hp_bonus=int(enemy_bonus.hp);q.atk_bonus=int(enemy_bonus.attack)
+	var pool:=GameData.learnset(species_index)
+	var support:String="";var signature:String="";var highest_power:=-1.0
+	for name in pool:
+		if preload("res://scripts/move_behaviors.gd").is_support(name) and support.is_empty():support=name
+		if float(GameData.MOVES[name].power)>highest_power:
+			highest_power=float(GameData.MOVES[name].power);signature=name
+	if boss and not signature.is_empty() and not q.moves.any(func(move):return move.name==signature):q.moves[1].name=signature
+	if not support.is_empty() and (boss or spawn_rng.randf()<.30):
+		if not q.moves.any(func(move):return move.name==support):q.moves[2].name=support
 	return q
 
 func begin(new_team:Array,level:int,use_fortune:bool,use_challenger:bool)->void:
 	team_data=new_team;stage_level=level;fortune=use_fortune;challenger=use_challenger
-	var level_total:=0
-	for q in team_data:level_total+=int(q.get("level",1))
-	team_average_level=level_total/maxi(1,team_data.size())
-	enemy_bonus=GameData.enemy_stone_bonus(GameData.team_stone_power(team_data),stage_area_index)
+	team_average_level=GameData.average_team_level(team_data)
+	enemy_bonus=GameData.stage_enemy_stone_bonus(stage_level)
 	# Every stage is one field. Groves are cleared by gathering. Levels run a
 	# handful of enemy sets (waves 1..n), each spawning at one of the field's
 	# spawn areas only after the previous set is beaten, and then the boss.
@@ -175,7 +184,11 @@ func place_actor(actor:QuibletActor3D)->void:
 	actor.arena=arena_rect;actor.obstacle_rects=flight_obstacles if actor.floats_over_water() else obstacles;actor.defeated.connect(_on_actor_defeated);actor.move_used.connect(_on_move_used);actor.stuck.connect(_on_actor_stuck);add_child(actor)
 
 func build_level()->void:
-	var rng:=RandomNumberGenerator.new();rng.seed=stage_area_index*1009+stage_node_index*131+73
+	var rng:=RandomNumberGenerator.new()
+	if map_seed==0:rng.randomize();generated_map_seed=rng.randi()
+	else:generated_map_seed=map_seed
+	rng.seed=generated_map_seed
+	terrain_wave_offset=Vector2(rng.randf_range(-500,500),rng.randf_range(-500,500))
 	biome=GameData.expedition_biome(stage_area_index)
 	fade_weights.clear();waterfall_cells.clear();waterfalls.clear();waterfall_bubbles.clear();spanned_cells.clear();bridge_arches.clear();river_crossings.clear();obstacles.clear();berry_nodes.clear();zones.clear();route_points.clear();corridor_widths.clear();walkable.clear();rivers.clear();bridges.clear();wall_tiers.clear();props.clear();prop_cells.clear();decor_count=0;cliff_tiers={1:0,2:0,3:0};cache_node=null
 	if is_instance_valid(decor_root):decor_root.free()
@@ -245,14 +258,15 @@ func open_treasure_cache()->void:
 	treasure_keys-=1;treasure_key_used.emit()
 	var origin:Vector3=cache_node.global_position
 	# A cache always holds a Power Stone rolled with Fortune-rate bonuses, two
-	# ingredient bundles, and a Boss-rate chance at a special item.
-	var power_stone:=GameData.make_power_stone(["Health","Attack"].pick_random(),GameData.power_stone_tier_for_level(stage_level),GameData.roll_power_stone_bonuses(true));power_stones.append(power_stone)
+	# ingredient bundles, and a separate chance at a special item.
+	var power_stone:=GameData.make_stage_power_stone(["Health","Attack"].pick_random(),stage_level,GameData.roll_power_stone_bonuses(true));power_stones.append(power_stone)
 	var reward:=power_stone.duplicate(true);reward.merge({"kind":"power_stone","name":power_stone.type+" Power Stone","amount":1});reward_acquired.emit(reward,origin)
 	for i in 2:
 		var ingredient:=GameData.roll_ingredient(stage_level);var amount:=randi_range(BERRY_PATCH_RANGE.x,BERRY_PATCH_RANGE.y);loot[ingredient]+=amount
 		reward_acquired.emit({"kind":"ingredient","name":ingredient,"amount":amount},origin)
-	var special:=GameData.roll_special_item("boss",fortune)
+	var special:=GameData.roll_special_item("cache",fortune)
 	if special!="":extra_specials.append(special);reward_acquired.emit({"kind":"special","name":special,"amount":1},origin)
+	award_drop_charms("cache",origin)
 	cache_node.queue_free();cache_node=null
 	event_message.emit("The Treasure Key opens the cache!")
 
@@ -272,13 +286,19 @@ func field_size()->Vector2i:
 func layout_zones(rng:RandomNumberGenerator)->void:
 	var count:=zone_count();var size:=field_size()
 	field_rect=Rect2i(-size.x/2,-size.y/2,size.x,size.y)
-	var left:=float(field_rect.position.x)+4.0;var right:=float(field_rect.end.x)-1-(6.5 if stage_kind=="boss" else 4.0)
-	var swing:=float(size.y)*.27;var side:=1.0 if rng.randf()<.5 else -1.0
+	# Rotate the route in normalized map space, so starts can be on any edge
+	# without pushing clearings outside a rectangular field.
+	var orientation:=rng.randi_range(0,3)*PI*.5
+	var side:=1.0 if rng.randf()<.5 else -1.0
+	var half_extent:=Vector2(size)*.5-Vector2(8,8)
 	for i in count:
-		var center:=Vector2(left,0.0)
-		if i>0:
-			center.x=lerpf(left,right,float(i)/float(count-1))+rng.randf_range(-.8,.8)
-			center.y=side*swing+rng.randf_range(-1.2,1.2);side*=-1.0
+		var progress:=float(i)/float(count-1)
+		var along:=lerpf(-.94,.90,progress)
+		if i>0 and i<count-1:along+=rng.randf_range(-.10,.10)
+		var across:=rng.randf_range(-.65,.65) if i==0 else side*rng.randf_range(.20,.82)
+		side*=-1.0
+		var normalized:=Vector2(along,across).rotated(orientation)
+		var center:=normalized*half_extent
 		var radius:=Vector2(3.4,2.9)
 		if i>0:
 			if stage_kind=="boss":radius=Vector2(6.2,5.0)
@@ -854,12 +874,13 @@ func build_terrain(rng:RandomNumberGenerator)->void:
 # Broad swells of the open ground: a few overlapping long sine waves.
 func plain_roll(point:Vector2)->float:
 	var relief:=float(biome.get("relief",.8))
-	var swell:=.5+.5*sin(point.x*.095+1.3)*cos(point.y*.075)
+	var sample:=point+terrain_wave_offset
+	var swell:=.5+.5*sin(sample.x*.095+1.3)*cos(sample.y*.075)
 	var h:=relief*(smoothstep(.18,.82,swell)-.5)*2.4
 	match str(biome.get("landform","rolling")):
 		"basin":h+=1.8*pow(clampf(absf(point.y)/maxf(1,field_rect.size.y*.5),0,1),2)
-		"ridges","fjords","looming":h+=relief*pow(absf(sin(point.x*.08+point.y*.11)),3)
-		"wetland":h-=.2*absf(sin(point.x*.14)*cos(point.y*.19))
+		"ridges","fjords","looming":h+=relief*pow(absf(sin(sample.x*.08+sample.y*.11)),3)
+		"wetland":h-=.2*absf(sin(sample.x*.14)*cos(sample.y*.19))
 	return h
 
 func shape_rolling_hills(values:PackedFloat32Array)->PackedFloat32Array:
@@ -1995,6 +2016,10 @@ func _process(delta:float)->void:
 					for member in living:member.has_command=false
 			else:actor.target=null;continue
 		actor.target=nearest(actor,team)
+	# An ongoing encounter blocks natural healing for the entire team, including
+	# members ordered to run or temporarily lacking a target.
+	var fighting:=enemies.any(func(foe):return is_instance_valid(foe) and foe.current_hp>0 and foe.get_meta("alerted",false))
+	for member in team:member.in_combat=fighting
 	update_team_targets()
 	update_advance(living)
 	for patch in berry_nodes.duplicate():
@@ -2147,7 +2172,14 @@ func update_group_camera(delta:float)->void:
 	camera.look_at(camera_focus+Vector3(0,.45,0),Vector3.UP)
 
 func nearest(from:QuibletActor3D,pool:Array[QuibletActor3D])->QuibletActor3D:
-	# A Taunt/Distract pulls attention: while any reachable candidate is taunting,
+	# Decoys are damageable actors, but never team members or wave enemies.
+	var decoy:QuibletActor3D=null;var decoy_distance:=TAUNT_RANGE
+	for child in get_children():
+		if child is QuibletActor3D and child.get_meta("psychic_decoy",false) and not child.is_queued_for_deletion() and child.current_hp>0 and child.enemy!=from.enemy:
+			var gap:=from.horizontal_distance(from.position,child.position)
+			if gap<decoy_distance:decoy=child;decoy_distance=gap
+	if decoy!=null:return decoy
+	# A Taunt pulls attention: while any reachable candidate is taunting,
 	# only taunters are considered, so enemies converge on the tank.
 	var taunters:Array[QuibletActor3D]=[]
 	for candidate in pool:
@@ -2158,6 +2190,12 @@ func nearest(from:QuibletActor3D,pool:Array[QuibletActor3D])->QuibletActor3D:
 		if candidate.current_hp<=0:continue
 		var d:=from.horizontal_distance(from.position,candidate.position)
 		if d<best:best=d;result=candidate
+	# Keep pressure on a nearby opponent rather than switching every frame.
+	# Taunts/decoys still win, and an escaping target can hand pursuit to a
+	# substantially closer teammate instead of dragging enemies indefinitely.
+	if from.enemy and is_instance_valid(from.target) and considered.has(from.target) and from.target.current_hp>0:
+		var current_distance:=from.horizontal_distance(from.position,from.target.position)
+		if current_distance<=maxf(from.attack_range,6.0) and current_distance<=best+2.0:return from.target
 	return result
 
 func spawn_wave()->void:
@@ -2168,7 +2206,7 @@ func spawn_wave()->void:
 
 # --- Spawn areas and enemy sets ---------------------------------------------
 # A field has a handful of spawn areas at random open spots, re-rolled on every
-# expedition (spawn_rng is randomised, unlike the seeded map). Enemy sets come
+# expedition alongside the fresh map layout. Enemy sets come
 # one at a time: each set appears at an unused spawn area away from the team
 # only after the previous set is beaten, idles until the team comes close, and
 # the team auto-explores toward it along walkable ground until the player
@@ -2298,7 +2336,7 @@ func encounter_positions(center:Vector2,count:int)->Array[Vector2]:
 
 func spawn_enemy_set()->void:
 	var point_index:=pick_spawn_point();used_spawn_points.append(point_index);var center:Vector2=spawn_points[point_index]
-	var scaling:=GameData.enemy_scaling(stage_area_index);var extra:=GameData.extra_enemies_for_area(stage_area_index)
+	var scaling:=GameData.stage_enemy_scaling(stage_area_index,stage_node_index);var extra:=GameData.extra_enemies_for_area(stage_area_index)
 	var team_scaled_cap:=maxi(1,ceili(team_data.size()*.75))
 	var count:=mini(1+spawn_rng.randi_range(0,1),team_scaled_cap)+extra+(1 if challenger else 0)+(BOSS_STAGE_EXTRA_ENEMIES if stage_kind=="boss" else 0)
 	# Surround encounters need enough opponents to occupy distinct sides.
@@ -2309,7 +2347,7 @@ func spawn_enemy_set()->void:
 		var q:=make_enemy(GameData.roll_area_species(stage_area_index,spawn_rng),enemy_level(spawn_rng.randi_range(-1,1)))
 		var actor:=QuibletActor3D.new();actor.setup(q,true,level_boost,-1,scaling)
 		actor.position=Vector3(positions[i].x,0,positions[i].y)
-		actor.set_meta("zone",patch_zone(center));actor.set_meta("group",wave);actor.set_meta("spawn_point",point_index);actor.set_meta("alert_center",center);actor.set_meta("alert_radius",1.8 if encounter_style=="surround" else SCATTER_ALERT_RADIUS);actor.set_meta("encounter_style",encounter_style);actor.set_meta("alerted",false)
+		actor.enemy_cast_recovery=.65+(i%2)*.35;actor.set_meta("zone",patch_zone(center));actor.set_meta("group",wave);actor.set_meta("spawn_point",point_index);actor.set_meta("alert_center",center);actor.set_meta("alert_radius",1.8 if encounter_style=="surround" else SCATTER_ALERT_RADIUS);actor.set_meta("encounter_style",encounter_style);actor.set_meta("alerted",false)
 		place_actor(actor);enemies.append(actor);play_spawn_drop(actor,i*SPAWN_DROP_STAGGER)
 	exploring=true
 	camera_pan_target=Vector3(center.x,0,center.y);camera_pan_time=spawn_drop_duration(count)+SET_PAN_LINGER
@@ -2455,20 +2493,24 @@ func spawn_boss_wave()->void:
 	var center:Vector2=spawn_points[pick_spawn_point(true)]
 	var arena_index:=patch_zone(center)
 	var team_scaled_cap:=maxi(1,ceili(team_data.size()*.75));var extra:=GameData.extra_enemies_for_area(stage_area_index)
-	var count:=mini(2,team_scaled_cap)+extra+(1 if challenger else 0)+(BOSS_STAGE_EXTRA_ENEMIES if stage_kind=="boss" else 0)+1
-	var scaling:=GameData.enemy_scaling(stage_area_index);var boss:QuibletActor3D=null
+	# Escort counts grow with the campaign rather than overwhelming starter teams.
+	var escort_count:=mini(GameData.boss_escort_limit(stage_area_index),mini(2,team_scaled_cap)+extra+(1 if challenger else 0)+(BOSS_STAGE_EXTRA_ENEMIES if stage_kind=="boss" else 0))
+	var count:=escort_count+1
+	var scaling:=GameData.stage_enemy_scaling(stage_area_index,stage_node_index);var boss:QuibletActor3D=null
 	encounter_style="clearing"
 	var positions:=encounter_positions(center,count)
 	for i in count:
 		var is_level_boss:=i==count-1
 		var level_boost:=(2 if challenger else (1 if fortune else 0))
 		if stage_kind=="boss":level_boost+=BOSS_STAGE_BOSS_LEVEL_BOOST if is_level_boss else BOSS_STAGE_ENEMY_LEVEL_BOOST
-		var q:=make_enemy(GameData.roll_area_species(stage_area_index,spawn_rng,is_level_boss),enemy_level(1));var actor:=QuibletActor3D.new();actor.setup(q,true,level_boost,-1,scaling)
+		var q:=make_enemy(GameData.roll_area_species(stage_area_index,spawn_rng,is_level_boss),enemy_level(1),is_level_boss);var actor:=QuibletActor3D.new();actor.setup(q,true,level_boost,-1,scaling)
 		# The boss drops in too, but its landing squash is left to its own introduction.
-		actor.position=Vector3(positions[i].x,0,positions[i].y);actor.set_meta("zone",arena_index);actor.set_meta("alert_center",center);actor.set_meta("alert_radius",5.0);actor.set_meta("group",wave);actor.set_meta("alerted",false);place_actor(actor);enemies.append(actor);play_spawn_drop(actor,i*SPAWN_DROP_STAGGER,not is_level_boss)
+		actor.position=Vector3(positions[i].x,0,positions[i].y);actor.enemy_cast_recovery=.65+(i%2)*.35;actor.set_meta("zone",arena_index);actor.set_meta("alert_center",center);actor.set_meta("alert_radius",5.0);actor.set_meta("group",wave);actor.set_meta("alerted",false);place_actor(actor);enemies.append(actor);play_spawn_drop(actor,i*SPAWN_DROP_STAGGER,not is_level_boss)
 		if is_level_boss:
-			actor.set_meta("level_boss",true);var boss_scale:=BOSS_STAGE_BOSS_SCALE if stage_kind=="boss" else 1.3;actor.scale=Vector3.ONE*boss_scale;actor.max_hp*=BOSS_STAGE_BOSS_HP_MULTIPLIER if stage_kind=="boss" else 1.45;actor.current_hp=actor.max_hp;actor.damage_multiplier*=BOSS_STAGE_BOSS_DAMAGE_MULTIPLIER if stage_kind=="boss" else 1.12
+			actor.set_meta("level_boss",true);var boss_scale:=BOSS_STAGE_BOSS_SCALE if stage_kind=="boss" else 1.3;actor.scale=Vector3.ONE*boss_scale;var role:=GameData.boss_role_scaling(stage_area_index,stage_kind=="boss",true);actor.max_hp*=float(role.hp);actor.current_hp=actor.max_hp;actor.damage_multiplier*=float(role.damage)
 			boss=actor
+		else:
+			actor.set_meta("boss_helper",true);var role:=GameData.boss_role_scaling(stage_area_index,stage_kind=="boss",false);actor.max_hp*=float(role.hp);actor.current_hp=actor.max_hp;actor.damage_multiplier*=float(role.damage)
 	exploring=true
 	camera_pan_target=Vector3(center.x,0,center.y);camera_pan_time=BOSS_INTRO_PAN_SECONDS
 	if boss!=null:
@@ -2516,7 +2558,7 @@ func play_boss_grunt()->void:
 
 # One guardian idles in every other meadow, a little stronger than a regular enemy.
 func spawn_grove_guardians()->void:
-	var scaling:=GameData.enemy_scaling(stage_area_index)
+	var scaling:=GameData.stage_enemy_scaling(stage_area_index,stage_node_index)
 	for zone_index in range(GROVE_GUARDED_MEADOW_STEP,zones.size(),GROVE_GUARDED_MEADOW_STEP):
 		var center:Vector2=zones[zone_index].center
 		var q:=make_enemy(GameData.roll_area_species(stage_area_index,spawn_rng),enemy_level(-1))
@@ -2545,8 +2587,20 @@ func retreat()->void:
 func give_up()->void:
 	finish(false)
 
+func award_drop_charms(source:String,origin:Vector3)->void:
+	for item in GameData.roll_drop_charms(source,fortune):
+		extra_specials.append(item)
+		reward_acquired.emit({"kind":"special","name":item,"amount":1},origin)
+
 func _on_actor_defeated(actor:QuibletActor3D)->void:
 	if actor.enemy:
+		if actor.get_meta("loot_awarded",false):return
+		actor.set_meta("loot_awarded",true)
+		var special:=GameData.roll_special_item("enemy",fortune)
+		if special!="":
+			extra_specials.append(special)
+			reward_acquired.emit({"kind":"special","name":special,"amount":1},actor.global_position)
+		award_drop_charms("enemy",actor.global_position)
 		if actor.get_meta("level_boss",false):rout_escorts(actor)
 		var ingredient:=GameData.roll_ingredient(stage_level);var amount:=int(ceil(randi_range(1,3)*(1.65 if challenger else 1.0)));loot[ingredient]+=amount
 		reward_acquired.emit({"kind":"ingredient","name":ingredient,"amount":amount},actor.global_position)
@@ -2555,14 +2609,14 @@ func _on_actor_defeated(actor:QuibletActor3D)->void:
 			var stone:Dictionary=GameData.MOVE_STONES.pick_random();var effect:String=stone.effect;move_stones[effect]=int(move_stones.get(effect,0))+1
 			reward_acquired.emit({"kind":"move_stone","name":stone.name,"effect":effect,"amount":1,"texture":stone.texture},actor.global_position)
 		elif stone_kind=="power_stone":
-			var power_stone:=GameData.make_power_stone(["Health","Attack"].pick_random(),GameData.power_stone_tier_for_level(stage_level),GameData.roll_power_stone_bonuses(fortune));power_stones.append(power_stone)
+			var power_stone:=GameData.make_stage_power_stone(["Health","Attack"].pick_random(),stage_level,GameData.roll_power_stone_bonuses(fortune));power_stones.append(power_stone)
 			var reward:=power_stone.duplicate(true);reward.merge({"kind":"power_stone","name":power_stone.type+" Power Stone","amount":1})
 			reward_acquired.emit(reward,actor.global_position)
 		enemies.erase(actor);actor.queue_free()
 		if enemies.is_empty() and not is_grove():
 			if wave<max_waves:
 				for member in team:
-					if member.current_hp>0:member.receive_shared_heal(member.max_hp*.25)
+					if member.current_hp>0:member.receive_shared_heal(member.max_hp*GameData.WAVE_RECOVERY_FRACTION)
 				event_message.emit("Set beaten — the team catches its breath." if wave<max_waves-1 else "The field is clear. The team catches its breath as something stirs…")
 			intermission=1.3
 	else:
@@ -2580,7 +2634,7 @@ func rout_escorts(boss:QuibletActor3D)->void:
 		_on_actor_defeated(escort)
 
 func _on_move_used(_actor:QuibletActor3D,_move_name:String,_new_target:QuibletActor3D,_details:Dictionary)->void:
-	if _move_name!="Distract":return
+	if _move_name!="Taunt":return
 	var affected:Array=team if _actor.enemy else alerted_enemies()
 	for actor in affected:
 		if actor.current_hp>0 and actor.horizontal_distance(actor.position,_actor.position)<=TAUNT_RANGE:actor.show_exclamation()
@@ -2671,9 +2725,10 @@ func finish(victory:bool)->void:
 	for actor in team+enemies:actor.cast_epoch+=1
 	for team_actor in team:team_actor.set_physics_process(false)
 	for enemy_actor in enemies:enemy_actor.set_physics_process(false)
-	var exp_reward:=int((85+stage_level*18)*(1.8 if challenger else 1.0)) if victory else int(25+stage_level*4);var special:=""
+	var exp_reward:=GameData.stage_exp_reward(stage_area_index,stage_node_index,victory,challenger);var special:=""
 	if victory:
 		special=GameData.roll_special_item(stage_kind,fortune)
+		extra_specials.append_array(GameData.roll_drop_charms(stage_kind,fortune))
 		if GameData.roll_treasure_key(stage_kind,fortune):extra_specials.append("Treasure Key")
 	expedition_finished.emit({"victory":victory,"exp":exp_reward,"loot":loot,"move_stones":move_stones,"power_stones":power_stones,"special":special,"extra_specials":extra_specials.duplicate(),"berries":gathered,"elapsed":elapsed,"area_index":stage_area_index,"node_index":stage_node_index,"stage_kind":stage_kind,"discovered_areas":discovered_areas.duplicate()})
 

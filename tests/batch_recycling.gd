@@ -36,9 +36,15 @@ func run():
  assert(game.ingredients.values().reduce(func(a,b):return a+int(b),0)==after)
  var recipe:Dictionary=GameData.RECIPES[0]
  game.leftovers[recipe.name]=1
+ var jars_before:int=game.special_items["Empty Leftover Jar"]
  game.recycle_leftover(recipe)
  assert(game.content.find_child("RecyclingResults",true,false)!=null)
  assert(game.leftovers[recipe.name]==0)
+ assert(game.special_items["Empty Leftover Jar"]==jars_before+1)
+ assert(game.content.find_child("ReturnedLeftoverJar",true,false)!=null)
+ assert(game.content.find_child("RecyclingResults",true,false).get_meta("returned_jars")==1)
+ game.recycle_leftover(recipe)
+ assert(game.special_items["Empty Leftover Jar"]==jars_before+1,"An empty leftover stack cannot refund another jar")
  assert(not game.recycle_batch_valid({0:{"type":"Attack","power":-1}}))
  print("Batch selection limit, cancellation, confirmation and rewards passed")
  game.queue_free();await process_frame;quit()

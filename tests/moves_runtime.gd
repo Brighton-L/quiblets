@@ -32,7 +32,7 @@ func run()->void:
 	# The Echo fires .3s after the 1.8s stream ends in physics time; wall-clock sampling can read a little early.
 	var stream_seconds:float=float(user.BEHAVIORS.profile("Water Jet").duration)
 	check(events.any(func(e):return e.name=="Water Jet" and e.echo and e.time>=stream_seconds-.1),"Echo did not repeat the entire finished stream (events: %s)"%str(events.map(func(e):return "%s%s@%.2f"%[e.name,"(echo)" if e.echo else "",e.time])))
-	check(events.any(func(e):return e.name=="Water Shot" and is_equal_approx(e.strength,.65*1.35)),"Link did not apply the destination's Heavy Stone at reduced strength")
+	check(events.any(func(e):return e.name=="Water Shot" and is_equal_approx(e.strength,.65*1.30)),"Link did not apply the destination's Heavy Stone at reduced strength")
 	check(user.move_cooldowns[1]==30,"Link changed the destination's existing cooldown")
 	fixture([{"name":"Water Shot","slots":2,"stones":["link:Hydro Shot","link_from:Leaf Shot"]},{"name":"Hydro Shot","slots":2,"stones":["link_from:Water Shot","link:Leaf Shot"]},{"name":"Leaf Shot","slots":2,"stones":["link_from:Hydro Shot","link:Water Shot"]}])
 	user.use_move(0,enemy);await create_timer(1.8).timeout

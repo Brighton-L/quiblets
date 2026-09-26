@@ -98,8 +98,8 @@ func run()->void:
 	await process_frame;await process_frame
 	check(game.screen=="expedition_changes" and not game.last_result.victory and game.area_progress[2]==0,"Team failure bypassed results or unlocked progress")
 	# Special items are rare on ordinary victories, likelier on Boss levels, common with Fortune, and every item can drop.
-	check(is_equal_approx(GameData.special_item_drop_chance("level",false),.03) and is_equal_approx(GameData.special_item_drop_chance("boss",false),.08) and is_equal_approx(GameData.special_item_drop_chance("level",true),.48),"Special item drop chances are wrong")
-	check(GameData.SPECIAL_ITEM_DROP_WEIGHTS.keys().all(func(item):return game.special_items.has(item)) and game.special_items.keys().all(func(item):return GameData.SPECIAL_ITEM_DROP_WEIGHTS.has(item) or item=="Treasure Key"),"Every special item except the separately rolled Treasure Key should be in the drop table")
+	check(is_equal_approx(GameData.special_item_drop_chance("level",false),.12) and is_equal_approx(GameData.special_item_drop_chance("boss",false),.25) and is_equal_approx(GameData.special_item_drop_chance("level",true),.60),"Special item drop chances are wrong")
+	check(GameData.SPECIAL_ITEM_DROP_WEIGHTS.keys().all(func(item):return game.special_items.has(item)) and game.special_items.keys().all(func(item):return GameData.SPECIAL_ITEM_DROP_WEIGHTS.has(item) or item=="Treasure Key" or GameData.INDEPENDENT_DROP_CHARMS.has(item)),"Every special item should have a weighted or independent drop roll")
 	var key_rng:=RandomNumberGenerator.new();key_rng.seed=77;var key_drops:=0;var boss_keys:=0
 	for i in 20000:
 		if GameData.roll_treasure_key("level",false,key_rng):key_drops+=1
@@ -112,8 +112,8 @@ func run()->void:
 		if item!="":drops+=1;dropped[item]=int(dropped.get(item,0))+1
 		if GameData.roll_special_item("boss",false,drop_rng)!="":boss_drops+=1
 		if GameData.roll_special_item("level",true,drop_rng)!="":fortune_drops+=1
-	check(drops>trials*.02 and drops<trials*.04,"Ordinary victories should drop a special item about 3%% of the time (got %d of %d)"%[drops,trials])
-	check(boss_drops>trials*.065 and boss_drops<trials*.095 and fortune_drops>trials*.44 and fortune_drops<trials*.52,"Boss and Fortune drop rates are off (boss %d, fortune %d of %d)"%[boss_drops,fortune_drops,trials])
+	check(drops>trials*.10 and drops<trials*.14,"Ordinary victories should drop a special item about 12%% of the time (got %d of %d)"%[drops,trials])
+	check(boss_drops>trials*.22 and boss_drops<trials*.28 and fortune_drops>trials*.57 and fortune_drops<trials*.63,"Boss and Fortune drop rates are off (boss %d, fortune %d of %d)"%[boss_drops,fortune_drops,trials])
 	check(dropped.has("Bountiful Berry") and dropped.has("Empty Leftover Jar") and dropped.has("Fortune Charm") and not dropped.has("Treasure Key") and dropped.size()>=GameData.SPECIAL_ITEM_DROP_WEIGHTS.size()-2,"Rare drops should include cooking specials and charms but roll keys separately")
 	print("QUIBLETS_EXPEDITION_RESULTS_OK checks=",checks," failures=",failures)
 	quit(0 if failures==0 else 1)

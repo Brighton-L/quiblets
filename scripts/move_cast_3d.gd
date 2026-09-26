@@ -45,28 +45,31 @@ var maneuver_points:Array[Vector3]=[]
 var maneuver_index:=0
 var owns_motion_lock:=false
 var dramatic_scale:=1.0
+var psychic_illusions:Array[Node3D]=[]
+var pressure_origin:=Vector3.ZERO
 
 func setup(source, move_entry:Dictionary, new_target, power_scale:float, is_echo:bool)->void:
 	caster_ref=weakref(source);epoch=source.cast_epoch;source_enemy=source.enemy
 	target_ref=weakref(new_target) if is_instance_valid(new_target) else null
 	entry=move_entry.duplicate(true);move_name=entry.name;profile=BEHAVIORS.profile(move_name);strength=power_scale
 	var species_name:=str(GameData.species(int(source.data.species)).name)
+	if species_name in ["Dartlet","Dartle"] and move_name=="Tailwind":profile.team=false
 	if species_name in ["Lombat","Lombera"] and move_name=="Noxious Cloud":profile.anchor="self"
-	if species_name=="Snobble" and move_name=="Brace":profile.status="defense";profile.amount=.6;profile["self_anchor"]=true
 	if species_name=="Lombera" and move_name=="Thunderflap":dramatic_scale=1.6
 	if species_name=="Snobble" and move_name=="Pound":profile.visual="heavy_ice_impact"
 	var move:Dictionary=GameData.MOVES[move_name]
-	damage=(float(move.power)+source.attack*.58)*strength*source.damage_multiplier
+	damage=GameData.move_damage(source.attack,float(move.power))*strength*source.damage_multiplier
 	# Helping Hand's empower buff temporarily raises the caster's attack output;
 	# a Honk's weaken lowers it.
 	if source.statuses.has("empower"):damage*=float(source.statuses.empower.amount)
 	if source.statuses.has("weaken"):damage*=maxf(.1,1.0-float(source.statuses.weaken.amount))
 	distance=float(move.range)/35.0*pow(1.38,count("reach"))
-	duration_scale=pow(1.65,count("lingering"));area_scale=pow(1.35,count("blast"));force_scale=pow(1.65,count("force"))
+	duration_scale=1.0+.35*count("lingering");area_scale=1.0+.30*count("blast");force_scale=pow(1.65,count("force"))
 	if profile.get("physical",false) and source.statuses.has("growth"):
 		area_scale*=source.statuses.growth.amount;force_scale*=source.statuses.growth.amount
 	radius=float(profile.get("radius",1.0))*area_scale
 	duration=float(profile.get("duration",0.0))*duration_scale
+	if profile.mode in ["field","beam","firework"]:damage/=sqrt(duration_scale)
 	origin=source.global_position;aim=origin+source.model.global_basis.z*distance
 	if is_instance_valid(new_target):aim=new_target.global_position
 	direction=flat(aim-origin).normalized()
@@ -112,6 +115,10 @@ func _ready()->void:
 		if direction.length()<.01:direction=Vector3.BACK
 		aim=origin+direction*distance
 	actor.move_used.emit(actor,move_name,target(),details)
+	if profile.get("mandatory_windup",false):actor.add_status("exposed",float(profile.delay),.3,actor)
+	if move_name=="Feint":add_psychic_illusion(origin)
+	if profile.has("illusions"):
+		for i in int(profile.illusions):add_psychic_illusion(origin+Vector3(cos(TAU*i/profile.illusions),0,sin(TAU*i/profile.illusions))*1.8)
 	var copies:=1+2*count("split")
 	var split_scale:=1.0 if copies==1 else 1.4/float(copies)
 	copies*=int(profile.get("projectile_count",profile.get("patch_count",1)))
@@ -186,6 +193,13 @@ func _physics_process(delta:float)->void:
 	if actor.cast_epoch!=epoch and (actor.current_hp>0 or profile.mode in ["dash","beam","contact","maneuver"]):finish(false);return
 	elapsed+=delta
 	actor.model.animate_species_move(move_name,elapsed,float(profile.get("delay",0.0)))
+	for i in psychic_illusions.size():
+		var illusion:=psychic_illusions[i]
+		if not is_instance_valid(illusion):continue
+		if move_name=="Feint":illusion.global_position=origin+direction*minf(distance,elapsed*12.0)
+		else:
+			var angle:=TAU*i/psychic_illusions.size()+elapsed*.45
+			illusion.global_position=actor.global_position+Vector3(cos(angle)*1.8,sin(elapsed*2+i)*.15,sin(angle)*1.8)
 	for rock in erupting_rocks:
 		rock.position.y=origin.y+lerpf(-.4,.6,clampf((elapsed-float(profile.get("delay",0.0)))/.16,0,1))
 	for fragment in fragments.duplicate():
@@ -226,6 +240,13 @@ func _physics_process(delta:float)->void:
 			for shot in shots:
 				if not shot.done:update_shot(shot,delta)
 			if shots.all(func(s):return s.done):finish()
+		"pressure_pass":
+			if elapsed>=.18:
+				profile.mode="wave";profile.speed=32.0;profile.knockback=4.0;profile.width=2.5;profile.delay=0.0
+				damage*=.35;origin=pressure_origin;travel=0.0
+				var visual:=orb(origin+Vector3.UP*.6,Vector3(2.5,.5,.5),.45)
+				visual.rotation.y=atan2(direction.x,direction.z)
+				shots.append({"pos":origin,"dir":direction,"travel":0.0,"hits":{},"visual":visual,"fuse":-1.0,"done":false})
 		"contact":update_contact(delta)
 		"maneuver":update_maneuver(delta)
 		"dash":update_dash(delta)
@@ -340,8 +361,11 @@ func end_shot(shot:Dictionary)->void:
 func update_dash(delta:float)->void:
 	var actor=source()
 	var start:Vector3=actor.global_position
+	if profile.get("tracking",false) and is_instance_valid(target()):
+		var toward:=flat(target().global_position-start)
+		if toward.length()>.05:direction=toward.normalized()
 	var step:float=minf(float(profile.speed)*delta,maxf(0,distance-travel))
-	var end:Vector3=actor.safe_displacement(start,start+direction*step,.55)
+	var end:Vector3=actor.body_displacement(start,start+direction*step,.55)
 	actor.global_position=end;actor.model.look_at(end+direction,Vector3.UP,true);travel+=step
 	if profile.get("leap",false):actor.model.position.y=sin(clampf(travel/maxf(distance,.01),0,1)*PI)*float(profile.get("leap_height",1.5))
 	visuals[0].position=end+Vector3.UP*.55
@@ -377,7 +401,7 @@ func update_contact(delta:float)->void:
 	if profile.get("attach",false):
 		var desired:Vector3=victim.global_position-gap.normalized()*.75
 		var proposed:Vector3=actor.global_position.move_toward(desired,12.0*delta)
-		actor.global_position=actor.safe_displacement(actor.global_position,proposed,.55)
+		actor.global_position=actor.body_displacement(actor.global_position,proposed,.55)
 		if flat(victim.global_position-actor.global_position).length()>1.2:
 			if elapsed>1.0:finish()
 			return
@@ -401,6 +425,8 @@ func build_maneuver()->void:
 	var center:Vector3=aim
 	var across:=direction.cross(Vector3.UP)
 	match str(profile.pattern):
+		"feint":maneuver_points=[origin+direction*minf(1.0,distance*.2),center+across*2.0,center-across*.8]
+		"mach":maneuver_points=[origin-direction*2.0,origin+direction*distance]
 		"touch":maneuver_points=[center-direction*.65,origin]
 		"side":maneuver_points=[center+across*.7,center-across*1.4]
 		"zigzag":maneuver_points=[center+across*.6,center-direction*.6,center-across*.6,center+direction*.6,origin]
@@ -411,16 +437,32 @@ func update_maneuver(delta:float)->void:
 	if actor.current_hp<=0 or maneuver_index>=maneuver_points.size():finish();return
 	var start:Vector3=actor.global_position;var goal:Vector3=maneuver_points[maneuver_index]
 	var desired:=start.move_toward(goal,float(profile.speed)*delta)
-	var end:Vector3=actor.safe_displacement(start,desired,.55);actor.global_position=end;visuals[0].position=end+Vector3.UP*.5
-	var returning:bool=profile.pattern in ["touch","zigzag"] and maneuver_index==maneuver_points.size()-1
+	var end:Vector3=actor.body_displacement(start,desired,.55);actor.global_position=end;visuals[0].position=end+Vector3.UP*.5
+	var returning:bool=(profile.pattern in ["touch","zigzag"] and maneuver_index==maneuver_points.size()-1) or (profile.pattern=="mach" and maneuver_index==0)
 	if not returning:
 		for victim in opponents():
 			if not dash_hits.has(victim.get_instance_id()) and segment_hit(start,end,victim.global_position,radius+.5)>=0:
 				dash_hits[victim.get_instance_id()]=true;hit(victim,damage)
-	if end.distance_to(desired)>.05:finish();return
+	if end.distance_to(desired)>.05:complete_maneuver();return
 	if end.distance_to(goal)<.08:
 		maneuver_index+=1;dash_hits.clear()
-		if maneuver_index>=maneuver_points.size():finish()
+		if profile.pattern=="mach" and maneuver_index==1:pressure_origin=actor.global_position
+		if maneuver_index>=maneuver_points.size():complete_maneuver()
+
+func complete_maneuver()->void:
+	if not profile.get("pressure_pass",false) or maneuver_index==0:finish();return
+	var actor=source()
+	var path:=flat(actor.global_position-pressure_origin)
+	distance=path.length();direction=path.normalized() if distance>.01 else direction
+	profile.mode="pressure_pass";elapsed=0.0
+	if owns_motion_lock:actor.motion_lock=maxi(0,actor.motion_lock-1);owns_motion_lock=false
+
+func add_psychic_illusion(point:Vector3)->void:
+	var actor=source()
+	var illusion:=QuibletModel3D.new();illusion.setup(int(actor.data.species),actor.enemy,.82)
+	add_child(illusion);illusion.global_position=point;illusion.rotation=actor.model.rotation
+	illusion.set_psychic_appearance(.4)
+	psychic_illusions.append(illusion)
 
 func linear_hits(amount:float)->void:
 	var actor=source();var end:Vector3=actor.safe_displacement(origin,origin+direction*distance,.05)
@@ -477,6 +519,7 @@ func hit(victim,amount:float,center:Vector3=Vector3.INF,chain_depth:int=0,visite
 			# "amount"; leech scales with damage; everything else uses the effect scale.
 			var magnitude:float=damage*.12*base_scale*pow(.6,chain_depth) if profile.status=="leech" else float(profile.get("amount",effect_scale))
 			victim.add_status(profile.status,float(profile.status_duration)*duration_scale*pow(.6,chain_depth),magnitude,actor,.15*count("drain"))
+		if profile.has("confuse_chance") and randf()<float(profile.confuse_chance):victim.add_status("confuse",2.0*duration_scale,.4,actor)
 		# A Honk interrupts (a short stun); a Scare sends the victim fleeing.
 		if profile.get("interrupt",false):victim.add_status("stun",.4,1.0,actor)
 		if profile.get("flee",false):victim.retreating=true
@@ -490,6 +533,17 @@ func hit(victim,amount:float,center:Vector3=Vector3.INF,chain_depth:int=0,visite
 
 func support()->void:
 	var actor=source();var mode:String=profile.mode
+	if profile.get("decoy",false):
+		var clone=load("res://scripts/psychic_decoy.gd").new()
+		clone.configure(actor,duration,float(profile.amount)*strength);get_parent().add_child(clone)
+		clone.global_position=actor.safe_displacement(actor.global_position,actor.global_position+direction.cross(Vector3.UP)*1.8,.5)
+	if profile.has("self_status"):actor.add_status(profile.self_status,duration,float(profile.self_amount)*strength,actor)
+	if profile.get("lock_on",false):
+		if is_instance_valid(target()):
+			actor.add_status("lock_on",duration,float(profile.amount)*strength,actor)
+			actor.statuses.lock_on["target"]=weakref(target());ribbon(actor.global_position,target().global_position)
+		return
+	if profile.get("sleepwalk",false):actor.add_status("sleepwalk",duration,1.0,actor)
 	if mode=="heal":heal_area(origin,float(profile.amount)*strength);pulse(origin,radius);return
 	# Ally-targeted buffs (Helping Hand) land on the strongest nearby teammate,
 	# falling back to the caster when it is alone so the move is never wasted.
@@ -499,7 +553,7 @@ func support()->void:
 		if mate!=null:primary=mate
 	if profile.get("self_anchor",false):actor.add_status("anchored",duration,1.0,actor)
 	var recipients:Array=[primary]
-	# Team buffs (Cheer, Shelter, Tailwind) reach the caster and every nearby ally.
+	# Team buffs (Cheer, Tailwind) reach the caster and every nearby ally.
 	if profile.get("team",false):
 		for mate in actors_in(actor.global_position,4.0,false):
 			if not recipients.has(mate):recipients.append(mate)
@@ -509,7 +563,10 @@ func support()->void:
 		if mode=="cleanse":
 			if profile.has("self_cost") and other==actor:other.take_damage(minf(other.current_hp-1,other.max_hp*float(profile.self_cost)))
 			other.cleanse()
-		else:other.add_status(profile.status,duration*share,float(profile.amount)*strength*share,actor)
+		else:
+			var magnitude:float=float(profile.amount)*strength*share
+			if profile.status=="empower" and other!=primary:magnitude=1.0+(float(profile.amount)*strength-1.0)*share
+			other.add_status(profile.status,duration*share,magnitude,actor)
 		pulse(other.global_position,.9)
 
 func best_ally(actor):
@@ -548,7 +605,7 @@ func do_peck()->void:
 		hit(other,damage);pulse(other.global_position,radius);last=other
 	if is_instance_valid(last):
 		var approach:Vector3=last.global_position-flat(last.global_position-actor.global_position).normalized()*1.1
-		actor.global_position=actor.safe_displacement(actor.global_position,actor.clamp_point(approach),.4)
+		actor.global_position=actor.body_displacement(actor.global_position,actor.clamp_point(approach),.4)
 
 func heal_area(center:Vector3,amount:float)->void:
 	var extra:float=1.8 if count("sharing")>0 else 0.0
@@ -647,6 +704,8 @@ func flower(point:Vector3)->void:
 func finish(emit_completion:bool=true)->void:
 	if done:return
 	done=true
+	for illusion in psychic_illusions:
+		if is_instance_valid(illusion):illusion.queue_free()
 	var actor=source()
 	if is_instance_valid(actor):
 		actor.model.animate_species_move("",0,0)

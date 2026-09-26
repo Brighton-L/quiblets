@@ -42,7 +42,7 @@ func run()->void:
 	check(q.moves[2].name=="Whirlpool" and q.moves[2].stones.is_empty() and int(game.move_stone_inventory.get("heavy",0))==1,"Memory Fruit on a full moveset should replace the chosen slot and refund its stones")
 	game.begin_item_use("Move Crystal");game.item_use.roster_index=0;game.item_use.move_index=1;game.apply_item_use();await process_frame
 	check(int(q.moves[1].slots)==2 and game.special_items["Move Crystal"]==2,"Move Crystal should add one Move Stone slot")
-	q.moves[1].slots=8;game.begin_item_use("Move Crystal");game.item_use.roster_index=0;game.item_use.move_index=1
+	q.moves[1].slots=8;q.moves[1].erase("slot_data");game.begin_item_use("Move Crystal");game.item_use.roster_index=0;game.item_use.move_index=1
 	check(game.item_use_problem()!="","Move Crystal must refuse a move that already has eight slots")
 	var echo_before:int=int(game.move_stone_inventory.get("echo",0))
 	game.begin_item_use("Echo Crystal");game.item_use.roster_index=0;game.item_use.stone_value="echo";game.item_use.move_index=0;game.apply_item_use();await process_frame
@@ -54,7 +54,7 @@ func run()->void:
 	check(q.prodigy==true and game.item_use_problem()!="","Prodigy Fruit should flag the next milestone and refuse a second blessing")
 	game.begin_item_use("Health Charm");game.item_use.roster_index=0;game.apply_item_use();await process_frame
 	game.begin_item_use("Attack Charm");game.item_use.roster_index=0;game.apply_item_use();await process_frame
-	check(int(q.health_charms)==1 and int(q.attack_charms)==1 and game.special_items["Health Charm"]==2,"Charms should add growth through the USE screen")
+	check(int(q.health_charms)==0 and int(q.attack_charms)==0 and game.special_items["Health Charm"]==3,"Charms cannot be applied through the USE screen")
 	# Power Stone work (combine, revitalize, convert, reforge) lives in the Stone Workshop: res://tests/stone_workshop.gd.
 	check(not game.special_items.has("Revitalizer Charm") and not game.special_items.has("Conversion Charm") and not game.special_items.has("Reforger Charm"),"The stone charms are no longer items")
 	# Using the last copy of an item returns to Resources.

@@ -32,7 +32,7 @@ func run()->void:
 	var base:=GameData.make_quiblet(0,10);var base_hp:=GameData.max_hp(base);var base_attack:=GameData.attack(base)
 	var boosted:=base.duplicate(true);fitted(boosted,[GameData.make_power_stone("Health",1,["Health","Attack"])])
 	var health_stone:Dictionary=boosted.power_slot_stones[0]
-	check(GameData.max_hp(boosted)==int((base_hp+health_stone.power)*1.05) and GameData.attack(boosted)==int(base_attack*1.05),"Health and Attack bonuses apply +5% after stone power")
+	check(GameData.max_hp(boosted)==int((base_hp+health_stone.power*GameData.HEALTH_STONE_MULTIPLIER)*1.05) and GameData.attack(boosted)==int(base_attack*1.05),"Health and Attack bonuses apply +5% after stone power")
 	# Live effects on actors.
 	var arena:=Node3D.new();root.add_child(arena)
 	var plain:=actor_for(GameData.make_quiblet(0,10),false,arena)

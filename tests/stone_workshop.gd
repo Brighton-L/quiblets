@@ -60,15 +60,15 @@ func run()->void:
 	var capped_totals:=GameData.stone_bonus_totals(many)
 	check(is_equal_approx(float(capped_totals.crit),.5) and is_equal_approx(float(capped_totals.evasion),.3) and is_equal_approx(float(capped_totals.resist),.4),"Equipped totals stop at each stat's cap")
 	# Direct level scaling, smooth within tiers, capped without weakening strong stones.
-	check(GameData.revitalized_power(stone("Health",100,[]),40)==240 and GameData.revitalized_power(stone("Health",600,[]),40)==600,"Revitalizer uses expedition level and preserves stronger stones")
-	check(GameData.revitalizer_base_power(40)==240 and GameData.revitalizer_base_power(41)==246,"Revitalizer improves within the same loot tier")
-	check(GameData.revitalizer_base_power(0)==20 and GameData.revitalizer_base_power(200)==630,"Revitalizer respects lower and upper bounds")
+	check(GameData.revitalized_power(stone("Health",100,[]),40)==GameData.stage_drop_power(40) and GameData.revitalized_power(stone("Health",600,[]),40)==600,"Revitalizer uses expedition level and preserves stronger stones")
+	check(GameData.revitalizer_base_power(40)==GameData.stage_drop_power(40) and GameData.revitalizer_base_power(41)==GameData.stage_drop_power(41),"Revitalizer improves within the same loot tier")
+	check(GameData.revitalizer_base_power(0)==30 and GameData.revitalizer_base_power(200)==740,"Revitalizer respects lower and upper bounds")
 	for trial in 40:
 		var original:=stone("Health",100,["Health"])
 		var revived:=GameData.revitalize_power_stone(original,40)
-		check(int(revived.power)>=240 and int(revived.power)<=245 and int(revived.tier)==3 and revived.bonuses==["Health"] and revived.type=="Health","Revitalizing keeps bonuses and type with a random 0–5 bonus")
+		check(int(revived.power)>=GameData.stage_drop_power(40) and int(revived.power)<=GameData.stage_drop_power(40)+5 and int(revived.tier)==3 and revived.bonuses==["Health"] and revived.type=="Health","Revitalizing keeps bonuses and type with a random 0–5 bonus")
 		check(original.power==100 and GameData.revitalize_power_stone(revived,40)==revived,"Revitalizing neither mutates input nor repeatedly rolls a bonus")
-	check(GameData.revitalize_power_stone(stone("Attack",700,[]),200).power==700,"Above-cap stones remain unchanged")
+	check(GameData.revitalize_power_stone(stone("Attack",1800,[]),200).power==1800,"Above-cap stones remain unchanged")
 	# Converter keeps everything but the type.
 	var converted:=GameData.convert_power_stone(a)
 	check(converted.type=="Health" and int(converted.power)==410 and converted.bonuses==a.bonuses and converted.quality==a.quality,"Converting swaps the stat type only")
@@ -88,7 +88,7 @@ func run()->void:
 	game.power_stone_inventory.clear()
 	for value in [a,b,c,d,stone("Health",300,["Health"]),stone("Health",90,[])]:game.power_stone_inventory.append(value)
 	game.begin_stone_workshop("combine");game.show_stone_workshop();await process_frame
-	check(game.screen=="stone_workshop" and game.content.find_children("WorkshopStone?","",true,false).size()==6 and game.content.find_child("WorkshopApply",true,false).disabled,"The workshop lists every inventory stone and starts with nothing to apply")
+	check(game.screen=="stone_workshop" and game.content.find_children("WorkshopStone?","",true,false).size()==2 and game.content.find_child("WorkshopApply",true,false).disabled,"The workshop lists the active Health tab and starts with nothing to apply")
 	for key in game.STONE_WORKSHOP_MODES:check(game.content.find_child("WorkshopMode_%s"%key,true,false)!=null,"Missing workshop tab "+str(key))
 	game.workshop_pick_stone(0);game.workshop_pick_stone(1);game.workshop_pick_stone(4);await process_frame
 	check(game.workshop_problem()!="" and game.content.find_child("WorkshopApply",true,false).disabled,"Mixed types must leave the Combiner disabled")
@@ -114,8 +114,14 @@ func run()->void:
 	game.power_stone_inventory[1].power=10
 	game.set_stone_workshop_mode("revitalize");game.workshop_pick_stone(1);await process_frame
 	var expected:int=maxi(10,GameData.revitalizer_base_power(game.highest_reached_stage_level()))
-	check(game.workshop_problem()=="" if expected>10 else game.workshop_problem()!="","Revitalizer availability follows the formula")
+	check(game.workshop_problem()!="","Revitalizer requires recycled Power")
+	check(game.workshop_required_power()==(expected-10)*2,"Cost is twice the power gap")
 	if expected>10:
+		game.power_stone_inventory.append(stone("Attack",(expected-10)*2-1,[]))
+		game.workshop_pick_stone(3)
+		check(game.workshop_problem()!="","One Power below the requirement is rejected")
+		game.power_stone_inventory[3].power+=1
+		check(game.workshop_problem()=="","Either type can fund the exact cost")
 		game.apply_stone_workshop();await process_frame
 		check(int(game.power_stone_inventory[1].power)>=expected and int(game.power_stone_inventory[1].power)<=expected+5 and game.power_stone_inventory[1].bonuses.is_empty() and game.stone_workshop.selected.is_empty(),"Revitalizing sets the formula power")
 		game.workshop_pick_stone(1);check(game.workshop_problem()!="","A revitalized stone cannot be revitalized again at the same progress")
@@ -134,12 +140,12 @@ func run()->void:
 	var after:Array=game.power_stone_inventory[1].bonuses
 	check(game.power_stone_inventory.size()==2 and after.size()==8 and after[7]=="Knockback Resistance" and after.slice(0,7)==before.slice(0,7) and game.power_stone_inventory[1].quality=="Obsidian","Reforging replaces only the chosen bonus and consumes the sacrifice")
 	# Fitted stones appear in every list, marked with their owner, and cannot be picked, dragged, or recycled.
-	var owner_q:Dictionary=game.roster[0];game.ensure_quiblet_equipment(owner_q);var owner_slot:int=GameData.first_power_slot_accepting(owner_q,"Attack")
+	var owner_q:Dictionary=game.roster[0];owner_q.level=100;game.ensure_quiblet_equipment(owner_q);var owner_slot:int=GameData.first_power_slot_accepting(owner_q,"Attack")
 	owner_q.power_slot_stones[owner_slot]=stone("Attack",777,["Attack"])
 	var entries:Array=game.all_power_stone_entries();var fitted_entries:Array=entries.filter(func(entry):return entry.get("fitted",false))
 	var attack_powers:Array=entries.filter(func(entry):return entry.stone_type=="Attack").map(func(entry):return int(entry.power))
 	check(entries.size()==game.power_stone_inventory.size()+1 and fitted_entries.size()==1 and int(fitted_entries[0].power)==777 and fitted_entries[0].owner==GameData.display_name(owner_q) and not fitted_entries[0].has("inventory_index") and attack_powers[0]==777 and range(attack_powers.size()-1).all(func(i):return attack_powers[i]>=attack_powers[i+1]),"Every owned stone is listed in one type-and-power order, fitted ones in their natural place with their owner and no inventory index")
-	game.begin_stone_workshop("combine");game.show_stone_workshop();await process_frame
+	game.begin_stone_workshop("combine");game.set_workshop_inventory_tab("Attack");await process_frame
 	var fitted_card=game.content.find_child("WorkshopFitted0_%d"%owner_slot,true,false)
 	check(fitted_card!=null and fitted_card.find_child("FittedOwnerBadge",true,false)!=null and fitted_card.find_child("FittedStoneIcon",true,false).modulate.r<1.0 and fitted_card._get_drag_data(Vector2.ZERO)==null,"A fitted stone's card is darkened, badged with its owner, and not draggable")
 	fitted_card.chosen.emit(fitted_card.item_data);await process_frame

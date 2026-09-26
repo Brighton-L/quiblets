@@ -28,5 +28,23 @@ func _initialize():
  fire.moves=[{"name":"Combust","slots":2,"stones":["echo"]}];fire.memory=["Combust"]
  GameData.replace_retired_moves(fire)
  assert(fire.moves[0].name=="Meteor Ember" and fire.moves[0].slots==2 and fire.moves[0].stones==["echo"] and fire.memory==["Meteor Ember"])
- print("Retired moves, learnsets, memory and fitted Link Stones passed")
+ var species_by_old:={"Hunker Down":12,"Distract":13,"Double Honk":19,"Shock Clamp":26,"Puff Grab":9,"Blazing Rush":7}
+ for old in GameData.RETIRED_CONSOLIDATED_MOVES:
+  var replacement:String=GameData.RETIRED_CONSOLIDATED_MOVES[old]
+  assert(not GameData.MOVES.has(old) and not MoveBehaviors.PROFILES.has(old))
+  for learnset in GameData.LEARNSETS:assert(not learnset.has(old))
+  assert(GameData.learnset(species_by_old[old]).count(replacement)==1)
+  for already_equipped in [false,true]:
+   var fixture:Dictionary={"species":species_by_old[old],"moves":[{"name":old,"slots":3,"stones":["echo","link_from:"+replacement]},{"name":replacement if already_equipped else "Water Shot","slots":2,"stones":["link:"+old]}],"memory":[old,replacement]}
+   GameData.replace_retired_moves(fixture)
+   assert(fixture.moves[0].name!=fixture.moves[1].name)
+   assert(GameData.MOVES.has(fixture.moves[0].name))
+   if not already_equipped:assert(fixture.moves[0].name==replacement)
+   assert(fixture.moves[0].slots==3 and fixture.moves[0].stones==["echo","link_from:"+replacement])
+   assert(fixture.moves[1].stones==["link:"+fixture.moves[0].name])
+   assert(not fixture.memory.has(old))
+   var once:Dictionary=fixture.duplicate(true)
+   GameData.replace_retired_moves(fixture)
+   assert(fixture==once,"Move conversion must be idempotent")
+ print("Retired moves, unique learnsets, memory, duplicate handling and fitted Link Stones passed")
  quit()

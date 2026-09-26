@@ -21,7 +21,7 @@ func run():
  var bat:=actor(28);var evolved:=actor(29,false,Vector3(0,0,1));var seal:=actor(30,false,Vector3(0,0,2));var enemy:=actor(0,true,Vector3(2,0,0))
  var keen=cast(bat,"Keen Ears",enemy,["sharing"]);keen._physics_process(.1);assert(bat.statuses.has("evade") and seal.statuses.has("evade"));keen.finish(false)
  for a in [bat,evolved,seal]:a.statuses.clear()
- var armor=cast(seal,"Ice Armor",enemy,["sharing"]);armor._physics_process(.1);assert(seal.statuses.has("defense") and bat.statuses.has("defense"));assert(seal.take_damage(100,null,false)<60);armor.finish(false)
+ var armor=cast(seal,"Armor",enemy,["sharing"]);armor._physics_process(.1);assert(seal.statuses.has("defense") and bat.statuses.has("defense"));assert(seal.take_damage(100,null,false)<60);armor.finish(false)
  for a in [bat,evolved,seal]:a.statuses.clear()
  var brace=cast(seal,"Brace",enemy,["sharing"]);brace._physics_process(.1)
  assert(seal.statuses.has("anchored") and seal.statuses.has("defense") and bat.statuses.has("defense") and not bat.statuses.has("anchored"))
